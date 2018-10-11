@@ -52,7 +52,9 @@ Each OpenET model should be stored in the "openet" folder (namespace).  The bene
 References
 ==========
 
+.. _references:
 
+.. [Anderson2007JGR] Anderson, M. C., J. M. Norman, J. R. Mecikalski, J. A. Otkin, and W. P. Kustas (2007), A climatological study of evapotranspiration and moisture stress across the continental United States based on thermal remote sensing: 1. Model formulation, J. Geophys. Res., 112, D10117, doi:10.1029/2006JD007506.
 
 .. |build| image:: https://travis-ci.org/Open-ET/openet-disalexi-beta.svg?branch=master
    :alt: Build status
