@@ -3,6 +3,7 @@ import ee
 
 class Landsat(object):
     """"""
+
     def __init__(self, toa_image):
         """Initialize a Landsat Collection 1 image
 
@@ -57,7 +58,8 @@ class Landsat(object):
         """
         self.prep_image = ee.Image([
             self._get_albedo(),
-            self._get_bqa_cfmask(),
+            # self._get_bqa_cfmask(), # TOA L8 only
+            self.cloudMaskL8sr(),  # SR L8 only
             self._get_lai(),
             self._get_lst(),
             # self.input_image.select(['lst']),
@@ -166,6 +168,30 @@ class Landsat(object):
             .add(snow_mask.multiply(3)) \
             .add(cloud_mask.multiply(4)) \
             .rename(['cfmask'])
+
+    def cloudMaskL457(self):
+        # bits 3 and 5 are cloud shadow and cloud respectively
+        cloudShadowBitMask = (1 << 3)
+        cloudsBitMask = (1 << 5)
+        cloudBitConfidence = (1 << 7)
+        # Get pixel QA
+        qa = self.input_image.select('pixel_qa')
+
+        mask = (qa.bitwiseAnd(cloudsBitMask).eq(0) and qa.bitwiseAnd(cloudBitConfidence).eq(0)) or \
+               (qa.bitwiseAnd(cloudShadowBitMask).eq(0))
+
+        return mask.rename(['mask'])
+
+    def cloudMaskL8sr(self):
+        # bits 3 and 5 are cloud shadow and cloud respectively
+        cloudShadowBitMask = (1 << 3)
+        cloudsBitMask = (1 << 5)
+        # Get pixel QA
+        qa = self.input_image.select('pixel_qa')
+
+        mask = qa.bitwiseAnd(cloudShadowBitMask).eq(0) and (qa.bitwiseAnd(cloudsBitMask).eq(0))
+
+        return mask.rename(['mask'])
 
     def _get_lai(self):
         """Compute LAI using METRIC NDVI / LAI empirical equation
