@@ -71,6 +71,7 @@ class Landsat(object):
         self.prep_image = ee.Image(self.prep_image.setMulti({
             'LANDSAT_ID': self.sr_image.get('system:index'),
             'system:time_start': self.sr_image.get('system:time_start')}))
+        return self.prep_image
 
         # The cloud mask could be applied here
         # mask_img = self.prep_image.select('Mask').eq(0)
