@@ -4,48 +4,58 @@ import ee
 class Landsat(object):
     """"""
 
-    def __init__(self, sr_image):
+    def __init__(self, image):
         """Initialize a Landsat Collection 1 image
 
         Parameters
         ----------
-        sr_image : ee.Image
-            Landsat 5/7/8 Collection 1 SR image
-            (i.e. from the "LANDSAT/X/C01/T1_SR" collection)
+        image : ee.Image
+            Landsat 5/7/8 Collection 1 TOA/SR image
+            (i.e. from the "LANDSAT/X/C01/T1_XX" collection)
 
         """
-        self.sr_image = sr_image
 
-        # Use the SATELLITE property identify each Landsat type
-        self.satellite = ee.String(self.sr_image.get('SATELLITE'))
+        self.name = ee.String(image.get("system:id"))
+        if self.name.getInfo().split("/")[-2] == "T1_SR":
+            self.image = image
+            input_bands = ee.Dictionary({
+                'LANDSAT_5': ['B1', 'B2', 'B3', 'B4', 'B5', 'B7', 'B6', 'BQA'],
+                'LANDSAT_7': ['B1', 'B2', 'B3', 'B4', 'B5', 'B7', 'B6_VCID_1', 'BQA'],
+                'LANDSAT_8': ['B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B10', 'pixel_qa']})  # SR
+            # Rename bands to generic names
+            output_bands = [
+                'blue', 'green', 'red', 'nir', 'swir1', 'swir2', 'lst', 'bqa']
+            # Use the SATELLITE property identify each Landsat type
+            self.spacecraft_id = ee.String(self.image.get('SATELLITE'))
+            self.input_image = ee.Image(self.image) \
+                .select(input_bands.get(self.spacecraft_id), output_bands)
+        else:
+            self.image = image
+            input_bands = ee.Dictionary({
+                'LANDSAT_5': ['B1', 'B2', 'B3', 'B4', 'B5', 'B7', 'B6', 'BQA'],
+                'LANDSAT_7': ['B1', 'B2', 'B3', 'B4', 'B5', 'B7', 'B6_VCID_1', 'BQA'],
+                'LANDSAT_8': ['B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B10', 'BQA']})
+            # Rename bands to generic names
+            output_bands = [
+                'blue', 'green', 'red', 'nir', 'swir1', 'swir2', 'lst', 'bqa']
+            # Use the SPACECRAFT_ID property identify each Landsat type
+            self.spacecraft_id = ee.String(self.image.get('SPACECRAFT_ID'))
+            # Rename thermal band "k" coefficients to generic names
+            input_k1 = ee.Dictionary({
+                'LANDSAT_5': 'K1_CONSTANT_BAND_6',
+                'LANDSAT_7': 'K1_CONSTANT_BAND_6_VCID_1',
+                'LANDSAT_8': 'K1_CONSTANT_BAND_10'})
+            input_k2 = ee.Dictionary({
+                'LANDSAT_5': 'K2_CONSTANT_BAND_6',
+                'LANDSAT_7': 'K2_CONSTANT_BAND_6_VCID_1',
+                'LANDSAT_8': 'K2_CONSTANT_BAND_10'})
+            output_k1 = self.image.get(input_k1.get(self.spacecraft_id))
+            output_k2 = self.image.get(input_k2.get(self.spacecraft_id))
 
-        # Rename bands to generic names
-        input_bands = ee.Dictionary({
-            'LANDSAT_5': ['B1', 'B2', 'B3', 'B4', 'B5', 'B7', 'B6', 'BQA'],
-            'LANDSAT_7': ['B1', 'B2', 'B3', 'B4', 'B5', 'B7', 'B6_VCID_1', 'BQA'],
-            # 'LANDSAT_8': ['B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B10', 'BQA']})
-            'LANDSAT_8': ['B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B10', 'pixel_qa']})  # SR
-        output_bands = [
-            'blue', 'green', 'red', 'nir', 'swir1', 'swir2', 'lst', 'bqa']
-
-        # Rename thermal band "k" coefficients to generic names
-        # input_k1 = ee.Dictionary({
-        #     'LANDSAT_5': 'K1_CONSTANT_BAND_6',
-        #     'LANDSAT_7': 'K1_CONSTANT_BAND_6_VCID_1',
-        #     'LANDSAT_8': 'K1_CONSTANT_BAND_10'})
-        # input_k2 = ee.Dictionary({
-        #     'LANDSAT_5': 'K2_CONSTANT_BAND_6',
-        #     'LANDSAT_7': 'K2_CONSTANT_BAND_6_VCID_1',
-        #     'LANDSAT_8': 'K2_CONSTANT_BAND_10'})
-        # output_k1 = self.toa_image.get(input_k1.get(self.spacecraft_id))
-        # output_k2 = self.toa_image.get(input_k2.get(self.spacecraft_id))
-
-        # self.input_image = ee.Image(self.toa_image) \
-        #     .select(input_bands.get(self.spacecraft_id), output_bands) \
-        #     .set('k1_constant', ee.Number(output_k1)) \
-        #     .set('k2_constant', ee.Number(output_k2))
-        self.input_image = ee.Image(self.sr_image)\
-            .select(input_bands.get(self.satellite), output_bands)
+            self.input_image = ee.Image(self.image) \
+                .select(input_bands.get(self.spacecraft_id), output_bands) \
+                .set('k1_constant', ee.Number(output_k1)) \
+                .set('k2_constant', ee.Number(output_k2))
 
     def prep(self):
         """Return an image with the bands/products needed to run EE DisALEXI
@@ -59,18 +69,26 @@ class Landsat(object):
         prep_image : ee.Image
 
         """
-        self.prep_image = ee.Image([
-            self._get_albedo(),
-            # self._get_bqa_cfmask(), # TOA L8 only
-            self.cloudMaskL8sr(),  # SR L8 only
-            self._get_lai(),
-            self._get_lst(),
-            # self.input_image.select(['lst']),
-            self._get_ndvi()])
+        if self.name == "T1_SR":
+            self.prep_image = ee.Image([
+                self._get_albedo(),
+                self.cloudMaskL8sr(),  # SR L8 only
+                self._get_lai(),
+                self._get_lst_from_sr(),
+                self._get_ndvi()])
+        else:
+
+            self.prep_image = ee.Image([
+                self._get_albedo(),
+                self._get_bqa_cfmask(), # TOA L8 only
+                self._get_lai(),
+                self._get_lst_from_toa(),
+                self._get_ndvi()])
+
 
         self.prep_image = ee.Image(self.prep_image.setMulti({
-            'LANDSAT_ID': self.sr_image.get('system:index'),
-            'system:time_start': self.sr_image.get('system:time_start')}))
+            'LANDSAT_ID': self.image.get('system:index'),
+            'system:time_start': self.image.get('system:time_start')}))
         return self.prep_image
 
         # The cloud mask could be applied here
@@ -184,18 +202,20 @@ class Landsat(object):
         mask = (qa.bitwiseAnd(cloudsBitMask).eq(0) and qa.bitwiseAnd(cloudBitConfidence).eq(0)) or \
                (qa.bitwiseAnd(cloudShadowBitMask).eq(0))
 
-        return mask.rename(['mask'])
+        return mask.rename(['cfmask'])
 
     def cloudMaskL8sr(self):
         # bits 3 and 5 are cloud shadow and cloud respectively
         cloudShadowBitMask = (1 << 3)
         cloudsBitMask = (1 << 5)
+        cloudBitConfidence = (1 << 7)
         # Get pixel QA
         qa = self.input_image.select(['bqa'])
 
-        mask = qa.bitwiseAnd(cloudShadowBitMask).eq(0) and (qa.bitwiseAnd(cloudsBitMask).eq(0))
+        mask = (qa.bitwiseAnd(cloudsBitMask).eq(0) and qa.bitwiseAnd(cloudBitConfidence).eq(0)) or \
+               (qa.bitwiseAnd(cloudShadowBitMask).eq(0))
 
-        return mask.rename(['mask'])
+        return mask.rename(['cfmask'])
 
     def _get_lai(self):
         """Compute LAI using METRIC NDVI / LAI empirical equation
@@ -222,7 +242,7 @@ class Landsat(object):
             .where(ndvi.lte(0), 0.99) \
             .where(ndvi.gt(0).And(lai.gt(3)), 0.98)
 
-    def _get_lst(self):
+    def _get_lst_from_sr(self):
         """just return land surface temperature (LST)
 
         Parameters
