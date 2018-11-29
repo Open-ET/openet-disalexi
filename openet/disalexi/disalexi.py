@@ -66,11 +66,11 @@ class Image(object):
 
         # CGM - Applying cloud mask directly to input image
         #   instead of to a_pt in main TSEB function
-        # self.cfmask = image.select('cfmask')
-        # self.mask = self.cfmask.eq(0)
+        self.cfmask = image.select('cfmask')
+        self.mask = self.cfmask.eq(0)
         input_image = ee.Image(image).updateMask(self.mask)
 
-        input_image = ee.ImageCollection(image).map()
+        # input_image = ee.ImageCollection(image).map()
 
         # Get input bands from the image
         self.albedo = input_image.select('albedo')
