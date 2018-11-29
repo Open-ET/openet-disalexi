@@ -285,11 +285,13 @@ class LandsatSR(Landsat):
         # Rename bands to generic names
         output_bands = [
             'blue', 'green', 'red', 'nir', 'swir1', 'swir2', 'lst', 'bqa']
+        scalars = [0.0001, 0.0001, 0.0001, 0.0001, 0.0001, 0.0001, 0.1, 1]
 
         # Use the SATELLITE property identify each Landsat type
         self.spacecraft_id = ee.String(self.image.get('SATELLITE'))
         self.input_image = ee.Image(self.image) \
             .select(input_bands.get(self.spacecraft_id), output_bands)
+        self.input_image = ee.Image(self.input_image.multiply(scalars))
         Landsat.__init__(self, self.input_image)
 
     def prep(self):
@@ -306,7 +308,7 @@ class LandsatSR(Landsat):
         """
 
         self.prep_image = ee.Image([
-            self._get_albedo_sr(),
+            self._get_albedo(),
             self._get_sr_cfmask(),  # SR L8 only
             self._get_lai(),
             self._get_lst_from_sr(),
@@ -390,39 +392,37 @@ class LandsatSR(Landsat):
         lst : ee.Image
 
         """
-        return self.input_image.select(['lst']).multiply(0.1)
+        return self.input_image.select(['lst']).subtract(5)  # For testing!
 
-    def _get_albedo_sr(self):
-        """Compute total shortwave broadband albedo following [Liang2001]
-
-        The Python code had the following line and comment:
-            "bands = [1, 3, 4, 5, 7]  # dont use blue"
-        IDL code and [Liang2001] indicate that the green band is not used.
-        Coefficients were derived for Landsat 7 ETM+, but were found to be
-            "suitable" to Landsat 4/5 TM also.
-
-        Parameters
-        ----------
-        self.input_image : ee.Image
-
-        Returns
-        -------
-        albedo : ee.Image
-
-        References
-        ----------
-        .. [Liang2001] Shunlin Liang (2001),
-            Narrowband to broadband conversions of land surface albedo -
-            I Algorithms, Remote Sensing of Environment,
-            Volume 76, Issue2, Pages 213-238,
-            http://doi.org/10.1016/S0034-4257(00)00205-4
-        """
-        bands = ['blue', 'red', 'nir', 'swir1', 'swir2']
-        coef = [0.356, 0.130, 0.373, 0.085, 0.072]
-        scalars = [0.0001, 0.0001, 0.0001, 0.0001, 0.0001]
-        return ee.Image(self.input_image).select(bands) \
-            .multiply(scalars) \
-            .multiply(coef) \
-            .reduce(ee.Reducer.sum()) \
-            .subtract(0.0018) \
-            .rename(['albedo'])
+    # def _get_albedo_sr(self):
+    #     """Compute total shortwave broadband albedo following [Liang2001]
+    #
+    #     The Python code had the following line and comment:
+    #         "bands = [1, 3, 4, 5, 7]  # dont use blue"
+    #     IDL code and [Liang2001] indicate that the green band is not used.
+    #     Coefficients were derived for Landsat 7 ETM+, but were found to be
+    #         "suitable" to Landsat 4/5 TM also.
+    #
+    #     Parameters
+    #     ----------
+    #     self.input_image : ee.Image
+    #
+    #     Returns
+    #     -------
+    #     albedo : ee.Image
+    #
+    #     References
+    #     ----------
+    #     .. [Liang2001] Shunlin Liang (2001),
+    #         Narrowband to broadband conversions of land surface albedo -
+    #         I Algorithms, Remote Sensing of Environment,
+    #         Volume 76, Issue2, Pages 213-238,
+    #         http://doi.org/10.1016/S0034-4257(00)00205-4
+    #     """
+    #     bands = ['blue', 'red', 'nir', 'swir1', 'swir2']
+    #     coef = [0.356, 0.130, 0.373, 0.085, 0.072]
+    #     return ee.Image(self.input_image).select(bands) \
+    #         .multiply(coef) \
+    #         .reduce(ee.Reducer.sum()) \
+    #         .subtract(0.0018) \
+    #         .rename(['albedo'])
