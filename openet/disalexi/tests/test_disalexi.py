@@ -63,9 +63,9 @@ def test_Image_init_missing_lc_type():
     'xy,et',
     [
         # CONUS ALEXI ET values
-        [ne1_xy, 6.342979],
-        [ne2_xy, 6.342979],
-        [ne3_xy, 5.760809],
+        [ne1_xy, 7.287301],
+        [ne2_xy, 7.287301],
+        [ne3_xy, 7.477266],
     ]
 )
 def test_Image_set_alexi_et_vars_defaults(xy, et, tol=1E-6):
@@ -405,7 +405,7 @@ def test_Image_compute_ta_test_asset(xy, iterations, expected, tol=0.01):
     #     .reproject(crs='EPSG:4326', crsTransform=d_obj.et_transform)
 
     # Extract image values at a point using reduceRegion (with point geom)
-    output = utils.image_value(ta_coarse_img.select(['t_air']))
+    output = utils.image_value(ta_coarse_img.select(['t_air']), tile_scale=4)
     logging.debug('  Target values: {}'.format(expected['t_air']))
     logging.debug('  Output values: {}'.format(output['t_air']))
     assert abs(output['t_air'] - expected['t_air']) <= tol
