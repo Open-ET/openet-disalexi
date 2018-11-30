@@ -233,8 +233,11 @@ def test_LandsatSR_lai(red=0.2, nir=0.7, expected=1.200, tol=0.001):
 @pytest.mark.parametrize(
     'red, nir, bt, expected',
     [
-        # Current LandsatSR LST function just returns brightness Ts
-        [0.2, 0.7, 300, 300],
+        [0.2, 0.7, 300, 304.5866],
+        [0.2, 0.3, 300, 304.8238],
+        [0.2, 0.1, 300, 303.6067],
+        # # Current LandsatSR LST function just returns brightness Ts
+        # [0.2, 0.7, 300, 300],
     ]
 )
 def test_LandsatSR_lst(red, nir, bt, expected, tol=0.001):

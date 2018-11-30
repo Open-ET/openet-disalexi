@@ -420,7 +420,11 @@ class LandsatSR(Landsat):
 
     @lazy_property
     def _lst(self):
-        """just return the Brightness Temperature (BT) as land surface temperature (LST) for now
+        """Compute emissivity corrected land surface temperature (LST)
+        from brightness temperature.
+
+        Note, the coefficients were derived from a small number of scenes in
+        southern Idaho [Allen2007] and may not be appropriate for other areas.
 
         Parameters
         ----------
@@ -430,6 +434,55 @@ class LandsatSR(Landsat):
         -------
         lst : ee.Image
 
+        References
+        ----------
+        .. [Allen2007a] R. Allen, M. Tasumi, R. Trezza (2007),
+            Satellite-Based Energy Balance for Mapping Evapotranspiration with
+            Internalized Calibration (METRIC) Model,
+            Journal of Irrigation and Drainage Engineering, Vol 133(4),
+            http://dx.doi.org/10.1061/(ASCE)0733-9437(2007)133:4(380)
+
         """
+        # Get properties from image
+        k1 = ee.Number(ee.Image(self.input_image).get('k1_constant'))
+        k2 = ee.Number(ee.Image(self.input_image).get('k2_constant'))
+
         ts_brightness = ee.Image(self.input_image).select(['lst'])
-        return ts_brightness.rename(['lst'])
+        emissivity = self._emissivity
+
+        # First back out radiance from brightness temperature
+        # Then recalculate emissivity corrected Ts
+        thermal_rad_toa = ts_brightness.expression(
+            'k1 / (exp(k2 / ts_brightness) - 1)',
+            {'ts_brightness': ts_brightness, 'k1': k1, 'k2': k2})
+
+        # tnb = 0.866   # narrow band transmissivity of air
+        # rp = 0.91     # path radiance
+        # rsky = 1.32   # narrow band clear sky downward thermal radiation
+        rc = thermal_rad_toa.expression(
+            '((thermal_rad_toa - rp) / tnb) - ((1. - emiss) * rsky)',
+            {
+                'thermal_rad_toa': thermal_rad_toa,
+                'emiss': emissivity,
+                'rp': 0.91, 'tnb': 0.866, 'rsky': 1.32})
+        lst = rc.expression(
+            'k2 / log(emiss * k1 / rc + 1)',
+            {'emiss': emissivity, 'rc': rc, 'k1': k1, 'k2': k2})
+
+        return lst.rename(['lst'])
+
+    # @lazy_property
+    # def _lst(self):
+    #     """just return the Brightness Temperature (BT) as land surface temperature (LST) for now
+    #
+    #     Parameters
+    #     ----------
+    #     self.input_image : ee.Image
+    #
+    #     Returns
+    #     -------
+    #     lst : ee.Image
+    #
+    #     """
+    #     ts_brightness = ee.Image(self.input_image).select(['lst'])
+    #     return ts_brightness.rename(['lst'])
