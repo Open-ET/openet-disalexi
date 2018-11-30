@@ -21,16 +21,17 @@ def constant_image_value(image, crs=default_crs):
 
 
 def image_value(image, xy=default_xy, scale=None,
-                crs=default_crs, crsTransform=default_geo):
+                crs=default_crs, crsTransform=default_geo, tile_scale=1):
     # Default to using Landsat crsTransform unless scale is set
+
     if scale is not None:
         value = image.reduceRegion(
             reducer=ee.Reducer.first(), geometry=ee.Geometry.Point(xy),
-            scale=default_scale)
+            scale=default_scale, tileScale=tile_scale)
     else:
         value = image.reduceRegion(
             reducer=ee.Reducer.first(), geometry=ee.Geometry.Point(xy),
-            crs=crs, crsTransform=crsTransform)
+            crs=crs, crsTransform=crsTransform, tileScale=tile_scale)
 
     return ee_getinfo(value)
     # return value.getInfo()
