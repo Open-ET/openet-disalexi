@@ -63,9 +63,9 @@ def test_Image_init_missing_lc_type():
     'xy,et',
     [
         # CONUS ALEXI ET values
-        [ne1_xy, 6.342979],
-        [ne2_xy, 6.342979],
-        [ne3_xy, 5.760809],
+        [ne1_xy, 7.287301],
+        [ne2_xy, 7.287301],
+        [ne3_xy, 7.477266],
     ]
 )
 def test_Image_set_alexi_et_vars_defaults(xy, et, tol=1E-6):

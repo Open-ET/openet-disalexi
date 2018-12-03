@@ -119,7 +119,6 @@ Each OpenET model should be stored in the "openet" folder (namespace).  The bene
 
     import openet.disalexi as disalexi
 
-
 References
 ==========
 
@@ -131,9 +130,9 @@ References
 .. [Anderson1997] Anderson, M. C., J. M. Norman, G. R. Diak, W. P. Kustas, J. R. Mecikalski (1997), A two-source time integrated model for estimating surface fluxes using thermal infrared remote sensing, Remote Sens. Environ. 60, 195-216.
 .. [Anderson2004] Anderson, M. C., J. M. Norman, J. R. Mecikalski, R. D. Torn, W. P. Kustas, J. B. Basara (2004), A multiscale remote sensing model for disaggregating regional fluxes to micrometeorological scales, J. Hydrometeorol. 5, 343-363.
 .. [Anderson2012b] Anderson, M. C., W.P. Kustas, J. G. Alfieri, F. Gao, C. Hain, J. H. Prueger, S. Evett, P. Colaizzi, T. Howell, J. L. Chavez (2012b), Mapping daily evapotranspiration at Landsat spatial scales during the BEAREX'08 field campaign (2012b), Adv. Water Resour, 50, 162-177.
+
 .. |build| image:: https://travis-ci.org/Open-ET/openet-disalexi-beta.svg?branch=master
    :alt: Build status
    :target: https://travis-ci.org/Open-ET/openet-disalexi-beta
 .. |version| image:: https://badge.fury.io/py/openet-disalexi.svg
    :alt: Latest version on PyPI
-   :target: https://badge.fury.io/py/openet-disalexi

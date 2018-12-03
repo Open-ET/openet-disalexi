@@ -18,10 +18,11 @@ class Image(object):
     def __init__(
             self,
             image,
-            elevation=ee.Image('USGS/NED'),
+            elevation=None,
             landcover=None,
             lc_type=None,
-            iterations=20
+            iterations=10,
+            tair_values=list(range(273, 321, 1)),
         ):
         """Initialize an image for computing DisALEXI
 
@@ -34,18 +35,20 @@ class Image(object):
         image : ee.Image
             Prepped image
         elevation: ee.Image
-            Elevation [m]
-            (the default is ee.Image('USGS/NED'))
+            Elevation asset.  Units must be in meters.
+            Will default to ee.Image('USGS/NED') if not set or None.
         lc_type : str
-            Land cover type (choices are 'NLCD' or 'GlobeLand30')
+            Land cover type.  Choices are 'NLCD' or 'GlobeLand30'.  Will
+            default to 'NLCD' if not set and 'landcover' parameter not set.
         landcover : ee.Image
-            Land cover
+            Land cover asset.  Will default to ee.Image('USGS/NLCD/NLCD2011')
+            if not set and 'lc_type' parameter not set.
         iterations : int
-            Number of iterations of main calculation
-            (the default is 20)
+            Number of iterations of main calculation (the default is 10).
         """
         # self.image = ee.Image(image)
         self.iterations = iterations
+        self.tair_values = tair_values
 
         # Set server side date/time properties using the 'system:time_start'
         self.datetime = ee.Date(ee.Image(image).get('system:time_start'))
@@ -98,10 +101,11 @@ class Image(object):
             self.landcover = ee.Image('USGS/NLCD/NLCD2011').select(['landcover'])
             self.lc_type = 'NLCD'
             # Using GlobeLand30 land cover and type
-            # self.landcover = ee.Image(
-            #     ee.ImageCollection('users/cgmorton/GlobeLand30').mosaic()) \
-            #         .divide(10).floor().multiply(10) \
-            #         .rename(['landcover'])
+            # lc_coll =  ee.ImageCollection('users/cgmorton/GlobeLand30')\
+            #     .filterBounds(image.geometry().bounds(1))
+            # self.landcover = ee.Image(lc_coll.mosaic()) \
+            #     .divide(10).floor().multiply(10) \
+            #     .rename(['landcover'])
             # self.lc_type = 'GLOBELAND30'
         elif landcover is None:
             # What should happen if on only the land cover image is set?
@@ -115,12 +119,12 @@ class Image(object):
             self.lc_type = lc_type
 
         # ALEXI ET - CONUS
-        self.et_coll = ee.ImageCollection(
-            'projects/climate-engine/alexi/conus/daily/et')
-        self.et_transform = [0.04, 0, -125.0, 0, -0.04, 49.80]
+        self.et_coll = ee.ImageCollection('projects/disalexi/alexi/CONUS')
+        self.et_transform = [0.04, 0, -125.04, 0, -0.04, 49.82]
         self.et_crs = 'EPSG:4326'
         # ALEXI ET - Global
-        # self.et_coll = ee.ImageCollection('projects/climate-engine/alexi/global/daily/et')
+        # self.et_coll = ee.ImageCollection(
+        #     'projects/climate-engine/alexi/global/daily/et')
         # self.et_transform = [0.05, 0, -180.0, 0, -0.05, 90]
         # self.et_crs = 'EPSG:4326'
 
@@ -288,7 +292,7 @@ class Image(object):
         # Get output for a range of Tair values
         # Mapping over the list seemed a little slower than the FC
         t_air_values = ee.FeatureCollection([
-            ee.Feature(None, {'t_air': t_air}) for t_air in range(273, 320, 1)])
+            ee.Feature(None, {'t_air': t_air}) for t_air in self.tair_values])
         # T_air_values = ee.List.sequence(275, 335, 5)
         output_coll = ee.ImageCollection(t_air_values.map(t_air_func))
 
