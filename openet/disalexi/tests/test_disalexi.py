@@ -60,12 +60,16 @@ def test_Image_init_missing_landcover_type():
 
 
 @pytest.mark.parametrize(
-    'xy,et',
+    'xy, et',
     [
-        # CONUS ALEXI ET values
-        [ne1_xy, 7.287301],
-        [ne2_xy, 7.287301],
-        [ne3_xy, 7.477266],
+        # CONUS ALEXI ET values (V001 values)
+        [ne1_xy, 15.433811],
+        [ne2_xy, 15.433811],
+        [ne3_xy, 15.472604],
+        # # CONUS ALEXI ET values (old pre-V001 values)
+        # [ne1_xy, 7.287301],
+        # [ne2_xy, 7.287301],
+        # [ne3_xy, 7.477266],
     ]
 )
 def test_Image_set_alexi_et_vars_defaults(xy, et, tol=1E-6):
@@ -76,8 +80,9 @@ def test_Image_set_alexi_et_vars_defaults(xy, et, tol=1E-6):
 
 
 @pytest.mark.parametrize(
-    'xy,et',
+    'xy, et',
     [
+        # CONUS ALEXI ET values (old pre-V001 values)
         [ne1_xy, 5.995176],
         [ne2_xy, 5.995176],
         [ne3_xy, 6.320339],
@@ -101,7 +106,7 @@ def test_Image_set_alexi_et_vars_assets(xy, et, tol=1E-6):
 
 
 @pytest.mark.parametrize(
-    'xy,elevation,pressure',
+    'xy, elevation, pressure',
     [
         [ne1_xy, 350, 97.2306250000000],
         [ne2_xy, 350, 97.2306250000000],
@@ -183,7 +188,7 @@ def test_Image_set_landcover_vars_set_asset(tol=1E-6):
 
 
 @pytest.mark.parametrize(
-    'xy,interp,rs1,rs24',
+    'xy, interp, rs1, rs24',
     [
         [ne1_xy, True, 880.75 + (35.8425 / 60) * (956.25 - 880.75), 8506.97168],
         [ne2_xy, True, 880.75 + (35.8425 / 60) * (956.25 - 880.75), 8506.97168],
@@ -204,7 +209,7 @@ def test_Image_set_solar_vars_defaults(xy, interp, rs1, rs24, tol=1E-4):
 
 
 @pytest.mark.parametrize(
-    'xy,rs1,rs24',
+    'xy, rs1, rs24',
     [
         [ne1_xy, 917.87845865885413, 8559.066406],
         [ne2_xy, 917.87921142578125, 8558.934570],
@@ -228,7 +233,7 @@ def test_Image_set_solar_vars_assets_no_interp(xy, rs1, rs24, tol=1E-4):
 
 
 @pytest.mark.parametrize(
-    'xy,rs1,rs24',
+    'xy, rs1, rs24',
     [
         [ne1_xy, 917.87845865885413, 8559.066406],
         [ne2_xy, 917.87921142578125, 8558.934570],
@@ -257,7 +262,7 @@ def test_Image_set_solar_vars_assets_interp(xy, rs1, rs24, tol=1E-4):
 
 
 @pytest.mark.parametrize(
-    'xy,t_rise,t_end',
+    'xy, t_rise, t_end',
     [
         [ne1_xy, 11.02448526443880, 26.01087501850882],
         [ne2_xy, 11.02404074400912, 26.01041448914592],
@@ -296,7 +301,7 @@ def test_Image_set_weather_var_assets(tol=0.01):
 
 
 @pytest.mark.parametrize(
-    'xy,iterations,expected',
+    'xy, iterations, expected',
     [
         [ne1_xy, 10, 297.00],
         # [ne2_xy, 10, 301.00],
@@ -342,8 +347,7 @@ def test_Image_compute_ta_asset(xy, iterations, expected, tol=0.01):
         .projection().getInfo()['transform']
 
     # Compute Tair
-    ta_img = d_obj.compute_ta() \
-        .reproject(crs=asset_crs, crsTransform=asset_transform)
+    ta_img = d_obj.ta.reproject(crs=asset_crs, crsTransform=asset_transform)
 
     # Extract image values at a point using reduceRegion (with point geom)
     output = list(utils.image_value(ta_img, xy=xy).values())[0]
@@ -356,7 +360,7 @@ def test_Image_compute_ta_asset(xy, iterations, expected, tol=0.01):
 
 
 # @pytest.mark.parametrize(
-#     'xy,iterations,expected',
+#     'xy, iterations, expected',
 #     [
 #         [ne1_xy, 10, {'t_air': 298.0, 'et': 5.995176}],
 #     ]
@@ -422,7 +426,7 @@ def test_Image_compute_ta_asset(xy, iterations, expected, tol=0.01):
 
 # @pytest.mark.skip(reason="Skipping until TSEB is working")
 # @pytest.mark.parametrize(
-#     'xy,iterations,expected',
+#     'xy, iterations, expected',
 #     [
 #         [ne1_xy, 10, 298.01],
 #         [ne1_xy, 20, 298.01],

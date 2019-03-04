@@ -12,6 +12,21 @@ from . import tseb_utils
 from . import utils
 
 
+def lazy_property(fn):
+    """Decorator that makes a property lazy-evaluated
+
+    https://stevenloria.com/lazy-properties/
+    """
+    attr_name = '_lazy_' + fn.__name__
+
+    @property
+    def _lazy_property(self):
+        if not hasattr(self, attr_name):
+            setattr(self, attr_name, fn(self))
+        return getattr(self, attr_name)
+    return _lazy_property
+
+
 class Image(object):
     """Earth Engine DisALEXI"""
 
@@ -132,8 +147,8 @@ class Image(object):
             self.lc_type = landcover_type
 
         # ALEXI ET - CONUS
-        self.et_coll = ee.ImageCollection('projects/disalexi/alexi/CONUS')
-        self.et_transform = [0.04, 0, -125.04, 0, -0.04, 49.82]
+        self.et_coll = ee.ImageCollection('projects/disalexi/alexi/CONUS_V001')
+        self.et_transform = [0.04, 0, -125.04, 0, -0.04, 49.8]
         self.et_crs = 'EPSG:4326'
         # ALEXI ET - Global
         # self.et_coll = ee.ImageCollection(
@@ -153,84 +168,8 @@ class Image(object):
         self.rs_daily_coll = ee.ImageCollection(
             'projects/climate-engine/merra2/rs_daily')
 
-    # def compute_ta_test(self):
-    #     """"""
-    #
-    #     self._set_alexi_et_vars()
-    #     self._set_elevation_vars()
-    #     self._set_landcover_vars()
-    #     self._set_solar_vars()
-    #     self._set_time_vars()
-    #     self._set_weather_vars()
-    #
-    #     def t_air_func(t_air):
-    #         """Compute TSEB ET for each air temperature value"""
-    #
-    #         # Start with ALEXI scale air temperature
-    #         t_air_coarse_img = self.alexi_et.multiply(0) \
-    #             .add(ee.Number(t_air.get('t_air')))
-    #
-    #         # Does the Ta image need to be projected to the Landsat image?
-    #         # .reproject(crs=self.image_crs, crsTransform=self.image_transform)
-    #
-    #         et_img = tseb.tseb_pt(
-    #             T_air=t_air_coarse_img,
-    #             T_rad=self.lst,
-    #             u=self.windspeed,
-    #             p=self.pressure,
-    #             z=self.elevation,
-    #             Rs_1=self.rs1,
-    #             Rs24=self.rs24,
-    #             vza=0,
-    #             zs=self.sol_zenith,
-    #             aleafv=self.aleafv,
-    #             aleafn=self.aleafn,
-    #             aleafl=self.aleafl,
-    #             adeadv=self.adeadv,
-    #             adeadn=self.adeadn,
-    #             adeadl=self.adeadl,
-    #             albedo=self.albedo,
-    #             ndvi=self.ndvi,
-    #             lai=self.lai,
-    #             clump=self.clump,
-    #             hc=self.hc,
-    #             time=self.time,
-    #             t_rise=self.t_rise,
-    #             t_end=self.t_end,
-    #             leaf_width=self.leaf_width,
-    #             a_PT_in=1.32,
-    #             iterations=self.iterations)
-    #
-    #         et_coarse_img = ee.Image(et_img) \
-    #             .reduceResolution(reducer=ee.Reducer.mean(), maxPixels=30000) \
-    #             .reproject(crs=self.et_crs, crsTransform=self.et_transform) \
-    #             .updateMask(1)
-    #
-    #         # Invert the abs(bias) since quality mosaic sorts descending
-    #         bias = et_coarse_img.subtract(self.alexi_et).abs().multiply(-1)
-    #         # bias = self.et_img.subtract(ET).abs().multiply(-1)
-    #         return ee.Image([bias, et_coarse_img, t_air_coarse_img]) \
-    #             .rename(['bias', 'et', 't_air'])
-    #
-    #     t_air_values = ee.FeatureCollection([
-    #         ee.Feature(None, {'t_air': t_air})
-    #         for t_air in [x * 0.1 for x in range(2950, 3050, 1)]])
-    #     # DEADBEEF - NumPy is only being used for this line
-    #     #     for t_air in np.arange(295, 305, 0.1)])
-    #     output_coll = ee.ImageCollection(t_air_values.map(t_air_func))
-    #
-    #     # Return the air temperature associated with the lowest difference
-    #     #   in ET from the ALEXI ET value
-    #     t_air = ee.Image(output_coll.qualityMosaic('bias'))
-    #     #     .select(['t_air'])
-    #
-    #     # # Project the output back to the ALEXI pixels
-    #     # #     .reproject(crs=self.et_crs, crsTransform=self.et_transform) \
-    #     # #     .rename(['t_air'])
-    #
-    #     return t_air
-
-    def compute_ta(self):
+    @lazy_property
+    def ta(self):
         """Compute Landsat scale air temperature that minimizes bias between
         Landsat scale ET and ALEXI ET
 
@@ -322,7 +261,8 @@ class Image(object):
 
         return t_air
 
-    def compute_et(self, T_air):
+    @lazy_property
+    def et(self):
         """Compute Landsat scale DisALEXI ET
 
         Parameters
@@ -344,7 +284,7 @@ class Image(object):
         self._set_weather_vars()
 
         et = tseb.tseb_pt(
-            T_air=T_air,
+            T_air=self.t_air,
             T_rad=self.lst,
             u=self.windspeed,
             p=self.pressure,

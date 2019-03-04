@@ -20,7 +20,7 @@ def test_constant_image_value(tol=0.000001):
 
 
 @pytest.mark.parametrize(
-    'lon,lat,expected',
+    'lon, lat, expected',
     [
         # US-NE1
         [-96.47672812080845, 41.16506126041818, 356.7449951171875],
@@ -37,7 +37,7 @@ def test_image_value_default(lon, lat, expected, tol=0.000001):
 
 
 @pytest.mark.parametrize(
-    'lon,lat,expected',
+    'lon, lat, expected',
     [
         # US-NE1
         [-96.47672812080845, 41.16506126041818, 356.7449951171875],
@@ -54,7 +54,7 @@ def test_image_value_scale(lon, lat, expected, tol=0.000001):
 
 
 @pytest.mark.parametrize(
-    'lon,lat,expected',
+    'lon, lat, expected',
     [
         # US-NE1
         [-96.47672812080845, 41.16506126041818, 356.7449951171875],

@@ -8,12 +8,12 @@ import openet.disalexi.utils as utils
 
 
 @pytest.mark.parametrize(
-    'T_air,T_rad,u,'
-    'p,z,Rs_1,Rs24,vza,'
-    'zs,aleafv,aleafn,aleafl,adeadv,adeadn,adeadl,'
-    'albedo,ndvi,lai,clump,'
-    'hc,time,t_rise,'
-    't_end,leaf_width,a_PT_in,iterations,expected',
+    'T_air, T_rad, u,'
+    'p, z, Rs_1, Rs24, vza,'
+    'zs, aleafv, aleafn, aleafl, adeadv, adeadn, adeadl,'
+    'albedo, ndvi, lai, clump,'
+    'hc, time, t_rise,'
+    't_end, leaf_width, a_PT_in, iterations,expected',
     [
         # US-NE1 - IDL iteration 1
         [296.86259968439742, 302.49074951171878, 7.02662301063538,

@@ -16,7 +16,7 @@ from .idl_values import ne1, ne2, ne3
 
 
 @pytest.mark.parametrize(
-    'timestamp,expected',
+    'timestamp, expected',
     [
         # IDL only computes integer JD
         [ne1['timestamp'], ne1['jd']],
@@ -34,7 +34,7 @@ def test_to_jd(timestamp, expected, tol=0.001):
 
 
 @pytest.mark.parametrize(
-    'timestamp,xy,expected',
+    'timestamp, xy, expected',
     [
         [ne1['timestamp'], ne1['xy'],
          {'t_rise': ne1['t_rise'], 't_end': ne1['t_end']}],
@@ -62,7 +62,7 @@ def test_sunrise_sunset_image(timestamp, xy, expected, tol=1E-10):
 
 
 @pytest.mark.parametrize(
-    'timestamp,xy,expected',
+    'timestamp, xy, expected',
     [
         [ne1['timestamp'], ne1['xy'],
          {'t_rise': ne1['t_rise'], 't_end': ne1['t_end']}],
@@ -89,7 +89,7 @@ def test_sunrise_sunset_constant(timestamp, xy, expected, tol=1E-10):
 
 
 @pytest.mark.parametrize(
-    'timestamp,xy,expected',
+    'timestamp, xy, expected',
     [
         [ne1['timestamp'], ne1['xy'], ne1['zs']],
         [ne2['timestamp'], ne2['xy'], ne2['zs']],
@@ -111,7 +111,7 @@ def test_solar_zenith_image(timestamp, xy, expected, tol=1E-10):
 
 
 @pytest.mark.parametrize(
-    'timestamp,xy,expected',
+    'timestamp, xy, expected',
     [
         [ne1['timestamp'], ne1['xy'], ne1['zs']],
         [ne2['timestamp'], ne2['xy'], ne2['zs']],
@@ -133,7 +133,7 @@ def test_solar_zenith_constant(timestamp, xy, expected, tol=1E-10):
 
 
 @pytest.mark.parametrize(
-    'T_air,expected',
+    'T_air, expected',
     [
         # US-NE1
         [296.86259968439742, 0.76937715366883],
@@ -152,8 +152,8 @@ def test_emissivity(T_air, expected, tol=1E-8):
 
 
 @pytest.mark.parametrize(
-    'albedo,Rs_1,F,fc,aleafv,aleafn,aleafl,adeadv,adeadn,adeadl,zs,iterations,'
-    'expected',
+    'albedo, Rs_1, F, fc, aleafv, aleafn, aleafl, adeadv, adeadn, adeadl, '
+    'zs, iterations, expected',
     [
         # US-NE1
         [0.19908118247986, 917.87845865885413, 2.34641011714935,
@@ -195,7 +195,7 @@ def test_albedo_separation(albedo, Rs_1, F, fc, aleafv, aleafn, aleafl, adeadv,
 
 
 @pytest.mark.parametrize(
-    'u,d0,z0m,z_u,fm,expected',
+    'u, d0, z0m, z_u, fm, expected',
     [
         # Test neutral conditions first
         # US-NE1
@@ -221,7 +221,7 @@ def test_compute_u_attr(u, d0, z0m, z_u, fm, expected, tol=1E-10):
 
 
 @pytest.mark.parametrize(
-    'u_attr,d0,z0h,z_t,fh,expected',
+    'u_attr, d0, z0h, z_t, fh, expected',
     [
         # Test neutral conditions first
         # US-NE1
@@ -247,7 +247,7 @@ def test_compute_r_ah(u_attr, d0, z0h, z_t, fh, expected, tol=1E-10):
 
 
 @pytest.mark.parametrize(
-    'u_attr,T_s,T_c,hc,F,d0,z0m,leaf,leaf_s,fm_h,expected',
+    'u_attr, T_s, T_c, hc, F, d0, z0m, leaf, leaf_s, fm_h, expected',
     [
         # Intentionally using LAI value for F to match Python code
         # Test neutral conditions first (use T_air for T_s and T_c)
@@ -280,7 +280,7 @@ def test_compute_r_s(u_attr, T_s, T_c, hc, F, d0, z0m, leaf, leaf_s, fm_h,
 
 
 @pytest.mark.parametrize(
-    'u_attr,hc,F,d0,z0m,xl,leaf_c,fm_h,expected',
+    'u_attr, hc, F, d0, z0m, xl, leaf_c, fm_h, expected',
     [
         # Intentionally using LAI value for F to match Python code
         # Test neutral conditions first
@@ -312,7 +312,7 @@ def test_compute_r_x(u_attr, hc, F, d0, z0m, xl, leaf_c, fm_h,
 
 
 @pytest.mark.parametrize(
-    'albedo_c,T_air,T_c,T_s,e_atm,Rs_c,F,expected',
+    'albedo_c, T_air, T_c, T_s, e_atm, Rs_c, F, expected',
     [
         # US-NE1
         [0.14601381353606, 296.86260047912600, 296.86260047912600,
@@ -343,7 +343,7 @@ def test_compute_Rn_c(albedo_c, T_air, T_c, T_s, e_atm, Rs_c, F,
 
 
 @pytest.mark.parametrize(
-    'albedo_s,T_air,T_c,T_s,e_atm,Rs_s,F,expected',
+    'albedo_s, T_air, T_c, T_s, e_atm, Rs_s, F, expected',
     [
         # US-NE1
         [0.30626749091907, 296.86260047912600, 296.86260047912600,
@@ -374,7 +374,7 @@ def test_compute_Rn_s(albedo_s, T_air, T_c, T_s, e_atm, Rs_s, F,
 
 
 @pytest.mark.parametrize(
-    'Rn,Rn_s,albedo,ndvi,t_rise,t_end,time,EF_s,expected',
+    'Rn, Rn_s, albedo, ndvi, t_rise, t_end, time, EF_s, expected',
     [
         # US-NE1
         [620.37512852869418, 145.97048553078571, 0.19908118247986,
@@ -405,7 +405,7 @@ def test_compute_G0(Rn, Rn_s, albedo, ndvi, t_rise, t_end, time, EF_s,
 
 
 @pytest.mark.parametrize(
-    'H_c,fc_q,T_air,t0,r_ah,r_s,r_x,r_air,expected',
+    'H_c, fc_q, T_air, t0, r_ah, r_s, r_x, r_air, expected',
     [
         # H_c is intermediate H_c
         # US-NE1
@@ -436,7 +436,7 @@ def test_temp_separation_tc(H_c, fc_q, T_air, t0, r_ah, r_s, r_x, r_air,
 
 
 @pytest.mark.parametrize(
-    'T_c,fc_q,T_air,t0,expected',
+    'T_c, fc_q, T_air, t0, expected',
     [
         # US-NE1
         [300.21526728574315, 0.69062621055586, 296.86260047912600,
@@ -462,7 +462,7 @@ def test_temp_separation_ts(T_c, fc_q, T_air, t0,
 
 
 @pytest.mark.parametrize(
-    'T_c,T_s,fc_q,T_air,r_ah,r_s,r_x,expected',
+    'T_c, T_s, fc_q, T_air, r_ah, r_s, r_x, expected',
     [
         # US-NE1
         [300.21526728574315, 307.39290099869856, 0.68492516637839,
@@ -492,7 +492,7 @@ def test_temp_separation_tac(T_c, T_s, fc_q, T_air, r_ah, r_s, r_x,
 
 
 @pytest.mark.parametrize(
-    'H,t0,u_attr,r_air,z_t,d0,expected',
+    'H, t0, u_attr, r_air, z_t, d0, expected',
     [
         # US-NE1
         [90.66942780971830, 302.49074951171878, 0.42300362871195,
@@ -525,7 +525,7 @@ def test_compute_stability_fh(H, t0, u_attr, r_air, z_t, d0, expected,
 
 
 @pytest.mark.parametrize(
-    'H,t0,u_attr,r_air,z_u,d0,z0m,expected',
+    'H, t0, u_attr, r_air, z_u, d0, z0m, expected',
     [
         # US-NE1
         [90.66942780971830, 302.49074951171878, 0.42300362871195,
@@ -565,7 +565,7 @@ def test_compute_stability_fm(H, t0, u_attr, r_air, z_u, d0, z0m, expected,
 
 
 @pytest.mark.parametrize(
-    'H,t0,u_attr,r_air,hc,d0,z0m,expected',
+    'H, t0, u_attr, r_air, hc, d0, z0m, expected',
     [
         # US-NE1
         [90.66942780971830, 302.49074951171878, 0.42300362871195,
