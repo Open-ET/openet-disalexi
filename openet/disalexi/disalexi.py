@@ -18,10 +18,11 @@ class Image(object):
     def __init__(
             self,
             image,
-            elevation=ee.Image('USGS/SRTMGL1_003').rename(['elevation']),
-            landcover=None,
-            lc_type=None,
-            iterations=10,
+            elevation_source='USGS/SRTMGL1_003',
+            landcover_source=None,
+            landcover_type=None,
+            stabil_iterations=10,
+            albedo_iterations=10,
             tair_values=list(range(273, 321, 1)),
         ):
         """Initialize an image for computing DisALEXI
@@ -34,20 +35,21 @@ class Image(object):
         ----------
         image : ee.Image
             Prepped image
-        elevation: ee.Image
+        elevation_source: ee.Image
             Elevation asset.  Units must be in meters.
-            Will default to ee.Image('USGS/NED') if not set or None.
-        lc_type : str
-            Land cover type.  Choices are 'NLCD' or 'GlobeLand30'.  Will
-            default to 'NLCD' if not set and 'landcover' parameter not set.
-        landcover : ee.Image
+            Will default to ee.Image('USGS/SRTMGL1_003') if not set or None.
+        landcover_source : ee.Image
             Land cover asset.  Will default to ee.Image('USGS/NLCD/NLCD2011')
             if not set and 'lc_type' parameter not set.
+        landcover_type : str
+            Land cover type.  Choices are 'NLCD' or 'GlobeLand30'.  Will
+            default to 'NLCD' if not set and 'landcover' parameter not set.
         iterations : int
             Number of iterations of main calculation (the default is 10).
         """
         # self.image = ee.Image(image)
-        self.iterations = iterations
+        self.stabil_iter = stabil_iterations
+        self.albedo_iter = albedo_iterations
         self.tair_values = tair_values
 
         # Set server side date/time properties using the 'system:time_start'
@@ -83,24 +85,31 @@ class Image(object):
         self.ndvi = input_image.select('ndvi')
 
         # Elevation [m]
-        if elevation is None:
+        if elevation_source is None:
             self.elevation = ee.Image('USGS/SRTMGL1_003').rename(['elevation'])
             # self.elevation = ee.Image('USGS/NED').rename(['elevation'])
             # self.elevation = ee.Image('USGS/GTOPO30').rename(['elevation'])
             # self.elevation = ee.Image('USGS/GMTED2010').rename(['elevation'])
             # self.elevation = ee.Image('CGIAR/SRTM90_V4').rename(['elevation'])
             # self.elevation = ee.Image.constant(350.0).rename(['elevation'])
+        elif type(elevation_source) is str:
+            self.elevation = ee.Image(elevation_source).rename(['elevation'])
         else:
-            self.elevation = elevation.rename(['elevation'])
+            self.elevation = elevation_source.rename(['elevation'])
+        # elif isinstance(elevation_source, computedobject.ComputedObject):
+        #     self.elevation = ee.Image(elevation_source).rename(['elevation'])
+        # else:
+        #     raise ValueError('unsupported elevation source: {}'.format(
+        #         elevation_source))
 
         # Set default land cover image and type
         # For now default to CONUS and use default if image and type were not set
         # GlobeLand30 values need to be set to the lowest even multiple of 10,
         #   since that is currently what is in the landcover.xlsx file.
         # http://www.globallandcover.com/GLC30Download/index.aspx
-        if landcover is None and lc_type is None:
+        if landcover_source is None and landcover_type is None:
             # Using NLCD as default land cover and type
-            self.landcover = ee.Image('USGS/NLCD/NLCD2011').select(['landcover'])
+            self.lc_source = ee.Image('USGS/NLCD/NLCD2011').select(['landcover'])
             self.lc_type = 'NLCD'
             # Using GlobeLand30 land cover and type
             # lc_coll =  ee.ImageCollection('users/cgmorton/GlobeLand30')\
@@ -108,17 +117,19 @@ class Image(object):
             # self.landcover = ee.Image(lc_coll.mosaic()) \
             #     .divide(10).floor().multiply(10) \
             #     .rename(['landcover'])
-            # self.lc_type = 'GLOBELAND30'
-        elif landcover is None:
+            # self.landcover_type = 'GLOBELAND30'
+        elif landcover_source is None:
             # What should happen if on only the land cover image is set?
-            raise ValueError('landcover must be set if lc_type is set')
-        elif lc_type is None:
+            raise ValueError(
+                'landcover_source must be set if landcover_type is set')
+        elif landcover_type is None:
             # What should happen if on only the land cover type is set?
             # The images could be looked up by type from a default LC image dict
-            raise ValueError('lc_type must be set if landcover is set')
+            raise ValueError(
+                'landcover_type must be set if landcover_source is set')
         else:
-            self.landcover = landcover
-            self.lc_type = lc_type
+            self.lc_source = landcover_source
+            self.lc_type = landcover_type
 
         # ALEXI ET - CONUS
         self.et_coll = ee.ImageCollection('projects/disalexi/alexi/CONUS')
@@ -216,8 +227,8 @@ class Image(object):
     #     # # Project the output back to the ALEXI pixels
     #     # #     .reproject(crs=self.et_crs, crsTransform=self.et_transform) \
     #     # #     .rename(['t_air'])
-
-        return t_air
+    #
+    #     return t_air
 
     def compute_ta(self):
         """Compute Landsat scale air temperature that minimizes bias between
@@ -278,7 +289,9 @@ class Image(object):
                 t_end=self.t_end,
                 leaf_width=self.leaf_width,
                 a_PT_in=1.32,
-                iterations=self.iterations)
+                stabil_iter=self.stabil_iter,
+                albedo_iter=self.albedo_iter,
+            )
 
             # Invert the abs(bias) since quality mosaic sorts descending
             bias = ee.Image(et).subtract(self.alexi_et).abs().multiply(-1)
@@ -358,7 +371,9 @@ class Image(object):
             t_end=self.t_end,
             leaf_width=self.leaf_width,
             a_PT_in=1.32,
-            iterations=self.iterations)
+            stabil_iter=self.stabil_iter,
+            albedo_iter=self.albedo_iter,
+        )
         return ee.Image(et).rename(['et'])
 
     def aggregate(self, T_air):
@@ -467,16 +482,16 @@ class Image(object):
                 .rename([lc_var])
 
         # Get LC based variables
-        self.aleafv = lc_remap(self.landcover, self.lc_type, 'aleafv')
-        self.aleafn = lc_remap(self.landcover, self.lc_type, 'aleafn')
-        self.aleafl = lc_remap(self.landcover, self.lc_type, 'aleafl')
-        self.adeadv = lc_remap(self.landcover, self.lc_type, 'adeadv')
-        self.adeadn = lc_remap(self.landcover, self.lc_type, 'adeadn')
-        self.adeadl = lc_remap(self.landcover, self.lc_type, 'adeadl')
-        hc_min = lc_remap(self.landcover, self.lc_type, 'hmin')
-        hc_max = lc_remap(self.landcover, self.lc_type, 'hmax')
-        self.leaf_width = lc_remap(self.landcover, self.lc_type, 'xl')
-        self.clump = lc_remap(self.landcover, self.lc_type, 'omega')
+        self.aleafv = lc_remap(self.lc_source, self.lc_type, 'aleafv')
+        self.aleafn = lc_remap(self.lc_source, self.lc_type, 'aleafn')
+        self.aleafl = lc_remap(self.lc_source, self.lc_type, 'aleafl')
+        self.adeadv = lc_remap(self.lc_source, self.lc_type, 'adeadv')
+        self.adeadn = lc_remap(self.lc_source, self.lc_type, 'adeadn')
+        self.adeadl = lc_remap(self.lc_source, self.lc_type, 'adeadl')
+        hc_min = lc_remap(self.lc_source, self.lc_type, 'hmin')
+        hc_max = lc_remap(self.lc_source, self.lc_type, 'hmax')
+        self.leaf_width = lc_remap(self.lc_source, self.lc_type, 'xl')
+        self.clump = lc_remap(self.lc_source, self.lc_type, 'omega')
 
         # LAI for leafs spherical distribution
         F = self.lai.multiply(self.clump).rename(['F'])

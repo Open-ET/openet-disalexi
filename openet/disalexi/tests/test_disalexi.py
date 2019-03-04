@@ -3,7 +3,7 @@ import logging
 import ee
 import pytest
 
-import openet.disalexi.disalexi as disalexi
+import openet.disalexi as disalexi
 import openet.disalexi.utils as utils
 
 # AmeriFlux sites adjusted to nearest Landsat cell centroid
@@ -46,17 +46,17 @@ def test_Image_init_dates():
     assert float(d_obj.time.getInfo()) == img_time
 
 
-def test_Image_init_missing_landcover():
+def test_Image_init_missing_landcover_source():
     """Test that only setting a land cover type raises a ValueError exception"""
     with pytest.raises(ValueError) as e_info:
-        d_obj = disalexi.Image(test_img, lc_type='NLCD')
+        d_obj = disalexi.Image(test_img, landcover_type='NLCD')
 
 
-def test_Image_init_missing_lc_type():
+def test_Image_init_missing_landcover_type():
     """Test that only setting a land cover image raises a ValueError exception"""
     with pytest.raises(ValueError) as e_info:
         d_obj = disalexi.Image(
-            test_img, landcover=ee.Image('USGS/NLCD/NLCD2011'))
+            test_img, landcover_source=ee.Image('USGS/NLCD/NLCD2011'))
 
 
 @pytest.mark.parametrize(
@@ -117,10 +117,11 @@ def test_Image_set_elevation_vars(xy, elevation, pressure, tol=1E-6):
                pressure) <= tol
 
 
-def test_Image_set_landcover_vars_invalid_lc_type():
-    """Test that setting an invalid lc_type value raises a KeyError exception"""
+def test_Image_set_landcover_vars_invalid_landcover_type():
+    """Test that setting an invalid landcover_type value raises a KeyError exception"""
     d_obj = disalexi.Image(
-        test_img, landcover=ee.Image('USGS/NLCD/NLCD2011'), lc_type='DEADBEEF')
+        test_img, landcover_source=ee.Image('USGS/NLCD/NLCD2011'),
+        landcover_type='DEADBEEF')
     # print(d_obj._set_landcover_vars())
     with pytest.raises(KeyError) as e_info:
         d_obj._set_landcover_vars()
@@ -148,8 +149,8 @@ def test_Image_set_landcover_vars_default(tol=1E-6):
 def test_Image_set_landcover_vars_init_asset(tol=1E-6):
     """Test setting the land cover image and type as the object is initialized"""
     d_obj = disalexi.Image(
-        test_img, lc_type='NLCD',
-        landcover=ee.Image(asset_ws + 'landcover'))
+        test_img, landcover_type='NLCD',
+        landcover_source=ee.Image(asset_ws + 'landcover'))
     d_obj._set_landcover_vars()
     assert utils.image_value(ee.Image(d_obj.aleafv))['aleafv'] == 0.83
     # assert utils.image_value(ee.Image(d_obj.aleafn))['aleafn'] == 0.35
@@ -166,7 +167,7 @@ def test_Image_set_landcover_vars_init_asset(tol=1E-6):
 def test_Image_set_landcover_vars_set_asset(tol=1E-6):
     """Test setting the land cover image and type directly on the object"""
     d_obj = disalexi.Image(test_img)
-    d_obj.landcover = ee.Image(asset_ws + 'landcover'),
+    d_obj.lc_source = ee.Image(asset_ws + 'landcover'),
     d_obj.lc_type = 'NLCD'
     d_obj._set_landcover_vars()
     assert utils.image_value(ee.Image(d_obj.aleafv))['aleafv'] == 0.83
@@ -306,10 +307,11 @@ def test_Image_compute_ta_asset(xy, iterations, expected, tol=0.01):
     """Test fine scale air temperature at a single point using the test assets"""
     d_obj = disalexi.Image(
         test_img,
-        elevation=ee.Image.constant(350.0),
-        iterations=iterations,
-        lc_type='NLCD',
-        landcover=ee.Image(asset_ws + 'landcover')
+        elevation_source=ee.Image.constant(350.0),
+        albedo_iterations=iterations,
+        stabil_iterations=iterations,
+        landcover_type='NLCD',
+        landcover_source=ee.Image(asset_ws + 'landcover')
     )
 
     # Overwrite the default ancillary images with the test assets
@@ -353,68 +355,69 @@ def test_Image_compute_ta_asset(xy, iterations, expected, tol=0.01):
 
 
 
-@pytest.mark.parametrize(
-    'xy,iterations,expected',
-    [
-        [ne1_xy, 10, {'t_air': 298.0, 'et': 5.995176}],
-    ]
-)
-def test_Image_compute_ta_test_asset(xy, iterations, expected, tol=0.01):
-    """Test coarse scale air temperature at a single point using the test assets"""
-    d_obj = disalexi.Image(
-        test_img,
-        elevation=ee.Image.constant(350.0),
-        iterations=iterations,
-        lc_type='NLCD',
-        landcover=ee.Image(asset_ws + 'landcover')
-    )
-
-    # Overwrite the default ancillary images with the test assets
-    d_obj.windspeed_coll = ee.ImageCollection([
-        ee.Image([
-            ee.Image(asset_ws + 'u'),
-            ee.Image(asset_ws + 'u').multiply(0)]) \
-            .setMulti({'system:time_start': img_date_start})])
-    d_obj.rs_hourly_coll = ee.ImageCollection([
-        ee.Image(asset_ws + 'Insol1')
-            .setMulti({'system:time_start': img_hour_start.subtract(3600000)}),
-        ee.Image(asset_ws + 'Insol1')
-            .setMulti({'system:time_start': img_hour_start}),
-        ee.Image(asset_ws + 'Insol1')
-            .setMulti({'system:time_start': img_hour_start.add(3600000)})
-    ])
-    d_obj.rs_daily_coll = ee.ImageCollection([
-        ee.Image(asset_ws + 'Insol24')  \
-            .setMulti({'system:time_start': img_date_start})])
-    d_obj.et_coll = ee.ImageCollection([
-        ee.Image(asset_ws + 'alexiET') \
-            .setMulti({'system:time_start': img_date_start})])
-    d_obj.et_transform = [0.04, 0, -96.442, 0, -0.04, 41.297]
-
-    d_obj._set_solar_vars(interpolate_flag=False)
-    d_obj._set_weather_vars()
-
-    # Get the spatial reference and geoTransform of the assets
-    # asset_crs = ee.Image(asset_ws + 'albedo').projection().crs().getInfo()
-    # asset_transform = ee.Image(asset_ws + 'albedo') \
-    #     .projection().getInfo()['transform']
-
-    # Compute ALEXI scale air temperature
-    ta_coarse_img = d_obj.compute_ta_test()
-    #     .reproject(crs=asset_crs, crsTransform=asset_transform)
-    #     .reproject(crs='EPSG:4326', crsTransform=d_obj.et_transform)
-
-    # Extract image values at a point using reduceRegion (with point geom)
-    output = utils.image_value(ta_coarse_img.select(['t_air']), tile_scale=4)
-    logging.debug('  Target values: {}'.format(expected['t_air']))
-    logging.debug('  Output values: {}'.format(output['t_air']))
-    assert abs(output['t_air'] - expected['t_air']) <= tol
-
-    # # This test consistently times out, commenting out for now
-    # output = utils.image_value(ta_coarse_img.select(['et']))
-    # logging.debug('  Target values: {}'.format(expected['et']))
-    # logging.debug('  Output values: {}'.format(output['et']))
-    # assert abs(output['et'] - expected['et']) <= tol
+# @pytest.mark.parametrize(
+#     'xy,iterations,expected',
+#     [
+#         [ne1_xy, 10, {'t_air': 298.0, 'et': 5.995176}],
+#     ]
+# )
+# def test_Image_compute_ta_test_asset(xy, iterations, expected, tol=0.01):
+#     """Test coarse scale air temperature at a single point using the test assets"""
+#     d_obj = disalexi.Image(
+#         test_img,
+#         elevation_source=ee.Image.constant(350.0),
+#         albedo_iterations=iterations,
+#         stabil_iterations=iterations,
+#         landcover_type='NLCD',
+#         landcover_source=ee.Image(asset_ws + 'landcover')
+#     )
+#
+#     # Overwrite the default ancillary images with the test assets
+#     d_obj.windspeed_coll = ee.ImageCollection([
+#         ee.Image([
+#             ee.Image(asset_ws + 'u'),
+#             ee.Image(asset_ws + 'u').multiply(0)]) \
+#             .setMulti({'system:time_start': img_date_start})])
+#     d_obj.rs_hourly_coll = ee.ImageCollection([
+#         ee.Image(asset_ws + 'Insol1')
+#             .setMulti({'system:time_start': img_hour_start.subtract(3600000)}),
+#         ee.Image(asset_ws + 'Insol1')
+#             .setMulti({'system:time_start': img_hour_start}),
+#         ee.Image(asset_ws + 'Insol1')
+#             .setMulti({'system:time_start': img_hour_start.add(3600000)})
+#     ])
+#     d_obj.rs_daily_coll = ee.ImageCollection([
+#         ee.Image(asset_ws + 'Insol24')  \
+#             .setMulti({'system:time_start': img_date_start})])
+#     d_obj.et_coll = ee.ImageCollection([
+#         ee.Image(asset_ws + 'alexiET') \
+#             .setMulti({'system:time_start': img_date_start})])
+#     d_obj.et_transform = [0.04, 0, -96.442, 0, -0.04, 41.297]
+#
+#     d_obj._set_solar_vars(interpolate_flag=False)
+#     d_obj._set_weather_vars()
+#
+#     # Get the spatial reference and geoTransform of the assets
+#     # asset_crs = ee.Image(asset_ws + 'albedo').projection().crs().getInfo()
+#     # asset_transform = ee.Image(asset_ws + 'albedo') \
+#     #     .projection().getInfo()['transform']
+#
+#     # Compute ALEXI scale air temperature
+#     ta_coarse_img = d_obj.compute_ta_test()
+#     #     .reproject(crs=asset_crs, crsTransform=asset_transform)
+#     #     .reproject(crs='EPSG:4326', crsTransform=d_obj.et_transform)
+#
+#     # Extract image values at a point using reduceRegion (with point geom)
+#     output = utils.image_value(ta_coarse_img.select(['t_air']), tile_scale=4)
+#     logging.debug('  Target values: {}'.format(expected['t_air']))
+#     logging.debug('  Output values: {}'.format(output['t_air']))
+#     assert abs(output['t_air'] - expected['t_air']) <= tol
+#
+#     # # This test consistently times out, commenting out for now
+#     # output = utils.image_value(ta_coarse_img.select(['et']))
+#     # logging.debug('  Target values: {}'.format(expected['et']))
+#     # logging.debug('  Output values: {}'.format(output['et']))
+#     # assert abs(output['et'] - expected['et']) <= tol
 
 
 # @pytest.mark.skip(reason="Skipping until TSEB is working")
@@ -431,10 +434,10 @@ def test_Image_compute_ta_test_asset(xy, iterations, expected, tol=0.01):
 #     """Test coarse scale air temperature at a single point using the test assets"""
 #     d_obj = disalexi.Image(
 #         test_img,
-#         elevation=ee.Image.constant(350.0),
+#         elevation_source=ee.Image.constant(350.0),
 #         iterations=iterations,
-#         lc_type='NLCD',
-#         landcover=ee.Image(asset_ws + 'landcover')
+#         landcover_type='NLCD',
+#         landcover_source=ee.Image(asset_ws + 'landcover')
 #     )
 #
 #     # Overwrite the default ancillary images with the test assets
@@ -516,7 +519,8 @@ def test_Image_compute_ta_test_asset(xy, iterations, expected, tol=0.01):
 #     def run_model(img):
 #         return disalexi.Image(
 #                 img, et_coll=alexi_et_coll,
-#                 landcover=landcover_img, lc_type=landcover_type) \
+#                 landcover_source=landcover_img,
+#                 landcover_type=landcover_type) \
 #             .run_disalexi()
 #     et_img = run_model(input_img).rename(['et'])
 #     # logging.info(et_img.getInfo())
@@ -564,7 +568,8 @@ def test_Image_compute_ta_test_asset(xy, iterations, expected, tol=0.01):
 #     def run_model(img):
 #         return disalexi.Image(
 #                 img, et_coll=alexi_et_coll,
-#                 landcover=landcover_img, lc_type=landcover_type) \
+#                 landcover_source=landcover_img,
+#                 landcover_type=landcover_type) \
 #             .run_disalexi()
 #     et_coll = ee.ImageCollection(input_coll.map(run_model))
 #     et_img = ee.Image(et_coll.first()).rename(['et'])

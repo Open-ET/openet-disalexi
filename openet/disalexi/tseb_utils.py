@@ -408,18 +408,18 @@ def albedo_separation(albedo, Rs_1, F, fc, aleafv, aleafn, aleafl, adeadv,
     def iter_func(n, prev):
         # Extract inputs from previous iteration
         # CGM - Variables that are commented out only need to be returned
-        # akb = ee.Image(ee.Dictionary(prev).get('akb'));
-        # albedo_c = ee.Image(ee.Dictionary(prev).get('albedo_c'));
-        # albedo_s = ee.Image(ee.Dictionary(prev).get('albedo_s'));
-        # ameann = ee.Image(ee.Dictionary(prev).get('ameann'));
-        # ameanv = ee.Image(ee.Dictionary(prev).get('ameanv'));
-        # diff = ee.Image(ee.Dictionary(prev).get('diff'));
-        fg_iter = ee.Image(ee.Dictionary(prev).get('fg'));
-        # rbcpyn = ee.Image(ee.Dictionary(prev).get('rbcpyn'));
-        # rbcpyv = ee.Image(ee.Dictionary(prev).get('rbcpyv'));
-        rsoilv_iter = ee.Image(ee.Dictionary(prev).get('rsoilv'));
-        # taudn = ee.Image(ee.Dictionary(prev).get('taudn'));
-        # taudv = ee.Image(ee.Dictionary(prev).get('taudv'));
+        # akb = ee.Image(ee.Dictionary(prev).get('akb'))
+        # albedo_c = ee.Image(ee.Dictionary(prev).get('albedo_c'))
+        # albedo_s = ee.Image(ee.Dictionary(prev).get('albedo_s'))
+        # ameann = ee.Image(ee.Dictionary(prev).get('ameann'))
+        # ameanv = ee.Image(ee.Dictionary(prev).get('ameanv'))
+        # diff = ee.Image(ee.Dictionary(prev).get('diff'))
+        fg_iter = ee.Image(ee.Dictionary(prev).get('fg'))
+        # rbcpyn = ee.Image(ee.Dictionary(prev).get('rbcpyn'))
+        # rbcpyv = ee.Image(ee.Dictionary(prev).get('rbcpyv'))
+        rsoilv_iter = ee.Image(ee.Dictionary(prev).get('rsoilv'))
+        # taudn = ee.Image(ee.Dictionary(prev).get('taudn'))
+        # taudv = ee.Image(ee.Dictionary(prev).get('taudv'))
 
         rsoiln = rsoilv_iter.multiply(ratio_soil)
         # rsoiln = .expression(

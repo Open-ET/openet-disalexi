@@ -7,7 +7,8 @@ from . import utils
 def tseb_pt(T_air, T_rad, u, p, z, Rs_1, Rs24, vza, zs,
             aleafv, aleafn, aleafl, adeadv, adeadn, adeadl,
             albedo, ndvi, lai, clump, hc, time, t_rise, t_end,
-            leaf_width, a_PT_in=1.32, iterations=35):
+            leaf_width, a_PT_in=1.32,
+            stabil_iter=35, albedo_iter=10):
     """Priestley-Taylor TSEB
 
     Calculates the Priestley Taylor TSEB fluxes using a single observation of
@@ -66,9 +67,12 @@ def tseb_pt(T_air, T_rad, u, p, z, Rs_1, Rs24, vza, zs,
     a_PT_in : float, optional
         Priestley Taylor coefficient for canopy potential transpiration
         (the default is 1.32).
-    iterations: int, optional
-        Number of iterations of main calculation
+    stabil_iter: int, optional
+        Number of iterations of stability calculation
         (the default is 35)
+    albedo_iter: int, optional
+        Number of iterations of albedo separation calculation
+        (the default is 10)
 
     Returns
     -------
@@ -199,7 +203,8 @@ def tseb_pt(T_air, T_rad, u, p, z, Rs_1, Rs24, vza, zs,
     #     {'T_air': T_air})
 
     Rs_c, Rs_s, albedo_c, albedo_s = tseb_utils.albedo_separation(
-        albedo, Rs_1, F, fc, aleafv, aleafn, aleafl, adeadv, adeadn, adeadl, zs)
+        albedo, Rs_1, F, fc, aleafv, aleafn, aleafl, adeadv, adeadn, adeadl, zs,
+        albedo_iter)
 
     # CGM - Moved emissivity calculation to separate function.
     #   I removed the Rs0 check.
@@ -278,7 +283,6 @@ def tseb_pt(T_air, T_rad, u, p, z, Rs_1, Rs24, vza, zs,
     # print('T_c:      {:20.14f}'.format(float(utils.image_value(T_c).values()[0])))
     # print('T_s:      {:20.14f}'.format(float(utils.image_value(T_s).values()[0])))
     # print('EF_s:     {:20.14f}'.format(float(utils.image_value(EF_s).values()[0])))
-    # print('Iterations: {}'.format(iterations))
 
     # ************************************************************************
     # Start Loop for Stability Correction and Water Stress
@@ -399,7 +403,7 @@ def tseb_pt(T_air, T_rad, u, p, z, Rs_1, Rs24, vza, zs,
         'T_ac': ee.Image(0), 'T_c': T_c, 'T_s': T_s, 'u_attr': u_attr
     })
     iter_output = ee.Dictionary(
-        ee.List.sequence(1, iterations).iterate(iter_func, input_images))
+        ee.List.sequence(1, stabil_iter).iterate(iter_func, input_images))
 
     # Unpack the iteration output
     a_PT = ee.Image(iter_output.get('a_PT'))
