@@ -35,7 +35,7 @@ class Image(object):
             image,
             alexi_et_source='CONUS_V001',
             elevation_source='USGS/SRTMGL1_003',
-            landcover_source='NLCD',
+            landcover_source='NLCD2011',
             rs_daily_source='MERRA2',
             rs_hourly_source='MERRA2',
             windspeed_source='CFSV2',
@@ -235,10 +235,8 @@ class Image(object):
 
         # Return the air temperature associated with the lowest difference
         #   in ET from the ALEXI ET value
-        t_air = ee.Image(output_coll.qualityMosaic('bias')) \
+        return ee.Image(output_coll.qualityMosaic('bias')) \
             .select(['t_air'])
-
-        return t_air
 
     # @lazy_property
     # def et(self):
@@ -404,7 +402,6 @@ class Image(object):
 
         return windspeed_img
 
-
     def _set_landcover_vars(self):
         """Compute Land Cover / LAI derived variables
 
@@ -517,6 +514,27 @@ class Image(object):
                 .filterDate(self.date, self.date.advance(1, 'day')) \
                 .first()) \
             .rename(['rs'])
+
+    # @lazy_property
+    # def _t_rise(self):
+    #     return tseb_utils.sunrise_sunset(
+    #         date=self.datetime,
+    #         lon=ee.Image.pixelLonLat().select(['longitude']).multiply(math.pi / 180),
+    #         lat=ee.Image.pixelLonLat().select(['latitude']).multiply(math.pi / 180))
+    #
+    # @lazy_property
+    # def _t_end(self):
+    #     return tseb_utils.sunrise_sunset(
+    #         date=self.datetime,
+    #         lon=ee.Image.pixelLonLat().select(['longitude']).multiply(math.pi / 180),
+    #         lat=ee.Image.pixelLonLat().select(['latitude']).multiply(math.pi / 180))
+    #
+    # @lazy_property
+    # def _sol_zenith(self):
+    #     return tseb_utils.solar_zenith(
+    #         date=self.datetime,
+    #         lon=ee.Image.pixelLonLat().select(['longitude']).multiply(math.pi / 180),
+    #         lat=ee.Image.pixelLonLat().select(['latitude']).multiply(math.pi / 180))
 
     def _set_time_vars(self):
         """Compute time and position related variables

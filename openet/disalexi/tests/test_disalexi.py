@@ -46,77 +46,72 @@ def test_Image_init_dates():
     assert float(d_obj.time.getInfo()) == img_time
 
 
-@pytest.mark.parametrize(
-    'xy, et',
-    [
-        # CONUS ALEXI ET values (V001 values)
-        [ne1_xy, 15.433811],
-        [ne2_xy, 15.433811],
-        [ne3_xy, 15.472604],
-        # # CONUS ALEXI ET values (old pre-V001 values)
-        # [ne1_xy, 7.287301],
-        # [ne2_xy, 7.287301],
-        # [ne3_xy, 7.477266],
-    ]
-)
-def test_Image_set_alexi_et_vars_defaults(xy, et, tol=1E-6):
-    d_obj = disalexi.Image(test_img)
-    d_obj._set_alexi_et_vars()
-    assert abs(utils.image_value(
-        ee.Image(d_obj.alexi_et), xy=xy, scale=0.1)['alexi_et'] - et) <= tol
+# @pytest.mark.parametrize(
+#     'xy, et',
+#     [
+#         # CONUS ALEXI ET values (V001 values)
+#         [ne1_xy, 15.433811],
+#         [ne2_xy, 15.433811],
+#         [ne3_xy, 15.472604],
+#         # # CONUS ALEXI ET values (old pre-V001 values)
+#         # [ne1_xy, 7.287301],
+#         # [ne2_xy, 7.287301],
+#         # [ne3_xy, 7.477266],
+#     ]
+# )
+# def test_Image_set_alexi_et_vars_defaults(xy, et, tol=1E-6):
+#     d_obj = disalexi.Image(test_img)
+#     # d_obj._set_alexi_et_vars()
+#     assert abs(utils.image_value(
+#         ee.Image(d_obj.alexi_et), xy=xy, scale=0.1)['alexi_et'] - et) <= tol
 
 
-@pytest.mark.parametrize(
-    'xy, et',
-    [
-        # CONUS ALEXI ET values (old pre-V001 values)
-        [ne1_xy, 5.995176],
-        [ne2_xy, 5.995176],
-        [ne3_xy, 6.320339],
-    ]
-)
-def test_Image_set_alexi_et_vars_assets(xy, et, tol=1E-6):
-    """
-
-    Don't use scale parameter in image_value since ALEXI ET assets are already
-        resampled to the Landsat grid.
-    Add separate check that band name is set correctly?
-    """
-    d_obj = disalexi.Image(test_img)
-    d_obj.et_coll = ee.ImageCollection([
-        ee.Image(asset_ws + 'alexiET') \
-            .set({'system:time_start': img_date_start})])
-    d_obj.et_transform = [0.04, 0, -96.442, 0, -0.04, 41.297]
-    d_obj._set_alexi_et_vars()
-    assert abs(utils.image_value(
-        ee.Image(d_obj.alexi_et), xy=xy)['alexi_et'] - et) <= tol
-
-
-@pytest.mark.parametrize(
-    'xy, elevation, pressure',
-    [
-        [ne1_xy, 350, 97.2306250000000],
-        [ne2_xy, 350, 97.2306250000000],
-        [ne3_xy, 350, 97.2306250000000],
-    ]
-)
-def test_Image_set_elevation_vars(xy, elevation, pressure, tol=1E-6):
-    """"""
-    d_obj = disalexi.Image(test_img)
-    d_obj.elevation = ee.Image.constant(elevation)
-    d_obj._set_elevation_vars()
-    assert abs(utils.image_value(ee.Image(d_obj.pressure), xy=xy)['pressure'] -
-               pressure) <= tol
+# @pytest.mark.parametrize(
+#     'xy, et',
+#     [
+#         # CONUS ALEXI ET values (old pre-V001 values)
+#         [ne1_xy, 5.995176],
+#         [ne2_xy, 5.995176],
+#         [ne3_xy, 6.320339],
+#     ]
+# )
+# def test_Image_set_alexi_et_vars_assets(xy, et, tol=1E-6):
+#     """
+#
+#     Don't use scale parameter in image_value since ALEXI ET assets are already
+#         resampled to the Landsat grid.
+#     Add separate check that band name is set correctly?
+#     """
+#     d_obj = disalexi.Image(test_img)
+#     d_obj.et_coll = ee.ImageCollection([
+#         ee.Image(asset_ws + 'alexiET') \
+#             .set({'system:time_start': img_date_start})])
+#     d_obj.et_transform = [0.04, 0, -96.442, 0, -0.04, 41.297]
+#     # d_obj._set_alexi_et_vars()
+#     assert abs(utils.image_value(
+#         ee.Image(d_obj.alexi_et), xy=xy)['alexi_et'] - et) <= tol
 
 
-def test_Image_set_landcover_vars_invalid_landcover_type():
-    """Test that setting an invalid landcover_type value raises a KeyError exception"""
-    d_obj = disalexi.Image(
-        test_img, landcover_source=ee.Image('USGS/NLCD/NLCD2011'),
-        landcover_type='DEADBEEF')
-    # print(d_obj._set_landcover_vars())
-    with pytest.raises(KeyError) as e_info:
-        d_obj._set_landcover_vars()
+# @pytest.mark.parametrize(
+#     'xy, elevation, pressure',
+#     [
+#         [ne1_xy, 350, 97.2306250000000],
+#         [ne2_xy, 350, 97.2306250000000],
+#         [ne3_xy, 350, 97.2306250000000],
+#     ]
+# )
+# def test_Image_elevation_source(xy, elevation, pressure, tol=1E-6):
+#     """"""
+#     d_obj = disalexi.Image(test_img)
+#     d_obj.elevation = ee.Image.constant(elevation)
+#     assert abs(utils.image_value(ee.Image(d_obj.pressure), xy=xy)['pressure'] -
+#                pressure) <= tol
+
+
+def test_Image_landcover_source_exception():
+    """Test that setting an invalid landcover_source value raises a KeyError exception"""
+    with pytest.raises(ValueError) as e_info:
+        disalexi.Image(test_img, landcover_source='DEADBEEF')
 
 
 def test_Image_set_landcover_vars_default(tol=1E-6):
@@ -140,9 +135,7 @@ def test_Image_set_landcover_vars_default(tol=1E-6):
 
 def test_Image_set_landcover_vars_init_asset(tol=1E-6):
     """Test setting the land cover image and type as the object is initialized"""
-    d_obj = disalexi.Image(
-        test_img, landcover_type='NLCD',
-        landcover_source=ee.Image(asset_ws + 'landcover'))
+    d_obj = disalexi.Image(test_img, landcover_source='NLCD2011')
     d_obj._set_landcover_vars()
     assert utils.image_value(ee.Image(d_obj.aleafv))['aleafv'] == 0.83
     # assert utils.image_value(ee.Image(d_obj.aleafn))['aleafn'] == 0.35
@@ -159,8 +152,7 @@ def test_Image_set_landcover_vars_init_asset(tol=1E-6):
 def test_Image_set_landcover_vars_set_asset(tol=1E-6):
     """Test setting the land cover image and type directly on the object"""
     d_obj = disalexi.Image(test_img)
-    d_obj.lc_source = ee.Image(asset_ws + 'landcover'),
-    d_obj.lc_type = 'NLCD'
+    d_obj.landcover_source = 'NLCD2011'
     d_obj._set_landcover_vars()
     assert utils.image_value(ee.Image(d_obj.aleafv))['aleafv'] == 0.83
     # assert utils.image_value(ee.Image(d_obj.aleafn))['aleafn'] == 0.35
@@ -270,80 +262,81 @@ def test_Image_set_time_vars_defaults(xy, t_rise, t_end, tol=1E-8):
         ee.Image(d_obj.t_end), xy)['t_end'] - t_end) <= tol
 
 
-def test_Image_set_weather_vars_defaults(tol=0.01):
-    d_obj = disalexi.Image(test_img)
-    d_obj._set_weather_vars()
-    assert abs(utils.image_value(
-        ee.Image(d_obj.windspeed))['windspeed'] - 4.12) <= tol
+def test_Image_windspeed_default(tol=0.01):
+    output = utils.image_value(disalexi.Image(test_img).windspeed)['windspeed']
+    assert abs(output - 4.12) <= tol
 
 
-def test_Image_set_weather_var_assets(tol=0.01):
-    d_obj = disalexi.Image(test_img)
-    d_obj.windspeed_coll = ee.ImageCollection([
-        ee.Image([ee.Image(asset_ws + 'u'), ee.Image(asset_ws + 'u').multiply(0)]) \
-            .set({'system:time_start': img_date_start})])
-    d_obj._set_weather_vars()
-    assert abs(utils.image_value(
-        ee.Image(d_obj.windspeed))['windspeed'] - 7.02662301063538) <= tol
+def test_Image_windspeed_source_exception():
+    """Test that setting an invalid windspeed_source value raises a KeyError exception"""
+    with pytest.raises(ValueError) as e_info:
+        disalexi.Image(test_img, windspeed_source='DEADBEEF').windspeed
 
 
-@pytest.mark.parametrize(
-    'xy, iterations, expected',
-    [
-        [ne1_xy, 10, 297.00],
-        # [ne2_xy, 10, 301.00],
-        # [ne3_xy, 10, 302.00],
-    ]
-)
-def test_Image_compute_ta_asset(xy, iterations, expected, tol=0.01):
-    """Test fine scale air temperature at a single point using the test assets"""
-    d_obj = disalexi.Image(
-        test_img,
-        elevation_source=ee.Image.constant(350.0),
-        albedo_iterations=iterations,
-        stabil_iterations=iterations,
-        landcover_type='NLCD',
-        landcover_source=ee.Image(asset_ws + 'landcover')
-    )
+# def test_Image_set_weather_var_assets(tol=0.01):
+#     d_obj = disalexi.Image(test_img)
+#     d_obj.windspeed = ee.Image(
+#         ee.Image(asset_ws + 'u'), ee.Image(asset_ws + 'u').multiply(0)]) \
+#             .set({'system:time_start': img_date_start})])
+#     assert abs(utils.image_value(
+#         ee.Image(d_obj.windspeed))['windspeed'] - 7.02662301063538) <= tol
 
-    # Overwrite the default ancillary images with the test assets
-    d_obj.windspeed_coll = ee.ImageCollection([
-        ee.Image([
-                ee.Image(asset_ws + 'u'),
-                ee.Image(asset_ws + 'u').multiply(0)]) \
-            .set({'system:time_start': img_date_start})])
-    d_obj.rs_hourly_coll = ee.ImageCollection([
-        ee.Image(asset_ws + 'Insol1')
-            .set({'system:time_start': img_hour_start.subtract(3600000)}),
-        ee.Image(asset_ws + 'Insol1')
-            .set({'system:time_start': img_hour_start}),
-        ee.Image(asset_ws + 'Insol1')
-            .set({'system:time_start': img_hour_start.add(3600000)})
-    ])
-    d_obj.rs_daily_coll = ee.ImageCollection([
-        ee.Image(asset_ws + 'Insol24')
-            .set({'system:time_start': img_date_start})])
-    d_obj.et_coll = ee.ImageCollection([
-        ee.Image(asset_ws + 'alexiET') \
-            .set({'system:time_start': img_date_start})])
-    d_obj.et_transform = [0.04, 0, -96.442, 0, -0.04, 41.297]
 
-    # Get the spatial reference and geoTransform of the assets
-    asset_crs = ee.Image(asset_ws + 'albedo').projection().crs().getInfo()
-    asset_transform = ee.Image(asset_ws + 'albedo') \
-        .projection().getInfo()['transform']
-
-    # Compute Tair
-    ta_img = d_obj.ta.reproject(crs=asset_crs, crsTransform=asset_transform)
-
-    # Extract image values at a point using reduceRegion (with point geom)
-    output = list(utils.image_value(ta_img, xy=xy).values())[0]
-    # output = utils.image_value(ta_img)['t_air']
-
-    logging.debug('  Target values: {}'.format(expected))
-    logging.debug('  Output values: {}'.format(output))
-    assert abs(output - expected) <= tol
-
+# @pytest.mark.parametrize(
+#     'xy, iterations, expected',
+#     [
+#         [ne1_xy, 10, 297.00],
+#         # [ne2_xy, 10, 301.00],
+#         # [ne3_xy, 10, 302.00],
+#     ]
+# )
+# def test_Image_compute_ta_asset(xy, iterations, expected, tol=0.01):
+#     """Test fine scale air temperature at a single point using the test assets"""
+#     d_obj = disalexi.Image(
+#         test_img,
+#         elevation_source=ee.Image.constant(350.0),
+#         landcover_source='NLCD2011',
+#         albedo_iterations=iterations,
+#         stabil_iterations=iterations,
+#     )
+#
+#     # Overwrite the default ancillary images with the test assets
+#     d_obj.windspeed_coll = ee.ImageCollection([
+#         ee.Image([
+#                 ee.Image(asset_ws + 'u'),
+#                 ee.Image(asset_ws + 'u').multiply(0)]) \
+#             .set({'system:time_start': img_date_start})])
+#     d_obj.rs_hourly_coll = ee.ImageCollection([
+#         ee.Image(asset_ws + 'Insol1')
+#             .set({'system:time_start': img_hour_start.subtract(3600000)}),
+#         ee.Image(asset_ws + 'Insol1')
+#             .set({'system:time_start': img_hour_start}),
+#         ee.Image(asset_ws + 'Insol1')
+#             .set({'system:time_start': img_hour_start.add(3600000)})
+#     ])
+#     d_obj.rs_daily_coll = ee.ImageCollection([
+#         ee.Image(asset_ws + 'Insol24')
+#             .set({'system:time_start': img_date_start})])
+#     d_obj.et_coll = ee.ImageCollection([
+#         ee.Image(asset_ws + 'alexiET') \
+#             .set({'system:time_start': img_date_start})])
+#     d_obj.et_transform = [0.04, 0, -96.442, 0, -0.04, 41.297]
+#
+#     # Get the spatial reference and geoTransform of the assets
+#     asset_crs = ee.Image(asset_ws + 'albedo').projection().crs().getInfo()
+#     asset_transform = ee.Image(asset_ws + 'albedo') \
+#         .projection().getInfo()['transform']
+#
+#     # Compute Tair
+#     ta_img = d_obj.ta.reproject(crs=asset_crs, crsTransform=asset_transform)
+#
+#     # Extract image values at a point using reduceRegion (with point geom)
+#     output = list(utils.image_value(ta_img, xy=xy).values())[0]
+#     # output = utils.image_value(ta_img)['t_air']
+#
+#     logging.debug('  Target values: {}'.format(expected))
+#     logging.debug('  Output values: {}'.format(output))
+#     assert abs(output - expected) <= tol
 
 
 # @pytest.mark.parametrize(
@@ -359,8 +352,7 @@ def test_Image_compute_ta_asset(xy, iterations, expected, tol=0.01):
 #         elevation_source=ee.Image.constant(350.0),
 #         albedo_iterations=iterations,
 #         stabil_iterations=iterations,
-#         landcover_type='NLCD',
-#         landcover_source=ee.Image(asset_ws + 'landcover')
+#         landcover_source='NLCD2011',
 #     )
 #
 #     # Overwrite the default ancillary images with the test assets
@@ -427,8 +419,7 @@ def test_Image_compute_ta_asset(xy, iterations, expected, tol=0.01):
 #         test_img,
 #         elevation_source=ee.Image.constant(350.0),
 #         iterations=iterations,
-#         landcover_type='NLCD',
-#         landcover_source=ee.Image(asset_ws + 'landcover')
+#         landcover_source='NLCD2011',
 #     )
 #
 #     # Overwrite the default ancillary images with the test assets
@@ -500,7 +491,7 @@ def test_Image_compute_ta_asset(xy, iterations, expected, tol=0.01):
 #         ee.Image.constant(10).set({
 #             'system:time_start': ee.Date('2015-08-06', 'GMT').millis()})])
 #     landcover_img = ee.Image.constant(11)
-#     landcover_type = 'NLCD'
+#     landcover_source = 'NLCD2011'
 #
 #     # Prepare the Landsat 8 image for DisALEXI
 #     input_img = ee.Image(landsat.Landsat(landsat_img).prep_landsat8())
@@ -510,8 +501,7 @@ def test_Image_compute_ta_asset(xy, iterations, expected, tol=0.01):
 #     def run_model(img):
 #         return disalexi.Image(
 #                 img, et_coll=alexi_et_coll,
-#                 landcover_source=landcover_img,
-#                 landcover_type=landcover_type) \
+#                 landcover_source=landcover_img) \
 #             .run_disalexi()
 #     et_img = run_model(input_img).rename(['et'])
 #     # logging.info(et_img.getInfo())
@@ -540,7 +530,7 @@ def test_Image_compute_ta_asset(xy, iterations, expected, tol=0.01):
 #         ee.Image.constant(10).set({
 #             'system:time_start': ee.Date('2015-08-06', 'GMT').millis()})])
 #     landcover_img = ee.Image('USGS/NLCD/NLCD2011')
-#     landcover_type = 'NLCD'
+#     landcover_type = 'NLCD2011'
 #
 #     # Initialize the Landsat collection (with a single image)
 #     landsat_coll = ee.ImageCollection(
