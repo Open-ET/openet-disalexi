@@ -35,7 +35,7 @@ test_img = ee.Image([
 ])
 test_img = ee.Image(test_img \
     .rename(['albedo', 'cfmask', 'lai', 'lst', 'ndvi']) \
-    .setMulti({'system:time_start': img_time_start}))
+    .set({'system:time_start': img_time_start}))
 
 
 def test_Image_init_dates():
@@ -44,19 +44,6 @@ def test_Image_init_dates():
     assert d_obj.doy.getInfo() == img_doy
     assert int(d_obj.hour.getInfo()) == img_hour
     assert float(d_obj.time.getInfo()) == img_time
-
-
-def test_Image_init_missing_landcover_source():
-    """Test that only setting a land cover type raises a ValueError exception"""
-    with pytest.raises(ValueError) as e_info:
-        d_obj = disalexi.Image(test_img, landcover_type='NLCD')
-
-
-def test_Image_init_missing_landcover_type():
-    """Test that only setting a land cover image raises a ValueError exception"""
-    with pytest.raises(ValueError) as e_info:
-        d_obj = disalexi.Image(
-            test_img, landcover_source=ee.Image('USGS/NLCD/NLCD2011'))
 
 
 @pytest.mark.parametrize(
@@ -98,7 +85,7 @@ def test_Image_set_alexi_et_vars_assets(xy, et, tol=1E-6):
     d_obj = disalexi.Image(test_img)
     d_obj.et_coll = ee.ImageCollection([
         ee.Image(asset_ws + 'alexiET') \
-            .setMulti({'system:time_start': img_date_start})])
+            .set({'system:time_start': img_date_start})])
     d_obj.et_transform = [0.04, 0, -96.442, 0, -0.04, 41.297]
     d_obj._set_alexi_et_vars()
     assert abs(utils.image_value(
@@ -221,10 +208,10 @@ def test_Image_set_solar_vars_assets_no_interp(xy, rs1, rs24, tol=1E-4):
     d_obj = disalexi.Image(test_img)
     d_obj.rs_hourly_coll = ee.ImageCollection([
         ee.Image(asset_ws + 'Insol1')
-            .setMulti({'system:time_start': img_hour_start})])
+            .set({'system:time_start': img_hour_start})])
     d_obj.rs_daily_coll = ee.ImageCollection([
         ee.Image(asset_ws + 'Insol24') \
-            .setMulti({'system:time_start': img_date_start})])
+            .set({'system:time_start': img_date_start})])
     d_obj._set_solar_vars(interpolate_flag=False)
     assert abs(utils.image_value(
         ee.Image(d_obj.rs1), xy)['rs'] - rs1) <= tol
@@ -245,15 +232,15 @@ def test_Image_set_solar_vars_assets_interp(xy, rs1, rs24, tol=1E-4):
     d_obj = disalexi.Image(test_img)
     d_obj.rs_hourly_coll = ee.ImageCollection([
         ee.Image(asset_ws + 'Insol1')
-            .setMulti({'system:time_start': img_hour_start.subtract(3600000)}),
+            .set({'system:time_start': img_hour_start.subtract(3600000)}),
         ee.Image(asset_ws + 'Insol1')
-            .setMulti({'system:time_start': img_hour_start}),
+            .set({'system:time_start': img_hour_start}),
         ee.Image(asset_ws + 'Insol1')
-            .setMulti({'system:time_start': img_hour_start.add(3600000)})
+            .set({'system:time_start': img_hour_start.add(3600000)})
     ])
     d_obj.rs_daily_coll = ee.ImageCollection([
         ee.Image(asset_ws + 'Insol24') \
-            .setMulti({'system:time_start': img_date_start})])
+            .set({'system:time_start': img_date_start})])
     d_obj._set_solar_vars(interpolate_flag=True)
     assert abs(utils.image_value(
         ee.Image(d_obj.rs1), xy)['rs'] - rs1) <= tol
@@ -294,7 +281,7 @@ def test_Image_set_weather_var_assets(tol=0.01):
     d_obj = disalexi.Image(test_img)
     d_obj.windspeed_coll = ee.ImageCollection([
         ee.Image([ee.Image(asset_ws + 'u'), ee.Image(asset_ws + 'u').multiply(0)]) \
-            .setMulti({'system:time_start': img_date_start})])
+            .set({'system:time_start': img_date_start})])
     d_obj._set_weather_vars()
     assert abs(utils.image_value(
         ee.Image(d_obj.windspeed))['windspeed'] - 7.02662301063538) <= tol
@@ -324,21 +311,21 @@ def test_Image_compute_ta_asset(xy, iterations, expected, tol=0.01):
         ee.Image([
                 ee.Image(asset_ws + 'u'),
                 ee.Image(asset_ws + 'u').multiply(0)]) \
-            .setMulti({'system:time_start': img_date_start})])
+            .set({'system:time_start': img_date_start})])
     d_obj.rs_hourly_coll = ee.ImageCollection([
         ee.Image(asset_ws + 'Insol1')
-            .setMulti({'system:time_start': img_hour_start.subtract(3600000)}),
+            .set({'system:time_start': img_hour_start.subtract(3600000)}),
         ee.Image(asset_ws + 'Insol1')
-            .setMulti({'system:time_start': img_hour_start}),
+            .set({'system:time_start': img_hour_start}),
         ee.Image(asset_ws + 'Insol1')
-            .setMulti({'system:time_start': img_hour_start.add(3600000)})
+            .set({'system:time_start': img_hour_start.add(3600000)})
     ])
     d_obj.rs_daily_coll = ee.ImageCollection([
-        ee.Image(asset_ws + 'Insol24')  \
-            .setMulti({'system:time_start': img_date_start})])
+        ee.Image(asset_ws + 'Insol24')
+            .set({'system:time_start': img_date_start})])
     d_obj.et_coll = ee.ImageCollection([
         ee.Image(asset_ws + 'alexiET') \
-            .setMulti({'system:time_start': img_date_start})])
+            .set({'system:time_start': img_date_start})])
     d_obj.et_transform = [0.04, 0, -96.442, 0, -0.04, 41.297]
 
     # Get the spatial reference and geoTransform of the assets
@@ -381,21 +368,21 @@ def test_Image_compute_ta_asset(xy, iterations, expected, tol=0.01):
 #         ee.Image([
 #             ee.Image(asset_ws + 'u'),
 #             ee.Image(asset_ws + 'u').multiply(0)]) \
-#             .setMulti({'system:time_start': img_date_start})])
+#             .set({'system:time_start': img_date_start})])
 #     d_obj.rs_hourly_coll = ee.ImageCollection([
 #         ee.Image(asset_ws + 'Insol1')
-#             .setMulti({'system:time_start': img_hour_start.subtract(3600000)}),
+#             .set({'system:time_start': img_hour_start.subtract(3600000)}),
 #         ee.Image(asset_ws + 'Insol1')
-#             .setMulti({'system:time_start': img_hour_start}),
+#             .set({'system:time_start': img_hour_start}),
 #         ee.Image(asset_ws + 'Insol1')
-#             .setMulti({'system:time_start': img_hour_start.add(3600000)})
+#             .set({'system:time_start': img_hour_start.add(3600000)})
 #     ])
 #     d_obj.rs_daily_coll = ee.ImageCollection([
 #         ee.Image(asset_ws + 'Insol24')  \
-#             .setMulti({'system:time_start': img_date_start})])
+#             .set({'system:time_start': img_date_start})])
 #     d_obj.et_coll = ee.ImageCollection([
 #         ee.Image(asset_ws + 'alexiET') \
-#             .setMulti({'system:time_start': img_date_start})])
+#             .set({'system:time_start': img_date_start})])
 #     d_obj.et_transform = [0.04, 0, -96.442, 0, -0.04, 41.297]
 #
 #     d_obj._set_solar_vars(interpolate_flag=False)
@@ -449,16 +436,16 @@ def test_Image_compute_ta_asset(xy, iterations, expected, tol=0.01):
 #         ee.Image([
 #             ee.Image(asset_ws + 'u'),
 #             ee.Image(asset_ws + 'u').multiply(0)]) \
-#             .setMulti({'system:time_start': img_date_start})])
+#             .set({'system:time_start': img_date_start})])
 #     d_obj.rs_hourly_coll = ee.ImageCollection([
 #         ee.Image(asset_ws + 'Insol1') \
-#             .setMulti({'system:time_start': img_hour_start})])
+#             .set({'system:time_start': img_hour_start})])
 #     d_obj.rs_daily_coll = ee.ImageCollection([
 #         ee.Image(asset_ws + 'Insol24')  \
-#             .setMulti({'system:time_start': img_date_start})])
+#             .set({'system:time_start': img_date_start})])
 #     d_obj.et_coll = ee.ImageCollection([
 #         ee.Image(asset_ws + 'alexiET') \
-#             .setMulti({'system:time_start': img_date_start})])
+#             .set({'system:time_start': img_date_start})])
 #     d_obj.et_transform = [0.04, 0, -96.442, 0, -0.04, 41.297]  # ETd test asset
 #
 #     # Get the spatial reference and geoTransform of the assets
@@ -504,13 +491,13 @@ def test_Image_compute_ta_asset(xy, iterations, expected, tol=0.01):
 #     # What is a reasonable BQA value?
 #     landsat_img = ee.Image.constant([0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 300, 0]) \
 #         .rename(['B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B10', 'BQA']) \
-#         .setMulti({'system:time_start': ee.Date('2015-08-05', 'GMT').millis()})
+#         .set({'system:time_start': ee.Date('2015-08-05', 'GMT').millis()})
 #
 #     # Generate a totally fake set of inputs using constant images
 #     alexi_et_coll = ee.ImageCollection([
-#         ee.Image.constant(10).setMulti({
+#         ee.Image.constant(10).set({
 #             'system:time_start': ee.Date('2015-08-05', 'GMT').millis()}),
-#         ee.Image.constant(10).setMulti({
+#         ee.Image.constant(10).set({
 #             'system:time_start': ee.Date('2015-08-06', 'GMT').millis()})])
 #     landcover_img = ee.Image.constant(11)
 #     landcover_type = 'NLCD'
@@ -548,9 +535,9 @@ def test_Image_compute_ta_asset(xy, iterations, expected, tol=0.01):
 #     # Initialize DisALEXI object
 #     # Use fake Alexi ET collection for now
 #     alexi_et_coll = ee.ImageCollection([
-#         ee.Image.constant(10).setMulti({
+#         ee.Image.constant(10).set({
 #             'system:time_start': ee.Date('2015-08-05', 'GMT').millis()}),
-#         ee.Image.constant(10).setMulti({
+#         ee.Image.constant(10).set({
 #             'system:time_start': ee.Date('2015-08-06', 'GMT').millis()})])
 #     landcover_img = ee.Image('USGS/NLCD/NLCD2011')
 #     landcover_type = 'NLCD'

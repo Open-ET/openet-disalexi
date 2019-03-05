@@ -142,7 +142,7 @@ class LandsatTOA(Landsat):
 
         self.input_image = ee.Image(self.raw_image) \
             .select(input_bands.get(self._spacecraft_id), output_bands) \
-            .setMulti({
+            .set({
                 'system:time_start': self._time_start,
                 'system:index': self._index,
                 'k1_constant': ee.Number(output_k1),
@@ -167,7 +167,7 @@ class LandsatTOA(Landsat):
             self._lai,
             self._lst,
             self._ndvi])
-        self.prep_image = self.prep_image.setMulti({
+        self.prep_image = self.prep_image.set({
             'system:time_start': self._time_start,
             'system:index': self._index,
         })
@@ -323,7 +323,7 @@ class LandsatSR(Landsat):
         self.input_image = ee.Image(self.raw_image) \
             .select(input_bands.get(self._spacecraft_id), output_bands) \
             .multiply(scalars) \
-            .setMulti({
+            .set({
                 'system:time_start': self._time_start,
                 'system:index': self._index,
                 'k1_constant': ee.Number(k1.get(self._spacecraft_id)),
@@ -350,7 +350,7 @@ class LandsatSR(Landsat):
             self._lst,
             self._ndvi])
 
-        self.prep_image = ee.Image(self.prep_image.setMulti({
+        self.prep_image = ee.Image(self.prep_image.set({
             'system:time_start': self._time_start,
             'system:index': self._index,
         }))

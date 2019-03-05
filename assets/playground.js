@@ -1534,7 +1534,7 @@ var input_img = ee.Image([
   landsat_lai(landsat_img),
   landsat_lst(landsat_img),
   landsat_ndvi(landsat_img)]);
-input_img = ee.Image(input_img.setMulti({
+input_img = ee.Image(input_img.set({
   'SCENE_ID': landsat_img.get('system:index'),
   'system:time_start': landsat_img.get('system:time_start')
 }));

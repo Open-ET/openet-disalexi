@@ -76,7 +76,7 @@ def test_LandsatTOA_albedo(blue, green, red, nir, swir1, swir2, tol=0.000001):
 
     raw_img = ee.Image.constant([blue, green, red, nir, swir1, swir2, 300, 0]) \
         .rename(['B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B10', 'BQA']) \
-        .setMulti(l8_properties)
+        .set(l8_properties)
     albedo = ee.Image(landsat.LandsatTOA(ee.Image(raw_img))._albedo)
     assert abs(utils.image_value(albedo)['albedo'] - expected) <= tol
 
@@ -97,7 +97,7 @@ def test_LandsatTOA_albedo(blue, green, red, nir, swir1, swir2, tol=0.000001):
 def test_LandsatTOA_cfmask(bqa, expected):
     input_img = ee.Image.constant([0.2, 0, 0, 0, 0, 0, 300, int(bqa, 2)]) \
         .rename(['B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B10', 'BQA']) \
-        .setMulti(l8_properties)
+        .set(l8_properties)
     cfmask = ee.Image(landsat.LandsatTOA(input_img)._cfmask)
     assert utils.image_value(cfmask)['cfmask'] == expected
 
@@ -105,7 +105,7 @@ def test_LandsatTOA_cfmask(bqa, expected):
 def test_LandsatTOA_lai(red=0.2, nir=0.7, expected=1.200, tol=0.001):
     input_img = ee.Image.constant([0.2, 0.2, red, nir, 0.2, 0.2, 300, 0]) \
         .rename(['B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B10', 'BQA']) \
-        .setMulti(l8_properties)
+        .set(l8_properties)
     lai = ee.Image(landsat.LandsatTOA(input_img)._lai)
     assert abs(utils.image_value(lai)['lai'] - expected) <= tol
 
@@ -122,7 +122,7 @@ def test_LandsatTOA_lst(red, nir, bt, expected, tol=0.001):
     """Test that different emissivity values (from NDVI & LAI) change LST"""
     input_img = ee.Image.constant([0.2, 0.2, red, nir, 0.2, 0.2, bt, 0]) \
         .rename(['B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B10', 'BQA']) \
-        .setMulti(l8_properties)
+        .set(l8_properties)
     lst = ee.Image(landsat.LandsatTOA(input_img)._lst)
     assert abs(utils.image_value(lst)['lst'] - expected) <= tol
 
@@ -130,7 +130,7 @@ def test_LandsatTOA_lst(red, nir, bt, expected, tol=0.001):
 def test_LandsatTOA_ndvi(red=0.2, nir=0.7, expected=0.5556, tol=0.001):
     input_img = ee.Image.constant([0.2, 0.2, red, nir, 0.2, 0.2, 300, 0]) \
         .rename(['B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B10', 'BQA']) \
-        .setMulti(l8_properties)
+        .set(l8_properties)
     ndvi = ee.Image(landsat.LandsatTOA(input_img)._ndvi)
     assert abs(utils.constant_image_value(ndvi)['ndvi'] - expected) <= tol
 
@@ -189,7 +189,7 @@ def test_LandsatSR_albedo(blue, green, red, nir, swir1, swir2, tol=0.000001):
     raw_img = ee.Image.constant([blue, green, red, nir, swir1, swir2, 300, 0]) \
         .rename(['B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B10', 'pixel_qa']) \
         .divide(sr_scalars) \
-        .setMulti(l8_properties)
+        .set(l8_properties)
     albedo = ee.Image(landsat.LandsatSR(ee.Image(raw_img))._albedo)
     assert abs(utils.image_value(albedo)['albedo'] - expected) <= tol
 
@@ -215,7 +215,7 @@ def test_LandsatSR_albedo(blue, green, red, nir, swir1, swir2, tol=0.000001):
 def test_LandsatSR_cfmask(pixel_qa, expected):
     input_img = ee.Image.constant([0.2, 0, 0, 0, 0, 0, 300, int(pixel_qa, 2)]) \
         .rename(['B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B10', 'pixel_qa']) \
-        .setMulti(l8_properties)
+        .set(l8_properties)
     cfmask = ee.Image(landsat.LandsatSR(input_img)._cfmask)
     assert utils.image_value(cfmask)['cfmask'] == expected
 
@@ -225,7 +225,7 @@ def test_LandsatSR_lai(red=0.2, nir=0.7, expected=1.200, tol=0.001):
     input_img = ee.Image.constant([0.2, 0.2, red, nir, 0.2, 0.2, 300, 0]) \
         .rename(['B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B10', 'pixel_qa']) \
         .divide(sr_scalars) \
-        .setMulti(l8_properties)
+        .set(l8_properties)
     lai = ee.Image(landsat.LandsatSR(input_img)._lai)
     assert abs(utils.image_value(lai)['lai'] - expected) <= tol
 
@@ -245,7 +245,7 @@ def test_LandsatSR_lst(red, nir, bt, expected, tol=0.001):
     input_img = ee.Image.constant([0.2, 0.2, red, nir, 0.2, 0.2, bt, 0]) \
         .rename(['B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B10', 'pixel_qa']) \
         .divide(sr_scalars) \
-        .setMulti(l8_properties)
+        .set(l8_properties)
     lst = ee.Image(landsat.LandsatSR(input_img)._lst)
     assert abs(utils.image_value(lst)['lst'] - expected) <= tol
 
@@ -254,6 +254,6 @@ def test_LandsatSR_ndvi(red=0.2, nir=0.7, expected=0.5556, tol=0.001):
     input_img = ee.Image.constant([0.2, 0.2, red, nir, 0.2, 0.2, 300, 0]) \
         .rename(['B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B10', 'pixel_qa']) \
         .divide(sr_scalars) \
-        .setMulti(l8_properties)
+        .set(l8_properties)
     ndvi = ee.Image(landsat.LandsatSR(input_img)._ndvi)
     assert abs(utils.constant_image_value(ndvi)['ndvi'] - expected) <= tol

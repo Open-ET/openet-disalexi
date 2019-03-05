@@ -66,3 +66,11 @@ def ee_getinfo(ee_obj, n=4):
         if output:
             break
     return output
+
+
+def is_number(x):
+    try:
+        float(x)
+        return True
+    except:
+        return False

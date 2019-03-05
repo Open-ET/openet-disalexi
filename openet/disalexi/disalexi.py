@@ -33,9 +33,12 @@ class Image(object):
     def __init__(
             self,
             image,
+            alexi_et_source='CONUS_V001',
             elevation_source='USGS/SRTMGL1_003',
-            landcover_source=None,
-            landcover_type=None,
+            landcover_source='NLCD',
+            rs_daily_source='MERRA2',
+            rs_hourly_source='MERRA2',
+            windspeed_source='CFSV2',
             stabil_iterations=10,
             albedo_iterations=10,
             tair_values=list(range(273, 321, 1)),
@@ -50,17 +53,21 @@ class Image(object):
         ----------
         image : ee.Image
             Prepped image
-        elevation_source: ee.Image
-            Elevation asset.  Units must be in meters.
-            Will default to ee.Image('USGS/SRTMGL1_003') if not set or None.
-        landcover_source : ee.Image
-            Land cover asset.  Will default to ee.Image('USGS/NLCD/NLCD2011')
-            if not set and 'lc_type' parameter not set.
-        landcover_type : str
-            Land cover type.  Choices are 'NLCD' or 'GlobeLand30'.  Will
-            default to 'NLCD' if not set and 'landcover' parameter not set.
-        iterations : int
-            Number of iterations of main calculation (the default is 10).
+        elevation_source: str, ee.Image
+            Elevation source keyword or asset.  Units must be in meters.
+        landcover_source : {'NLCD', 'NLCD2011', 'GLOBELAND30'}
+            Land cover source keyword.
+        rs_daily_source : {'MERRA2'}
+            Daily solar insolation source keyword (the default is 'MERRA2').
+        rs_hourly_source : {'MERRA2'}
+            Hourly solar insolation source keyword (the default is 'MERRA2').
+        windspeed_source : {'CFSV2}
+            Windspeed source keyword (the default is 'CFSV2').
+        stabil_iterations : int
+            Number of iterations of the stability calculation (the default is 10).
+        albedo_iterations : int
+            Number of iterations of the albedo separation (the default is 10).
+
         """
         # self.image = ee.Image(image)
         self.stabil_iter = stabil_iterations
@@ -99,74 +106,50 @@ class Image(object):
         self.lst = input_image.select('lst')
         self.ndvi = input_image.select('ndvi')
 
-        # Elevation [m]
-        if elevation_source is None:
-            self.elevation = ee.Image('USGS/SRTMGL1_003').rename(['elevation'])
-            # self.elevation = ee.Image('USGS/NED').rename(['elevation'])
-            # self.elevation = ee.Image('USGS/GTOPO30').rename(['elevation'])
-            # self.elevation = ee.Image('USGS/GMTED2010').rename(['elevation'])
-            # self.elevation = ee.Image('CGIAR/SRTM90_V4').rename(['elevation'])
-            # self.elevation = ee.Image.constant(350.0).rename(['elevation'])
-        elif type(elevation_source) is str:
-            self.elevation = ee.Image(elevation_source).rename(['elevation'])
-        else:
-            self.elevation = elevation_source.rename(['elevation'])
-        # elif isinstance(elevation_source, computedobject.ComputedObject):
-        #     self.elevation = ee.Image(elevation_source).rename(['elevation'])
-        # else:
-        #     raise ValueError('unsupported elevation source: {}'.format(
-        #         elevation_source))
+        # Model input parameters
+        self.alexi_et_source = alexi_et_source
+        self.landcover_source = landcover_source
+        self.elevation_source = elevation_source
+        self.windspeed_source = windspeed_source
+        self.rs_daily_source = rs_daily_source
+        self.rs_hourly_source = rs_hourly_source
 
         # Set default land cover image and type
         # For now default to CONUS and use default if image and type were not set
         # GlobeLand30 values need to be set to the lowest even multiple of 10,
         #   since that is currently what is in the landcover.xlsx file.
         # http://www.globallandcover.com/GLC30Download/index.aspx
-        if landcover_source is None and landcover_type is None:
-            # Using NLCD as default land cover and type
+        if self.landcover_source.upper() == 'NLCD2011':
             self.lc_source = ee.Image('USGS/NLCD/NLCD2011').select(['landcover'])
             self.lc_type = 'NLCD'
-            # Using GlobeLand30 land cover and type
-            # lc_coll =  ee.ImageCollection('users/cgmorton/GlobeLand30')\
-            #     .filterBounds(image.geometry().bounds(1))
-            # self.landcover = ee.Image(lc_coll.mosaic()) \
-            #     .divide(10).floor().multiply(10) \
-            #     .rename(['landcover'])
-            # self.landcover_type = 'GLOBELAND30'
-        elif landcover_source is None:
-            # What should happen if on only the land cover image is set?
-            raise ValueError(
-                'landcover_source must be set if landcover_type is set')
-        elif landcover_type is None:
-            # What should happen if on only the land cover type is set?
-            # The images could be looked up by type from a default LC image dict
-            raise ValueError(
-                'landcover_type must be set if landcover_source is set')
+        elif self.landcover_source.upper() == 'NLCD2006':
+            self.lc_source = ee.Image('USGS/NLCD/NLCD2006').select(
+                ['landcover'])
+            self.lc_type = 'NLCD'
+        elif self.landcover_source.upper() == 'GLOBELAND30':
+            lc_coll =  ee.ImageCollection('users/cgmorton/GlobeLand30')\
+                .filterBounds(image.geometry().bounds(1))
+            self.lc_source = ee.Image(lc_coll.mosaic()) \
+                .divide(10).floor().multiply(10) \
+                .rename(['landcover'])
+            self.lc_type = 'GLOBELAND30'
         else:
-            self.lc_source = landcover_source
-            self.lc_type = landcover_type
+            raise ValueError('unsupported landcover_source: {}'.format(
+                self.landcover_source))
 
-        # ALEXI ET - CONUS
-        self.et_coll = ee.ImageCollection('projects/disalexi/alexi/CONUS_V001')
-        self.et_transform = [0.04, 0, -125.04, 0, -0.04, 49.8]
-        self.et_crs = 'EPSG:4326'
-        # ALEXI ET - Global
-        # self.et_coll = ee.ImageCollection(
-        #     'projects/climate-engine/alexi/global/daily/et')
-        # self.et_transform = [0.05, 0, -180.0, 0, -0.05, 90]
-        # self.et_crs = 'EPSG:4326'
+        if self.rs_daily_source.upper() == 'MERRA2':
+            self.rs_daily_coll = ee.ImageCollection(
+                'projects/climate-engine/merra2/rs_daily')
+        else:
+            raise ValueError('unsupported rs_daily_source: {}'.format(
+                self.rs_daily_source))
 
-        # Hard coding using CFSR for wind speed
-        self.windspeed_coll = ee.ImageCollection('NOAA/CFSV2/FOR6H') \
-            .select([
-                'u-component_of_wind_height_above_ground',
-                'v-component_of_wind_height_above_ground'])
-
-        # Hard coding using MERRA2 solar insolation [W m-2]
-        self.rs_hourly_coll = ee.ImageCollection(
-            'projects/climate-engine/merra2/rs_hourly')
-        self.rs_daily_coll = ee.ImageCollection(
-            'projects/climate-engine/merra2/rs_daily')
+        if self.rs_hourly_source.upper() == 'MERRA2':
+            self.rs_hourly_coll = ee.ImageCollection(
+                'projects/climate-engine/merra2/rs_hourly')
+        else:
+            raise ValueError('unsupported rs_hourly_source: {}'.format(
+                self.rs_hourly_source))
 
     @lazy_property
     def ta(self):
@@ -182,28 +165,22 @@ class Image(object):
             Landsat scale air temperature image
 
         """
-        self._set_alexi_et_vars()
-        self._set_elevation_vars()
         self._set_landcover_vars()
         self._set_solar_vars()
         self._set_time_vars()
-        self._set_weather_vars()
 
         def t_air_func(t_air):
-            """Compute TSEB ET for each T_air value
+            """Compute TSEB ET for the target T_air value
 
             Assume the function is being mapped over a FC with a T_air property
             Return bias (ALEXI ET - TSEB ET) as first band for quality mosaic
             """
+            tair = ee.Number(t_air.get('t_air'))
+            tair_fine = self.lst.multiply(0).add(tair)
+            tair_coarse = self.alexi_et.multiply(0).add(tair)
 
-            # Apply T_air values to Landsat pixels
-            t_air_img = self.lst.multiply(0).add(ee.Number(t_air.get('t_air')))
-            # T_air_img = ee.Image.constant(ee.Number(t_air.get('t_air'))).double()
-            # T_air_img = ee.Image.constant(ee.Number(t_air)).double()
-            # return t_air_img
-
-            et = tseb.tseb_pt(
-                T_air=t_air_img,
+            et_fine = tseb.tseb_pt(
+                T_air=tair_fine,
                 T_rad=self.lst,
                 u=self.windspeed,
                 p=self.pressure,
@@ -232,10 +209,16 @@ class Image(object):
                 albedo_iter=self.albedo_iter,
             )
 
+            # Aggregate the Landsat scale ET up to the ALEXI scale
+            et_coarse = ee.Image(et_fine) \
+                .reduceResolution(reducer=ee.Reducer.mean(), maxPixels=30000) \
+                .reproject(crs=self.et_crs, crsTransform=self.et_transform)
+            #     .updateMask(1)
+
             # Invert the abs(bias) since quality mosaic sorts descending
-            bias = ee.Image(et).subtract(self.alexi_et).abs().multiply(-1)
+            bias = et_coarse.subtract(self.alexi_et).abs().multiply(-1)
             # bias = self.et_img.subtract(ET).abs().multiply(-1)
-            return ee.Image([bias, ee.Image(et), t_air_img]) \
+            return ee.Image([bias, et_coarse, tair_coarse]) \
                 .rename(['bias', 'et', 't_air'])
 
         # Get output for a single Tair value
@@ -255,96 +238,71 @@ class Image(object):
         t_air = ee.Image(output_coll.qualityMosaic('bias')) \
             .select(['t_air'])
 
-        # Project the output back to the landsat scene
-        #     .reproject(crs=, crsTransform=) \
-        #     .rename(['t_air'])
-
         return t_air
 
-    @lazy_property
-    def et(self):
-        """Compute Landsat scale DisALEXI ET
-
-        Parameters
-        ----------
-        T_air: ee.Image
-            ALEXI ET scale air temperature (K)
-
-        Returns
-        -------
-        image : ee.Image
-            DisALEXI ET image
-
-        """
-        self._set_elevation_vars()
-        self._set_alexi_et_vars()
-        self._set_landcover_vars()
-        self._set_solar_vars()
-        self._set_time_vars()
-        self._set_weather_vars()
-
-        et = tseb.tseb_pt(
-            T_air=self.t_air,
-            T_rad=self.lst,
-            u=self.windspeed,
-            p=self.pressure,
-            z=self.elevation,
-            Rs_1=self.rs1,
-            Rs24=self.rs24,
-            # CGM - Need to add GEE gaussian_filter call to Rs24
-            # Rs24=ndimage.gaussian_filter(self.Rs24, sigma=5),
-            vza=0,
-            zs=self.sol_zenith,
-            aleafv=self.aleafv,
-            aleafn=self.aleafn,
-            aleafl=self.aleafl,
-            adeadv=self.adeadv,
-            adeadn=self.adeadn,
-            adeadl=self.adeadl,
-            albedo=self.albedo,
-            ndvi=self.ndvi,
-            lai=self.lai,
-            clump=self.clump,
-            hc=self.hc,
-            time=self.time,
-            t_rise=self.t_rise,
-            t_end=self.t_end,
-            leaf_width=self.leaf_width,
-            a_PT_in=1.32,
-            stabil_iter=self.stabil_iter,
-            albedo_iter=self.albedo_iter,
-        )
-        return ee.Image(et).rename(['et'])
-
-    def aggregate(self, T_air):
-        """EE approach for aggregating Landsat Ta to the ALEXI grid
-
-        30000 pixels should works for aggregating Landsat to global ET (5 km)
-        The ".updateMask(1)" call is used to remove the transparency mask
-        Should we use the ".mean().unweighted()" reducer?
-
-        Parameters
-        ----------
-        T_air: ee.Image
-            Landsat scale air temperature (K)
-
-        Returns
-        -------
-        image : ee.Image
-
-        """
-        T_air = ee.Image(T_air) \
-            .reduceResolution(reducer=ee.Reducer.mean(), maxPixels=30000) \
-            .reproject(crs=self.et_crs, crsTransform=self.et_transform) \
-            .updateMask(1)
-        return T_air
-
-    # def smooth(self, T_air):
-    #     """Resample image
+    # @lazy_property
+    # def et(self):
+    #     """Compute Landsat scale DisALEXI ET
     #
     #     Parameters
     #     ----------
-    #     T_air
+    #     T_air: ee.Image
+    #         ALEXI ET scale air temperature (K)
+    #
+    #     Returns
+    #     -------
+    #     image : ee.Image
+    #         DisALEXI ET image
+    #
+    #     """
+    #     self._set_landcover_vars()
+    #     self._set_solar_vars()
+    #     self._set_time_vars()
+    #
+    #     et = tseb.tseb_pt(
+    #         T_air=self.t_air,
+    #         T_rad=self.lst,
+    #         u=self.windspeed,
+    #         p=self.pressure,
+    #         z=self.elevation,
+    #         Rs_1=self.rs1,
+    #         Rs24=self.rs24,
+    #         # CGM - Need to add GEE gaussian_filter call to Rs24
+    #         # Rs24=ndimage.gaussian_filter(self.Rs24, sigma=5),
+    #         vza=0,
+    #         zs=self.sol_zenith,
+    #         aleafv=self.aleafv,
+    #         aleafn=self.aleafn,
+    #         aleafl=self.aleafl,
+    #         adeadv=self.adeadv,
+    #         adeadn=self.adeadn,
+    #         adeadl=self.adeadl,
+    #         albedo=self.albedo,
+    #         ndvi=self.ndvi,
+    #         lai=self.lai,
+    #         clump=self.clump,
+    #         hc=self.hc,
+    #         time=self.time,
+    #         t_rise=self.t_rise,
+    #         t_end=self.t_end,
+    #         leaf_width=self.leaf_width,
+    #         a_PT_in=1.32,
+    #         stabil_iter=self.stabil_iter,
+    #         albedo_iter=self.albedo_iter,
+    #     )
+    #     return ee.Image(et).rename(['et'])
+
+    # def aggregate(self, T_air):
+    #     """EE approach for aggregating Landsat Ta to the ALEXI grid
+    #
+    #     30000 pixels should works for aggregating Landsat to global ET (5 km)
+    #     The ".updateMask(1)" call is used to remove the transparency mask
+    #     Should we use the ".mean().unweighted()" reducer?
+    #
+    #     Parameters
+    #     ----------
+    #     T_air: ee.Image
+    #         Landsat scale air temperature (K)
     #
     #     Returns
     #     -------
@@ -352,23 +310,100 @@ class Image(object):
     #
     #     """
     #     T_air = ee.Image(T_air) \
-    #         .resample('bilinear') \
-    #         .reproject(crs=self.et_crs, crsTransform=self.et_transform)
+    #         .reduceResolution(reducer=ee.Reducer.mean(), maxPixels=30000) \
+    #         .reproject(crs=self.et_crs, crsTransform=self.et_transform) \
+    #         .updateMask(1)
     #     return T_air
+    #
+    # # def smooth(self, T_air):
+    # #     """Resample image
+    # #
+    # #     Parameters
+    # #     ----------
+    # #     T_air
+    # #
+    # #     Returns
+    # #     -------
+    # #     image : ee.Image
+    # #
+    # #     """
+    # #     T_air = ee.Image(T_air) \
+    # #         .resample('bilinear') \
+    # #         .reproject(crs=self.et_crs, crsTransform=self.et_transform)
+    # #     return T_air
 
-    def _set_alexi_et_vars(self):
+    @lazy_property
+    def alexi_et(self):
         """Extract ALEXI ET image for the target image time"""
-        self.alexi_et = ee.Image(ee.ImageCollection(self.et_coll) \
-            .filterDate(self.date, self.date.advance(1, 'day')).first())
-        self.alexi_et = self.alexi_et.rename(['alexi_et'])
+        if self.alexi_et_source.upper() == 'CONUS_V001':
+            alexi_et_id = 'projects/disalexi/alexi/CONUS_V001'
+            alexi_et_coll = ee.ImageCollection(alexi_et_id) \
+                .filterDate(self.date, self.date.advance(1, 'day'))
+            alexi_et_img = ee.Image(alexi_et_coll.first())
+            self.et_transform = [0.04, 0, -125.04, 0, -0.04, 49.8]
+            self.et_crs = 'EPSG:4326'
+        else:
+            raise ValueError('Unsupported alexi_et_source: {}\n'.format(
+                self.alexi_et_source))
 
-    def _set_elevation_vars(self):
-        """Compute elevation derived variables"""
-        self.pressure = self.elevation \
+        return alexi_et_img.rename(['alexi_et'])
+
+    @lazy_property
+    def elevation(self):
+        """Elevation"""
+        if utils.is_number(self.elevation_source):
+            elev_image = ee.Image.constant(float(self.elevation_source))
+        # elif self.elevation_source.upper() == 'GTOPO':
+        #     elev_image = ee.Image('USGS/GTOPO30')
+        # elif self.elevation_source.upper() == 'NED':
+        #     elev_image = ee.Image('USGS/NED')
+        # elif self.elevation_source.upper() == 'SRTM':
+        #     elev_image = ee.Image('USGS/SRTMGL1_003')
+        # elif (self.elevation_source.lower().startswith('projects/') or
+        #       self.elevation_source.lower().startswith('users/')):
+        #     elev_image = ee.Image(self.elevation_source)
+        elif type(self.elevation_source) is str:
+            elev_image = ee.Image(self.elevation_source)
+        else:
+            raise ValueError('Unsupported elev_source: {}\n'.format(
+                self.elevation_source))
+
+        return elev_image.select([0], ['elev'])
+
+    @lazy_property
+    def pressure(self):
+        """Air pressure"""
+        return self.elevation \
             .expression(
                 '101.3 * (((293.0 - 0.0065 * z) / 293.0) ** 5.26)',
                 {'z': self.elevation}) \
             .rename(['pressure'])
+
+    @lazy_property
+    def windspeed(self):
+        """Windspeed"""
+
+        # if utils.is_number(self.windspeed_source):
+        #     dt_img = ee.Image.constant(float(self._dt_source))
+        if self.windspeed_source.upper() == 'CFSV2':
+            # It would be more correct to compute the magnitude for each image,
+            #   then compute the average.
+            # Do we need daily, 6hr, or interpolated instantaneous data?
+            windspeed_coll = ee.ImageCollection('NOAA/CFSV2/FOR6H') \
+                .select([
+                    'u-component_of_wind_height_above_ground',
+                    'v-component_of_wind_height_above_ground']) \
+                .filterDate(self.date, self.date.advance(1, 'day'))
+            windspeed_img = windspeed_coll.mean() \
+                .expression('sqrt(b(0) ** 2 + b(1) ** 2)') \
+                .rename(['windspeed'])
+
+        else:
+            raise ValueError('Invalid windspeed_source: {}\n'.format(
+                self.windspeed_source))
+
+        return windspeed_img
+
 
     def _set_landcover_vars(self):
         """Compute Land Cover / LAI derived variables
@@ -451,7 +486,6 @@ class Image(object):
 
     def _set_solar_vars(self, interpolate_flag=True):
         """Extract MERRA2 solar images for the target image time"""
-
         # Interpolate rs hourly image at image time
         # Hourly Rs is time average so time starts are 30 minutes early
         # Move image time 30 minutes earlier to simplify filtering/interpolation
@@ -474,7 +508,8 @@ class Image(object):
             self.rs1 = ee.Image(
                 ee.ImageCollection(self.rs_hourly_coll) \
                     .filterDate(self.date, self.date.advance(1, 'day')) \
-                    .filter(ee.Filter.calendarRange(self.hour_int, self.hour_int, 'hour'))
+                    .filter(ee.Filter.calendarRange(
+                        self.hour_int, self.hour_int, 'hour'))
                     .first()) \
                 .rename(['rs'])
         self.rs24 = ee.Image(
@@ -500,43 +535,3 @@ class Image(object):
             date=self.datetime,
             lon=ee.Image.pixelLonLat().select(['longitude']).multiply(math.pi / 180),
             lat=ee.Image.pixelLonLat().select(['latitude']).multiply(math.pi / 180))
-
-    def _set_weather_vars(self):
-        """Compute weather derived variables (only wind from CFSv2 for now)
-
-        Assume input image is a CFSv2 collection
-        Assume wind speed image has two bands and compute magnitude
-        It would probably make more sense to compute a single windspeed image
-            in the input collection.
-        For simplicity, computing the mean of all images in the UTC day
-
-        Do we need daily, 6hr, or interpolated instantaneous data?
-
-        CFSv2 units q: kg/kg, p: Pa, ta: K, wind: m/s
-        """
-        windspeed_img = ee.Image(self.windspeed_coll \
-            .filterDate(self.date, self.date.advance(1, 'day')).mean())
-        self.windspeed = windspeed_img \
-            .expression('sqrt(b(0) ** 2 + b(1) ** 2)') \
-            .rename(['windspeed'])
-
-        # CGM - Per Mitch, q2, Ta, pressure, and ea are not used in the current
-        #   implementation of DisALEXI.
-        # self.q2 = cfsr_img.select(['Specific_humidity_height_above_ground']) \
-        #     .rename(['q2'])
-        # self.q2 = cfsr_img.expression(
-        #     '0.5 * (a + b)',
-        #     {'a': cfsr_img.select(['Minimum_specific_humidity_at_2m_height_above_ground_6_Hour_Interval'])
-        #      'b': cfsr_img.select(['Maximum_specific_humidity_at_2m_height_above_ground_6_Hour_Interval'])})
-
-        # self.ta = cfsr_img.select(['Temperature_height_above_ground']) \
-        #     .rename(['ta'])
-        # self.ta = cfsr_img.expression(
-        #     '0.5 * (a + b)',
-        #     {'a': cfsr_img.select(['Minimum_temperature_height_above_ground_6_Hour_Interval'])
-        #      'b': cfsr_img.select(['Maximum_temperature_height_above_ground_6_Hour_Interval'])})
-
-        # Get modeled air pressure (convert Pa to kPa)
-        # self.pressure = cfsr_img.select(['Pressure_surface']) \
-        #     .multiply(0.001).rename(['pressure'])
-
