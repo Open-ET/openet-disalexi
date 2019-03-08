@@ -93,22 +93,6 @@ def tseb_pt(T_air, T_rad, u, p, z, Rs_1, Rs24, vza, zs,
         Agricultural and Forest Meteorology, Volume 94, Issue 1, Pages 13-29,
         http://dx.doi.org/10.1016/S0168-1923(99)00005-2.
     """
-    # print('\nINPUTS')
-    # print('T_rad:    {:20.14f}'.format(float(utils.image_value(T_rad).values()[0])))
-    # print('T_air:    {:20.14f}'.format(float(utils.image_value(T_air).values()[0])))
-    # print('u:        {:20.14f}'.format(float(utils.image_value(u).values()[0])))
-    # print('Rs_1:     {:20.14f}'.format(float(utils.image_value(Rs_1).values()[0])))
-    # print('Rs24:     {:20.14f}'.format(float(utils.image_value(Rs24).values()[0])))
-    # # print('vza:      {:20.14f}'.format(float(utils.image_value(vza).values()[0])))
-    # print('zs:       {:20.14f}'.format(float(utils.image_value(zs).values()[0])))
-    # print('albedo:   {:20.14f}'.format(float(utils.image_value(albedo).values()[0])))
-    # print('ndvi:     {:20.14f}'.format(float(utils.image_value(ndvi).values()[0])))
-    # print('lai:      {:20.14f}'.format(float(utils.image_value(lai).values()[0])))
-    # print('clump:    {:20.14f}'.format(float(utils.image_value(clump).values()[0])))
-    # print('hc:       {:20.14f}'.format(float(utils.image_value(hc).values()[0])))
-    # print('time:     {:20.14f}'.format(float(utils.image_value(time).values()[0])))
-    # print('t_rise:   {:20.14f}'.format(float(utils.image_value(t_rise).values()[0])))
-    # print('t_end:    {:20.14f}'.format(float(utils.image_value(t_end).values()[0])))
 
     # ************************************************************************
     # Correct Clumping Factor
@@ -250,40 +234,6 @@ def tseb_pt(T_air, T_rad, u, p, z, Rs_1, Rs24, vza, zs,
     # H_iter = T_air.multiply(0).add(200.16)
     EF_s = T_air.multiply(0)
 
-    # print('\nF:        {:20.14f}'.format(float(utils.image_value(F).values()[0])))
-    # print('fc:       {:20.14f}'.format(float(utils.image_value(fc).values()[0])))
-    # print('lai_c:    {:20.14f}'.format(float(utils.image_value(lai_c).values()[0])))
-    # print('fc_q:     {:20.14f}'.format(float(utils.image_value(fc_q).values()[0])))
-    # print('z0h:      {:20.14f}'.format(float(utils.image_value(z0h).values()[0])))
-    # print('z0m:      {:20.14f}'.format(float(utils.image_value(z0m).values()[0])))
-    # print('leaf:     {:20.14f}'.format(float(utils.image_value(leaf).values()[0])))
-    # print('leaf_c:   {:20.14f}'.format(float(utils.image_value(leaf_c).values()[0])))
-    # print('leaf_s:   {:20.14f}'.format(float(utils.image_value(leaf_s).values()[0])))
-    # print('e_s:      {:20.14f}'.format(float(utils.image_value(e_s).values()[0])))
-    # print('Ss:       {:20.14f}'.format(float(utils.image_value(Ss).values()[0])))
-    # print('lambda1:  {:20.14f}'.format(float(utils.image_value(lambda1).values()[0])))
-    # print('p:        {:20.14f}'.format(float(utils.image_value(p).values()[0])))
-    # print('z:        {:20.14f}'.format(float(utils.image_value(z).values()[0])))
-    # print('g:        {:20.14f}'.format(float(utils.image_value(g).values()[0])))
-    # print('a_PT:     {:20.14f}'.format(float(utils.image_value(a_PT).values()[0])))
-    # print('Rs_c:     {:20.14f}'.format(float(utils.image_value(Rs_c).values()[0])))
-    # print('Rs_s:     {:20.14f}'.format(float(utils.image_value(Rs_s).values()[0])))
-    # print('albedo_c: {:20.14f}'.format(float(utils.image_value(albedo_c).values()[0])))
-    # print('albedo_s: {:20.14f}'.format(float(utils.image_value(albedo_s).values()[0])))
-    # print('e_atm:    {:20.14f}'.format(float(utils.image_value(e_atm).values()[0])))
-    # print('r_air:    {:20.14f}'.format(float(utils.image_value(r_air).values()[0])))
-    # print('cp:       {:20.14f}'.format(float(cp.getInfo())))
-    # print('d_0:      {:20.14f}'.format(float(utils.image_value(d_0).values()[0])))
-    # print('z0m:      {:20.14f}'.format(float(utils.image_value(z0m).values()[0])))
-    # print('z0h:      {:20.14f}'.format(float(utils.image_value(z0h).values()[0])))
-    # print('u_attr:   {:20.14f}'.format(float(utils.image_value(u_attr).values()[0])))
-    # print('r_ah:     {:20.14f}'.format(float(utils.image_value(r_ah).values()[0])))
-    # print('r_s:      {:20.14f}'.format(float(utils.image_value(r_s).values()[0])))
-    # print('r_x:      {:20.14f}'.format(float(utils.image_value(r_x).values()[0])))
-    # print('T_c:      {:20.14f}'.format(float(utils.image_value(T_c).values()[0])))
-    # print('T_s:      {:20.14f}'.format(float(utils.image_value(T_s).values()[0])))
-    # print('EF_s:     {:20.14f}'.format(float(utils.image_value(EF_s).values()[0])))
-
     # ************************************************************************
     # Start Loop for Stability Correction and Water Stress
     def iter_func(n, prev):
@@ -421,21 +371,6 @@ def tseb_pt(T_air, T_rad, u, p, z, Rs_1, Rs24, vza, zs,
     # r_s = ee.Image(iter_output.get('r_s'))
     # r_x = ee.Image(iter_output.get('r_x'))
 
-    # print('\na_PT:     {:20.14f}'.format(utils.image_value(a_PT).values()[0]))
-    # print('Rn_c:     {:20.14f}'.format(utils.image_value(Rn_c).values()[0]))
-    # print('Rn_s:     {:20.14f}'.format(utils.image_value(Rn_s).values()[0]))
-    # print('G:        {:20.14f}'.format(utils.image_value(G).values()[0]))
-    # print('H_c:      {:20.14f}'.format(utils.image_value(H_c).values()[0]))
-    # print('H_s:      {:20.14f}'.format(utils.image_value(H_s).values()[0]))
-    # print('LE_c:     {:20.14f}'.format(utils.image_value(LE_c).values()[0]))
-    # print('LE_s:     {:20.14f}'.format(utils.image_value(LE_s).values()[0]))
-    # print('r_ah:     {:20.14f}'.format(utils.image_value(r_ah).values()[0]))
-    # print('r_s:      {:20.14f}'.format(utils.image_value(r_s).values()[0]))
-    # print('r_x:      {:20.14f}'.format(utils.image_value(r_x).values()[0]))
-    # print('T_ac:     {:20.14f}'.format(utils.image_value(T_ac).values()[0]))
-    # print('T_c:      {:20.14f}'.format(utils.image_value(T_c).values()[0]))
-    # print('T_s:      {:20.14f}'.format(utils.image_value(T_s).values()[0]))
-
     # ************************************************************************
     # Check Energy Balance Closure
     ind = a_PT.lte(0.01)
@@ -459,6 +394,7 @@ def tseb_pt(T_air, T_rad, u, p, z, Rs_1, Rs24, vza, zs,
 
     # The latent heat of vaporization is 2.45 MJ kg-1
     # Assume Rs24 is still in W m-2 day-1 and convert to MJ kg-1
+    # Convert units from MJ m-2 day-1 to mm day-1
     # CGM - Leaving out scaling value for now
     ET = albedo \
         .expression(
@@ -466,14 +402,7 @@ def tseb_pt(T_air, T_rad, u, p, z, Rs_1, Rs24, vza, zs,
             {'LE_c': LE_c, 'LE_s': LE_s, 'Rs_1': Rs_1,
              'Rs24': Rs24.multiply(0.0864 / 24.0),
              'scaling': 1}) \
-        .max(0.01)
+        .divide(0.408) \
+        .max(0.01) \
 
-    # print('\nRn_c:     {:20.14f}'.format(utils.image_value(Rn_c).values()[0]))
-    # print('Rn_s:     {:20.14f}'.format(utils.image_value(Rn_s).values()[0]))
-    # print('G:        {:20.14f}'.format(utils.image_value(G).values()[0]))
-    # print('H_c:      {:20.14f}'.format(utils.image_value(H_c).values()[0]))
-    # print('H_s:      {:20.14f}'.format(utils.image_value(H_s).values()[0]))
-    # print('LE_c:     {:20.14f}'.format(utils.image_value(LE_c).values()[0]))
-    # print('LE_s:     {:20.14f}'.format(utils.image_value(LE_s).values()[0]))
-    # print('\nET:       {:20.14f}'.format(utils.image_value(ET).values()[0]))
-    return ET
+    return ET.rename(['et'])

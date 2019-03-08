@@ -280,6 +280,7 @@ def albedo_separation(albedo, Rs_1, F, fc, aleafv, aleafn, aleafl, adeadv,
     .. [Campbell1998] Campbell, G. S. & Norman, J. M. (1998),
         An introduction to environmental biophysics. Springer, New York
         https://archive.org/details/AnIntroductionToEnvironmentalBiophysics.
+
     """
     # DAYTIME
     # Calculate potential (clear-sky) VIS and NIR solar components
@@ -382,27 +383,6 @@ def albedo_separation(albedo, Rs_1, F, fc, aleafv, aleafn, aleafl, adeadv,
     fg = albedo.multiply(0).add(1)
     # rsoilv = ee.Image.constant(0.12)
     # fg = ee.Image.constant(1.0)
-
-    # print('\nairmas:   {:>20.14f}'.format(utils.image_value(airmas).values()[0]))
-    # print('airmas:   {:>30.24f}'.format(utils.image_value(airmas).values()[0]))
-    # print('potbm1:   {:>20.14f}'.format(utils.image_value(potbm1).values()[0]))
-    # print('potvis:   {:>20.14f}'.format(utils.image_value(potvis).values()[0]))
-    # print('potbm2:   {:>20.14f}'.format(utils.image_value(potbm2).values()[0]))
-    # print('potnir:   {:>20.14f}'.format(utils.image_value(potnir).values()[0]))
-    # print('fclear:   {:>20.14f}'.format(utils.image_value(fclear).values()[0]))
-    # print('fvis:     {:>20.14f}'.format(utils.image_value(fvis).values()[0]))
-    # print('fnir:     {:>20.14f}'.format(utils.image_value(fnir).values()[0]))
-    # print('fb1:      {:>20.14f}'.format(utils.image_value(fb1).values()[0]))
-    # print('dirvis:   {:>20.14f}'.format(utils.image_value(dirvis).values()[0]))
-    # print('dirnir:   {:>20.14f}'.format(utils.image_value(dirnir).values()[0]))
-    # print('difvis:   {:>20.14f}'.format(utils.image_value(difvis).values()[0]))
-    # print('difnir:   {:>20.14f}'.format(utils.image_value(difnir).values()[0]))
-    # print('rsoilv:   {:>20.14f}'.format(utils.image_value(rsoilv).values()[0]))
-    # print('fg:       {:>20.14f}'.format(utils.image_value(fg).values()[0]))
-    # print('aleafv:   {:>20.14f}'.format(utils.image_value(aleafv).values()[0]))
-    # print('aleafn:   {:>20.14f}'.format(utils.image_value(aleafn).values()[0]))
-    # print('adeadv:   {:>20.14f}'.format(utils.image_value(adeadv).values()[0]))
-    # print('adeadn:   {:>20.14f}'.format(utils.image_value(adeadn).values()[0]))
 
     # CGM - Switched to an iterate call
     def iter_func(n, prev):
@@ -647,18 +627,6 @@ def albedo_separation(albedo, Rs_1, F, fc, aleafv, aleafn, aleafl, adeadv,
     # rsoiln = rsoilv.multiply(ratio_soil)
     taudn = ee.Image(iter_output.get('taudn'))
     taudv = ee.Image(iter_output.get('taudv'))
-    # print('\nakb:      {:>20.14f}'.format(utils.image_value(akb).values()[0]))
-    # print('albedo_c: {:>20.14f}'.format(utils.image_value(albedo_c).values()[0]))
-    # print('albedo_s: {:>20.14f}'.format(utils.image_value(albedo_s).values()[0]))
-    # print('ameann:   {:>20.14f}'.format(utils.image_value(ameann).values()[0]))
-    # print('ameanv:   {:>20.14f}'.format(utils.image_value(ameanv).values()[0]))
-    # print('diff:     {:>20.14f}'.format(utils.image_value(diff).values()[0]))
-    # print('rbcpyn:   {:>20.14f}'.format(utils.image_value(rbcpyn).values()[0]))
-    # print('rbcpyv:   {:>20.14f}'.format(utils.image_value(rbcpyv).values()[0]))
-    # print('rsoilv:   {:>20.14f}'.format(utils.image_value(rsoilv).values()[0]))
-    # print('rsoiln:   {:>20.14f}'.format(utils.image_value(rsoiln).values()[0]))
-    # print('taudv:    {:>20.14f}'.format(utils.image_value(taudv).values()[0]))
-    # print('taudn:    {:>20.14f}'.format(utils.image_value(taudn).values()[0]))
 
     # if a solution is not reached, alb_c=alb_s=alb
     albedo_c = albedo_c.where(diff.abs().gt(0.05), albedo)
@@ -677,13 +645,7 @@ def albedo_separation(albedo, Rs_1, F, fc, aleafv, aleafn, aleafl, adeadv,
         {'rbcpyv': rbcpyv, 'rsoilv': rsoilv, 'expfac': expfac})
     # Eq 15.11
     taubtv = F.expression('xnum / xden', {'xnum': xnum, 'xden': xden})
-    # print('\nexpfac:   {:>20.14f}'.format(utils.image_value(expfac).values()[0]))
-    # print('rbcpyv:   {:>20.14f}'.format(utils.image_value(rbcpyv).values()[0]))
-    # print('rsoilv:   {:>20.14f}'.format(utils.image_value(rsoilv).values()[0]))
-    # print('xnum:     {:>20.14f}'.format(utils.image_value(xnum).values()[0]))
-    # print('xden:     {:>20.14f}'.format(utils.image_value(xden).values()[0]))
-    # print('taubtv:   {:>20.14f}'.format(utils.image_value(taubtv).values()[0]))
-  
+
     # Direct beam+scattered canopy transmission coefficient (NIR)
     expfac = F.expression(
         'sqrt(ameann) * akb * F',
@@ -697,13 +659,7 @@ def albedo_separation(albedo, Rs_1, F, fc, aleafv, aleafn, aleafl, adeadv,
         {'rbcpyn': rbcpyn, 'rsoiln': rsoiln, 'expfac': expfac})
     # Eq 15.11
     taubtn = F.expression('xnum / xden', {'xnum': xnum, 'xden': xden})
-    # print('\nexpfac:   {:>20.14f}'.format(utils.image_value(expfac).values()[0]))
-    # print('rbcpyn:   {:>20.14f}'.format(utils.image_value(rbcpyn).values()[0]))
-    # print('rsoiln:   {:>20.14f}'.format(utils.image_value(rsoiln).values()[0]))
-    # print('xnum:     {:>20.14f}'.format(utils.image_value(xnum).values()[0]))
-    # print('xden:     {:>20.14f}'.format(utils.image_value(xden).values()[0]))
-    # print('taubtn:   {:>20.14f}'.format(utils.image_value(taubtn).values()[0]))
-  
+
     # Shortwave radiation components
     tausolar = F.expression(
         'fvis * (difvis * taudv + dirvis * taubtv) + '
@@ -719,11 +675,6 @@ def albedo_separation(albedo, Rs_1, F, fc, aleafv, aleafn, aleafl, adeadv,
         'Rs_1 * (1.0 - tausolar)', {'Rs_1': Rs_1, 'tausolar': tausolar})
     Rs_s = Rs_1.expression(
         'Rs_1 * tausolar', {'Rs_1': Rs_1, 'tausolar': tausolar})
-
-    # print('\nRs_c:     {:>20.14f}'.format(utils.image_value(Rs_c).values()[0]))
-    # print('Rs_s:     {:>20.14f}'.format(utils.image_value(Rs_s).values()[0]))
-    # print('albedo_c: {:>20.14f}'.format(utils.image_value(albedo_c).values()[0]))
-    # print('albedo_s: {:>20.14f}'.format(utils.image_value(albedo_s).values()[0]))
 
     return Rs_c, Rs_s, albedo_c, albedo_s
 
@@ -745,6 +696,7 @@ def compute_G0(Rn, Rn_s, albedo, ndvi, t_rise, t_end, time, EF_s):
     Returns
     -------
     G0 : ee.Image
+
     """
     w = EF_s.expression('1 / (1 + (EF_s / 0.5) ** 8.0)', {'EF_s': EF_s})
 
