@@ -6,9 +6,9 @@ from . import utils
 
 def tseb_pt(T_air, T_rad, u, p, z, Rs_1, Rs24, vza, zs,
             aleafv, aleafn, aleafl, adeadv, adeadn, adeadl,
-            albedo, ndvi, lai, clump, hc, time, t_rise, t_end,
+            albedo, ndvi, lai, clump, hc, time, t_noon,
             leaf_width, a_PT_in=1.32,
-            stabil_iter=35, albedo_iter=10):
+            stabil_iter=36, albedo_iter=10):
     """Priestley-Taylor TSEB
 
     Calculates the Priestley Taylor TSEB fluxes using a single observation of
@@ -58,9 +58,7 @@ def tseb_pt(T_air, T_rad, u, p, z, Rs_1, Rs24, vza, zs,
         Canopy height (m).
     time
 
-    t_rise : ee.Image
-
-    t_end : ee.Image
+    t_noon : ee.Image
 
     leaf_width : ee.Image
         Average/effective leaf width (m)
@@ -73,6 +71,8 @@ def tseb_pt(T_air, T_rad, u, p, z, Rs_1, Rs24, vza, zs,
     albedo_iter: int, optional
         Number of iterations of albedo separation calculation
         (the default is 10)
+    t_rise : ee.Image
+    t_end : ee.Image
 
     Returns
     -------
@@ -187,8 +187,8 @@ def tseb_pt(T_air, T_rad, u, p, z, Rs_1, Rs24, vza, zs,
     #     {'T_air': T_air})
 
     Rs_c, Rs_s, albedo_c, albedo_s = tseb_utils.albedo_separation(
-        albedo, Rs_1, F, fc, aleafv, aleafn, aleafl, adeadv, adeadn, adeadl, zs,
-        albedo_iter)
+        albedo, Rs_1, F, fc, aleafv, aleafn, aleafl, adeadv, adeadn, adeadl,
+        zs, albedo_iter)
 
     # CGM - Moved emissivity calculation to separate function.
     #   I removed the Rs0 check.
@@ -256,7 +256,7 @@ def tseb_pt(T_air, T_rad, u, p, z, Rs_1, Rs24, vza, zs,
         #     albedo_c, albedo_s, T_air, T_c_iter, T_s_iter, e_atm, Rs_c, Rs_s, F)
 
         G = tseb_utils.compute_G0(
-            Rn, Rn_s, albedo, ndvi, t_rise, t_end, time, EF_s_iter)
+            Rn, Rn_s, albedo, ndvi, t_noon, time, EF_s_iter)
 
         LE_c = albedo \
             .expression(
@@ -385,7 +385,7 @@ def tseb_pt(T_air, T_rad, u, p, z, Rs_1, Rs24, vza, zs,
     # CGM - Check order of operations
     ind = LE_c.gt(Rn_c.add(100))
     # CGM - Not used below since LE_c is recomputed
-    LE_c = LE_c.where(ind, Rn_c.add(100))
+    # LE_c = LE_c.where(ind, Rn_c.add(100))
     H_c = H_c.where(ind, -100)
 
     LE_s = albedo.expression(

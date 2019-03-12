@@ -6,11 +6,14 @@ var deg2rad = Math.PI / 180.0;
 
 
 // DisALEXI Image class
-function disalexi_image(image) {
+function disalexi_image(image, stabil_iter, albedo_iter, ta_cellsize, ta_start, ta_stop, ta_step) {
 
-  // Variables from Image Class
-  var iterations = 10;
-  var t_air_values = range(273, 321, 1);
+  var ta_values = range(ta_start, ta_stop, ta_step);
+  
+  var image_proj = image.projection();
+  var image_crs = image_proj.crs();
+  var image_transform = ee.List(
+    ee.Dictionary(ee.Algorithms.Describe(image_proj)).get('transform'));
 
   // Set server side date/time properties using the 'system:time_start'
   var image_dt = ee.Date(ee.Image(image).get('system:time_start'));
@@ -37,12 +40,12 @@ function disalexi_image(image) {
 
 
   // Elevation [m]
-  var elevation = ee.Image('USGS/NED').rename(['elevation']);
-  // elevation = ee.Image('USGS/SRTMGL1_003').rename(['elevation']);
-  // elevation = ee.Image('USGS/GTOPO30').rename(['elevation']);
-  // elevation = ee.Image('USGS/GMTED2010').rename(['elevation']);
-  // elevation = ee.Image('CGIAR/SRTM90_V4').rename(['elevation']);
-  // elevation = ee.Image.constant(350.0).rename(['elevation']);
+  // var elevation = ee.Image('USGS/NED').rename(['elevation']);
+  var elevation = ee.Image('USGS/SRTMGL1_003').rename(['elevation']);
+  // var elevation = ee.Image('USGS/GTOPO30').rename(['elevation']);
+  // var elevation = ee.Image('USGS/GMTED2010').rename(['elevation']);
+  // var elevation = ee.Image('CGIAR/SRTM90_V4').rename(['elevation']);
+  // var elevation = ee.Image.constant(350.0).rename(['elevation']);
 
 
   // Set default land cover image and type
@@ -56,8 +59,8 @@ function disalexi_image(image) {
 
 
   // ALEXI ET - CONUS
-  var et_coll = ee.ImageCollection('projects/disalexi/alexi/CONUS');
-  var et_transform = [0.04, 0, -125.04, 0, -0.04, 49.82];
+  var et_coll = ee.ImageCollection('projects/disalexi/alexi/CONUS_V001');
+  var et_transform = [0.04, 0, -125.04, 0, -0.04, 49.8];
   var et_crs = 'EPSG:4326';
 
   // Hard coding using CFSR for wind speed
@@ -67,8 +70,8 @@ function disalexi_image(image) {
       'v-component_of_wind_height_above_ground']);
 
   // Hard coding using MERRA2 solar insolation [W m-2]
-  var rs_hourly_coll = ee.ImageCollection('projects/climate-engine/merra2/rs_hourly');
-  var rs_daily_coll = ee.ImageCollection('projects/climate-engine/merra2/rs_daily');
+  var rs_hourly_coll = ee.ImageCollection('projects/disalexi/merra2/hourly').select(['SWGDNCLR']);
+  var rs_daily_coll = ee.ImageCollection('projects/climate-engine/merra2/daily').select(['SWGDNCLR']);
 
 
   // def _set_alexi_et_vars(self):
@@ -308,28 +311,17 @@ function disalexi_image(image) {
     .multiply(sun_app.multiply(deg2rad).sin())
     .asin();
 
-  // CGM - Functions below are lat/lon dependent and can be written as ee.Image expressions
-  // CGM - d is still in radians, not converting
-  var ha_t = lat.expression(
-    'acos((cos(90.833 * pi / 180) / (cos(lat) * cos(d))) - tan(lat) * tan(d)) * (180 / pi)',
-    {'lat': lat, 'd': d, 'pi': pi});
+  // // CGM - Functions below are lat/lon dependent and can be written as ee.Image expressions
+  // // CGM - d is still in radians, not converting
+  // var ha_t = lat.expression(
+  //   'acos((cos(90.833 * pi / 180) / (cos(lat) * cos(d))) - tan(lat) * tan(d)) * (180 / pi)',
+  //   {'lat': lat, 'd': d, 'pi': pi});
 
-  // def sunrise_sunset(date, lon, lay):
-  // Computes sunrise/sunset times
+  // def solar_noon(date, lon, lay):
   // Adjust image date time to start of day
   var t_noon = lon.expression(
     '(720.0 - 4 * lon - eq_t) / 1440 * 24.0',
     {'lon': lon.multiply(rad2deg), 'eq_t': eq_t});
-  var t_rise = lat
-    .expression(
-      '((t_noon / 24.0) - (ha_t * 4.0 / 1440)) * 24.0',
-      {'t_noon': t_noon, 'ha_t': ha_t})
-    .rename(['t_rise']);
-  var t_end = lat
-    .expression(
-      '((t_noon / 24.0) + (ha_t * 4.0 / 1440)) * 24.0',
-      {'t_noon': t_noon, 'ha_t': ha_t})
-    .rename(['t_end']);
 
   // Compute time and position related variables
   // CGM - The zs returned by this function is not used in the original Python code.
@@ -360,50 +352,55 @@ function disalexi_image(image) {
     .rename(['zs']);
 
 
-  function t_air_func (t_air) {
-    // Compute TSEB ET for each T_air value
-    // Assume the function is being mapped over a FC with a "t_air" property
+  function ta_func (ta_ftr) {
+    // Compute TSEB ET for each Ta value
+    // Assume the function is being mapped over a FC with a "ta" property
     // Return bias (ALEXI ET - TSEB ET) as first band for quality mosaic
 
     // Apply T_air values to Landsat pixels
-    var t_air_img = lst.multiply(0).add(ee.Number(t_air.get('t_air')));
-    // t_air_img = ee.Image.constant(ee.Number(t_air.get('t_air'))).double();
+    var ta = ee.Number(ta_ftr.get('ta'));
+    var ta_fine = lst.multiply(0).add(ta).rename(['ta']);
+    var ta_coarse = alexi_et.multiply(0).add(ta).rename(['ta']);
 
-    var et = tseb_pt(
-      t_air_img, lst, windspeed, pressure, elevation, rs1, rs24, 0, sol_zenith,
+    var et_fine = tseb_pt(
+      ta_fine, lst, windspeed, pressure, elevation, rs1, rs24, 0, sol_zenith,
       aleafv, aleafn, aleafl, adeadv, adeadn, adeadl, albedo, ndvi, lai, clump, hc,
-      time, t_rise, t_end, leaf_width, 1.32, iterations);
+      time, t_noon, leaf_width, 1.32, stabil_iter, albedo_iter);
 
+    // Aggregate the Landsat scale ET up to the ALEXI scale
+    var et_coarse = ee.Image(et_fine)
+      .reproject({'crs': image_crs, 'crsTransform': [ta_cellsize, 0, 15, 0, -ta_cellsize, 15]})
+      .reduceResolution({'reducer': ee.Reducer.mean(), 'maxPixels': 20000})
+      .reproject({'crs': et_crs, 'crsTransform': et_transform});
+    // .updateMask(1)
+    // .reproject(crs=image_crs, crsTransform=image_geo) 
+    
+    var bias = et_coarse.subtract(alexi_et);
+    
     // Invert the abs(bias) since quality mosaic sorts descending
-    var bias = ee.Image(et).subtract(alexi_et).abs().multiply(-1);
-    // bias = et_img.subtract(ET).abs().multiply(-1)
-    return ee.Image([bias, ee.Image(et), t_air_img])
-      .rename(['bias', 'et', 't_air']);
+    var qm_bias = bias.abs().multiply(-1);
+    
+    return ee.Image([qm_bias, ta_coarse]).rename(['qm_bias', 'ta']);
+    // return ee.Image([qm_bias, ta_coarse, et_coarse, bias])
+    //   .rename(['qm_bias', 'ta', 'et', 'bias'])
   }
 
 
   // Get output for a range of Tair values
-  var t_air_ftr_list = [];
-  for (var i = 0; i < t_air_values.length; i++) {
-    t_air_ftr_list.push(ee.Feature(null, {'t_air': t_air_values[i]}));
+  var ta_ftr_list = [];
+  for (var i = 0; i < ta_values.length; i++) {
+    ta_ftr_list.push(ee.Feature(null, {'ta': ta_values[i]}));
   }
-  var t_air_ftr_coll = ee.FeatureCollection(t_air_ftr_list);
+  var ta_ftr_coll = ee.FeatureCollection(ta_ftr_list);
 
   // Mapping over the list seemed a little slower than the FC
-  // t_air_ftr_coll = ee.List.sequence(275, 335, 5)
-
-  var output_coll = ee.ImageCollection(t_air_ftr_coll.map(t_air_func));
+  // ta_ftr_coll = ee.List.sequence(275, 335, 5)
 
   // Return the air temperature associated with the lowest difference
   //   in ET from the ALEXI ET value
-  var t_air = ee.Image(output_coll.qualityMosaic('bias'))
-    .select(['t_air']);
-
-  // Project the output back to the landsat scene
-  //     .reproject(crs=, crsTransform=) \
-  //     .rename(['t_air'])
-
-  return t_air;
+  return ee.ImageCollection(ta_ftr_coll.map(ta_func))
+    .qualityMosaic('qm_bias')
+    .select(['ta']);
 }
 
 
@@ -411,8 +408,8 @@ function disalexi_image(image) {
 
 function tseb_pt(T_air, T_rad, u, p, z, Rs_1, Rs24, vza, zs,
                  aleafv, aleafn, aleafl, adeadv, adeadn, adeadl,
-                 albedo, ndvi, lai, clump, hc, time, t_rise, t_end,
-                 leaf_width, a_PT_in, iterations) {
+                 albedo, ndvi, lai, clump, hc, time, t_noon,
+                 leaf_width, a_PT_in, stabil_iter, albedo_iter) {
   // Correct Clumping Factor
   var f_green = 1.0;
 
@@ -504,7 +501,7 @@ function tseb_pt(T_air, T_rad, u, p, z, Rs_1, Rs24, vza, zs,
 
   // #####################################################################
   // def albedo_separation(albedo, Rs_1, F, fc, aleafv, aleafn, aleafl, adeadv,
-  //                       adeadn, adeadl, zs, iterations=10):
+  //                       adeadn, adeadl, zs, albedo_iter=10):
   // Compute Solar Components and atmospheric properties ([Campbell1998]_)
 
   // Correct for curvature of atmos in airmas
@@ -526,12 +523,11 @@ function tseb_pt(T_air, T_rad, u, p, z, Rs_1, Rs24, vza, zs,
   // CGM - Not used
   var potdif = zs.expression(
     '(600.0 - potbm1) * 0.4 * cos(zs)', {'potbm1': potbm1, 'zs': zs});
-  var uu = zs.expression('1.0 / cos(zs)', {'zs': zs})
-    .max(0.01);
+  var uu = zs.expression('1.0 / cos(zs)', {'zs': zs}).max(0.01);
   var a = zs.expression(
     '10 ** (-1.195 + 0.4459 * axlog - 0.0345 * axlog * axlog)',
     {'axlog': uu.log10()});
-  var watabs = zs.expression('1320.0 * a', {'a': a});
+  var watabs = a.multiply(1320.0);
   var potbm2 = zs.expression(
     '720.0 * exp(-0.05 * airmas) - watabs',
     {'airmas': airmas, 'watabs': watabs});
@@ -829,9 +825,9 @@ function tseb_pt(T_air, T_rad, u, p, z, Rs_1, Rs24, vza, zs,
   });
 
   var albedo_iter_output = ee.Dictionary(
-    ee.List.repeat(albedo_input_images, iterations)
+    ee.List.repeat(albedo_input_images, albedo_iter)
       .iterate(albedo_iter_func, albedo_input_images));
-    // ee.List.sequence(1, iterations)
+    // ee.List.sequence(1, albedo_iter)
 
   // Unpack the iteration output
   var akb = ee.Image(albedo_iter_output.get('akb'));
@@ -885,10 +881,10 @@ function tseb_pt(T_air, T_rad, u, p, z, Rs_1, Rs24, vza, zs,
     'fnir': fnir, 'fvis': fvis,
     'taubtn': taubtn, 'taubtv': taubtv, 'taudn': taudn, 'taudv': taudv});
   var Rs_c = Rs_1.expression(
-    'Rs_1 * (1.0 - tausolar)',
+    'Rs_1 * (1.0 - tausolar)', 
     {'Rs_1': Rs_1, 'tausolar': tausolar});
   var Rs_s = Rs_1.expression(
-    'Rs_1 * tausolar',
+    'Rs_1 * tausolar', 
     {'Rs_1': Rs_1, 'tausolar': tausolar});
 
   // CGM - Moved emissivity calculation to separate function.
@@ -943,7 +939,7 @@ function tseb_pt(T_air, T_rad, u, p, z, Rs_1, Rs24, vza, zs,
     var Rn_s = compute_Rn_s(albedo_s, T_air, T_c_iter, T_s_iter, e_atm, Rs_s, F);
     var Rn = Rn_c.add(Rn_s);
 
-    var G = compute_G0(Rn, Rn_s, albedo, ndvi, t_rise, t_end, time, EF_s_iter);
+    var G = compute_G0(Rn, Rn_s, albedo, ndvi, t_noon, time, EF_s_iter);
 
     var LE_c = albedo
       .expression(
@@ -1023,7 +1019,7 @@ function tseb_pt(T_air, T_rad, u, p, z, Rs_1, Rs24, vza, zs,
     'T_ac': ee.Image(0), 'T_c': T_c, 'T_s': T_s, 'u_attr': u_attr
   });
   var iter_output = ee.Dictionary(
-    ee.List.sequence(1, iterations).iterate(iter_func, input_images));
+    ee.List.sequence(1, stabil_iter).iterate(iter_func, input_images));
 
   // Unpack the iteration output
   var a_PT = ee.Image(iter_output.get('a_PT'));
@@ -1063,12 +1059,14 @@ function tseb_pt(T_air, T_rad, u, p, z, Rs_1, Rs24, vza, zs,
 
   // The latent heat of vaporization is 2.45 MJ kg-1
   // Assume Rs24 is still in W m-2 day-1 and convert to MJ kg-1
+  // Convert units from MJ m-2 day-1 to mm day-1
   // CGM - Leaving out scaling value for now
   var ET = albedo
     .expression(
       '((LE_c + LE_s) / Rs_1) * (Rs24 / 2.45) * scaling',
       {'LE_c': LE_c, 'LE_s': LE_s, 'Rs_1': Rs_1,
       'Rs24': Rs24.multiply(0.0864 / 24.0), 'scaling': 1})
+    .divide(0.408)
     .max(0.01);
 
   return ET;
@@ -1085,7 +1083,7 @@ function emissivity(T_air) {
   return e_atm;
 }
 
-function compute_G0(Rn, Rn_s, albedo, ndvi, t_rise, t_end, time, EF_s) {
+function compute_G0(Rn, Rn_s, albedo, ndvi, t_noon, time, EF_s) {
   var w = EF_s.expression('1 / (1 + (EF_s / 0.5) ** 8.0)', {'EF_s': EF_s});
 
   // Maximum fraction of Rn,s that become G0
@@ -1093,8 +1091,9 @@ function compute_G0(Rn, Rn_s, albedo, ndvi, t_rise, t_end, time, EF_s) {
   var c_g = w.expression('(w * 0.35) + ((1 - w) * 0.31)', {'w': w});
   var t_g = w.expression('(w * 100000.0) + ((1 - w) * 74000.0)', {'w': w});
 
-  var t_noon = t_rise.expression(
-    '0.5 * (t_rise + t_end)', {'t_rise': t_rise, 't_end': t_end});
+  // DEADBEEF
+  // var t_noon = t_rise.expression(
+  //   '0.5 * (t_rise + t_end)', {'t_rise': t_rise, 't_end': t_end});
   var t_g0 = t_noon.expression(
     '(time - t_noon) * 3600.0', {'time': time, 't_noon': t_noon});
 
@@ -1121,9 +1120,9 @@ function compute_r_ah(u_attr, d0, z0h, z_t, fh) {
   var r_ah = u_attr.expression(
     '((log((z_t - d0) / z0h)) - fh) / u_attr / 0.41',
     {'d0': d0, 'fh': fh, 'u_attr': u_attr, 'z0h': z0h, 'z_t': z_t});
-  // CGM - The second conditional will overwrite the first one?
   r_ah = r_ah.where(r_ah.eq(0), 500);
-  r_ah = r_ah.where(r_ah.lte(1.0), 1.0);
+  r_ah = r_ah.max(1.0);
+  //r_ah = r_ah.where(r_ah.lte(1.0), 1.0);
   return r_ah;
 }
 
@@ -1264,9 +1263,11 @@ function temp_separation_tc(H_c, fc, T_air, t0, r_ah, r_s, r_x, r_air, cp) {
   var T_c = fc
     .expression('T_c_lin + delta_T_c', {'T_c_lin': T_c_lin, 'delta_T_c': delta_T_c})
     .where(fc.lt(0.10), t0)
-    .where(fc.gt(0.90), t0);
-  T_c = T_c.where(T_c.lte(T_air.subtract(10.0)), T_air.subtract(10.0));
-  T_c = T_c.where(T_c.gte(T_air.add(50.0)), T_air.add(50.0));
+    .where(fc.gt(0.90), t0)
+    .max(T_air.subtract(10.0))
+    .min(T_air.add(50.0));
+  // T_c = T_c.where(T_c.lte(T_air.subtract(10.0)), T_air.subtract(10.0));
+  // T_c = T_c.where(T_c.gte(T_air.add(50.0)), T_air.add(50.0));
   return T_c;
 }
 
@@ -1287,9 +1288,11 @@ function temp_separation_ts(T_c, fc, T_air, t0) {
         '(t0 - (fc * T_c)) / (1 - fc)',
         {'fc': fc, 't0': t0, 'T_c': T_c}))
     .where(fc.lt(0.1), t0)
-    .where(fc.gt(0.9), t0);
-  T_s = T_s.where(T_s.lte(T_air.subtract(10.0)), T_air.subtract(10.0));
-  T_s = T_s.where(T_s.gte(T_air.add(50.0)), T_air.add(50.0));
+    .where(fc.gt(0.9), t0)
+    .max(T_air.subtract(10.0))
+    .min(T_air.add(50.0));
+  // T_s = T_s.where(T_s.lte(T_air.subtract(10.0)), T_air.subtract(10.0));
+  // T_s = T_s.where(T_s.gte(T_air.add(50.0)), T_air.add(50.0));
   return T_s;
 }
 
@@ -1504,24 +1507,10 @@ function range(start, stop, step) {
 var image_id = 'LC08_044033_20150711';
 var raw_img = ee.Image('LANDSAT/LC08/C01/T1_RT_TOA/' + image_id);
 Map.addLayer(raw_img.select([3,2,1]), {min:0, max:0.3}, 'True Color');
-Map.centerObject(raw_img);
+//Map.centerObject(raw_img);
 
 
-// Clipped ALEXI grid and spatial reference
-var output_crs = 'EPSG:4326';
-var output_geo = [0.04,0.0,-123.04,0.0,-0.04,39.98];
-var output_cs_str = '0p04';
-var output_shape_str = '69x54';
-
-// Landsat grid and spatial reference
-var landsat_crs = raw_img.select(['B2']).projection().getInfo()['crs'];
-var landsat_geo = raw_img.select(['B2']).projection().getInfo()['transform'];
-var landsat_shape = raw_img.select(['B2']).getInfo()['bands'][0]['dimensions'];
-var landsat_shape_str = landsat_shape[0] + 'x' + landsat_shape[1];
-
-
-
-// Prep the Landsat image for DisALEXI
+// Prep the Landsat image for DisALEXI 
 // Rename Landsat bands to common band names
 var landsat_img = landsat_init(raw_img);
 //Map.addLayer(landsat_img, {}, 'Prepped Image');
@@ -1534,50 +1523,69 @@ var input_img = ee.Image([
   landsat_lai(landsat_img),
   landsat_lst(landsat_img),
   landsat_ndvi(landsat_img)]);
-input_img = ee.Image(input_img.set({
+input_img = input_img.set({
   'SCENE_ID': landsat_img.get('system:index'),
   'system:time_start': landsat_img.get('system:time_start')
-}));
+});
 //Map.addLayer(input_img, {}, 'Input Image');
 
 
-// Compute Tair at the Landsat scale
-var tair_img = disalexi_image(input_img);
-Map.addLayer(tair_img, {min:273, max:325, 'palette': ['FF0000', 'FFFF00', '00FFFF', '0000FF']}, 'Tair Coarse');
+// // Compute Tair at a super coarse scale for lots of Ta values
+// var tair_img = disalexi_image(input_img, 2, 1, 1920, 250, 350, 1);
+// Map.addLayer(
+//   tair_img, {min:275, max:325, 'palette': ['FF0000', 'FFFF00', '00FFFF', '0000FF']}, 
+//   'Ta 2, 1, 1920, 250, 350, 1');
+
+// Compute Tair at the Landsat scale for a single Ta value
+var tair_img = disalexi_image(input_img, 2, 1, 120, 290, 291, 1);
+Map.addLayer(
+  tair_img, {min:275, max:325, 'palette': ['FF0000', 'FFFF00', '00FFFF', '0000FF']}, 
+  'Ta 2, 1, 30, 290, 291, 1');
+
+// var tair_img = disalexi_image(input_img, 2, 1, 960, 250, 350, 1);
+// Map.addLayer(
+//   tair_img, {min:275, max:325, 'palette': ['FF0000', 'FFFF00', '00FFFF', '0000FF']}, 
+//   'Ta 2, 1, 960, 250, 350, 1');
+
+// var tair_img = disalexi_image(input_img, 2, 1, 480, 250, 350, 1);
+// Map.addLayer(
+//   tair_img, {min:275, max:325, 'palette': ['FF0000', 'FFFF00', '00FFFF', '0000FF']}, 
+//   'Ta 2, 1, 480, 250, 350, 1');
+  
+// var tair_img = disalexi_image(input_img, 2, 1, 240, 250, 350, 1);
+// Map.addLayer(
+//   tair_img, {min:275, max:325, 'palette': ['FF0000', 'FFFF00', '00FFFF', '0000FF']}, 
+//   'Ta 2, 1, 240, 250, 350, 1');
 
 
-// This asset already exists, but uncomment to rebuild it
-// // Export the Landsat scale Tair image
-// var asset_id = 'users/cgmorton/disalexi/ta/landsat/' + image_id;
-// var task_id = 'disalexi_tair_landsat_' + image_id;
+
+
+
+// // Export the coarse scale Tair image
+// var asset_id = 'users/cgmorton/disalexi/ta/coarse/' + image_id + '_' + output_cs_str;
+// var task_id = 'disalexi_tair_coarse_' + image_id + '_' + output_cs_str;
 // Export.image.toAsset({
-//   image: ee.Image(tair_img).toFloat(),
+//   image: ee.Image(tair_coarse_img).toFloat(),
 //   description: task_id,
 //   assetId: asset_id,
-//   crs: landsat_crs,
-//   crsTransform: landsat_geo,
-//   dimensions: landsat_shape_str,
+//   crs: output_crs,
+//   crsTransform: output_geo,
+//   dimensions: output_shape_str,
 // });
 
 
-// Aggregate Landsat scale Tair to the coarse ALEXI grid
-var tair_coarse_img = tair_img
-  .reproject(landsat_crs, null, 30)
-  .reduceResolution(ee.Reducer.mean(), false, 30000)
-  .reproject(output_crs, output_geo)
-  .updateMask(1);
-Map.addLayer(tair_coarse_img, {min:273, max:325, 'palette': ['FF0000', 'FFFF00', '00FFFF', '0000FF']}, 'Tair Coarse');
 
 
-// Export the coarse scale Tair image
-var asset_id = 'users/cgmorton/disalexi/ta/coarse/' + image_id + '_' + output_cs_str;
-var task_id = 'disalexi_tair_coarse_' + image_id + '_' + output_cs_str;
-Export.image.toAsset({
-  image: ee.Image(tair_coarse_img).toFloat(),
-  description: task_id,
-  assetId: asset_id,
-  crs: output_crs,
-  crsTransform: output_geo,
-  dimensions: output_shape_str,
-});
+
+// // Clipped ALEXI grid and spatial reference
+// var output_crs = 'EPSG:4326';
+// var output_geo = [0.04, 0.0, -123.04, 0.0, -0.04, 40.0];
+// var output_cs_str = '0p04';
+// var output_shape_str = '69x54';
+
+// Landsat grid and spatial reference
+//var landsat_crs = raw_img.select(['B2']).projection().getInfo()['crs'];
+//var landsat_geo = raw_img.select(['B2']).projection().getInfo()['transform'];
+//var landsat_shape = raw_img.select(['B2']).getInfo()['bands'][0]['dimensions'];
+//var landsat_shape_str = landsat_shape[0] + 'x' + landsat_shape[1];
 

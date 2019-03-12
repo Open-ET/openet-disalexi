@@ -8,7 +8,7 @@ deg2rad = math.pi / 180.0
 rad2deg = 180.0 / math.pi
 
 
-def sunrise_sunset(date, lon, lat):
+def solar_noon(date, lon):
     """Computes sunrise/sunset times
 
     Parameters
@@ -21,23 +21,16 @@ def sunrise_sunset(date, lon, lat):
 
     Returns
     -------
-    t_rise : ee.Image
-    t_end : ee.Image
+    t_noon : ee.Image
 
     """
     # Adjust image datetime to start of day
-    d, eq_t, ha_t = _solar_time(ee.Date(date.format('yyyy-MM-dd')), lon, lat)
+    d, eq_t = _solar_time(ee.Date(date.format('yyyy-MM-dd')))
 
     t_noon = lon.expression(
         '(720.0 - 4 * lon - eq_t) / 1440 * 24.0',
         {'lon': lon.multiply(rad2deg), 'eq_t': eq_t})
-    t_rise =lat.expression(
-        '((t_noon / 24.0) - (ha_t * 4.0 / 1440)) * 24.0',
-        {'t_noon': t_noon, 'ha_t': ha_t})
-    t_end = lat.expression(
-        '((t_noon / 24.0) + (ha_t * 4.0 / 1440)) * 24.0',
-        {'t_noon': t_noon, 'ha_t': ha_t})
-    return t_rise.rename(['t_rise']), t_end.rename(['t_end']),
+    return t_noon.rename(['t_noon'])
 
 
 def solar_zenith(date, lon, lat):
@@ -62,7 +55,7 @@ def solar_zenith(date, lon, lat):
     # # This will return the hour floating point value
     # time_t = ee.Date(date).get('hour').add(ee.Date(date).getFraction('hour'))
 
-    d, eq_t, ha_t = _solar_time(date, lon, lat)
+    d, eq_t = _solar_time(date)
 
     ts_time = lon.expression(
         '(time_t / 24.0 * 1440 + eq_t + 4.0 * lon) % 1440.',
@@ -70,7 +63,7 @@ def solar_zenith(date, lon, lat):
     ts_time = ts_time.where(ts_time.gt(1440), ts_time.subtract(1440))
     # ts_time[ts_time > 1440.] = ts_time[ts_time > 1440.] - 1440.
 
-    w = lon.expression('ts_time / 4.0 + 180.0', {'ts_time': ts_time})
+    w = lat.expression('ts_time / 4.0 + 180.0', {'ts_time': ts_time})
     w = w.where(ts_time.divide(4).gt(0), ts_time.divide(4).subtract(180))
     # w[ts_time/4.0 >= 0] = ts_time[ts_time/4.0 >= 0.] / 4.-180.
 
@@ -81,7 +74,7 @@ def solar_zenith(date, lon, lat):
     return zs.rename(['zs'])
 
 
-def _solar_time(date, lon, lat):
+def _solar_time(date):
     """Computes solar time variables following Campbell & Norman 1998
 
     Parameters
@@ -94,9 +87,7 @@ def _solar_time(date, lon, lat):
 
     Returns
     -------
-    d : ee.Number
     eq_t : ee.Number
-    ha_t : ee.Image
 
     """
     # IDL is computing time_t as hours and fractional minutes
@@ -154,30 +145,7 @@ def _solar_time(date, lon, lat):
         .multiply(sun_app.multiply(deg2rad).sin()) \
         .asin()
 
-    # CGM - Functions below are lat/lon dependent and can be written as
-    #   ee.Image expressions
-    # CGM - d is still in radians, not converting
-    ha_t = lat.expression(
-        'acos((cos(90.833 * pi / 180) / (cos(lat) * cos(d))) - tan(lat) * tan(d))'
-        ' * (180 / pi)',
-        {'lat': lat, 'd': d, 'pi': math.pi})
-
-    # print('\n{:10s} {:.12f}'.format('julian_', julian_.getInfo()))
-    # print('{:10s} {:.12f}'.format('time_t', time_t.getInfo()))
-    # print('{:10s} {:.12f}'.format('j_cen', j_cen.getInfo()))
-    # print('{:10s} {:.12f}'.format('lon_sun', lon_sun.getInfo()))
-    # print('{:10s} {:.12f}'.format('an_sun', an_sun.getInfo()))
-    # print('{:10s} {:.12f}'.format('ecc', ecc.getInfo()))
-    # print('{:10s} {:.12f}'.format('ob_ecl', ob_ecl.getInfo()))
-    # print('{:10s} {:.12f}'.format('ob_corr', ob_corr.getInfo()))
-    # print('{:10s} {:.12f}'.format('var_y', var_y.getInfo()))
-    # print('{:10s} {:.12f}'.format('eq_t', eq_t.getInfo()))
-    # print('{:10s} {:.12f}'.format('sun_eq', sun_eq.getInfo()))
-    # print('{:10s} {:.12f}'.format('sun_true', sun_true.getInfo()))
-    # print('{:10s} {:.12f}'.format('sun_app', sun_app.getInfo()))
-    # print('{:10s} {:.12f}'.format('d', d.getInfo()))
-
-    return d, eq_t, ha_t
+    return d, eq_t
 
 
 def _to_jd(date):
@@ -305,14 +273,13 @@ def albedo_separation(albedo, Rs_1, F, fc, aleafv, aleafn, aleafl, adeadv,
         '(potbm1 + (600.0 - potbm1) * 0.4) * cos(zs)',
         {'potbm1': potbm1, 'zs': zs})
     # CGM - Not used
-    potdif = zs.expression(
-        '(600.0 - potbm1) * 0.4 * cos(zs)', {'potbm1': potbm1, 'zs': zs})
-    uu = zs.expression('1.0 / cos(zs)', {'zs': zs}) \
-        .max(0.01)
+    # potdif = zs.expression(
+    #     '(600.0 - potbm1) * 0.4 * cos(zs)', {'potbm1': potbm1, 'zs': zs})
+    uu = zs.expression('1.0 / cos(zs)', {'zs': zs}).max(0.01)
     a = zs.expression(
         '10 ** (-1.195 + 0.4459 * axlog - 0.0345 * axlog * axlog)',
         {'axlog': uu.log10()})
-    watabs = zs.expression('1320.0 * a', {'a': a})
+    watabs = a.multiply(1320.0)
     potbm2 = zs.expression(
         '720.0 * exp(-0.05 * airmas) - watabs',
         {'airmas': airmas, 'watabs': watabs})
@@ -340,9 +307,10 @@ def albedo_separation(albedo, Rs_1, F, fc, aleafv, aleafn, aleafl, adeadv,
     fb1 = zs.expression(
         'potbm1 * cos(zs) / potvis',
         {'potbm1': potbm1, 'potvis': potvis, 'zs': zs})
-    fb2 = zs.expression(
-        'potbm2 * cos(zs) / potnir',
-        {'potbm2': potbm2, 'potnir': potnir, 'zs': zs})
+    # CGM - Not used
+    # fb2 = zs.expression(
+    #     'potbm2 * cos(zs) / potnir',
+    #     {'potbm2': potbm2, 'potnir': potnir, 'zs': zs})
 
     dirvis = zs \
         .expression(
@@ -669,8 +637,7 @@ def albedo_separation(albedo, Rs_1, F, fc, aleafv, aleafn, aleafl, adeadv,
          'fnir': fnir, 'fvis': fvis,
          'taubtn': taubtn, 'taubtv': taubtv,
          'taudn': taudn, 'taudv': taudv})
-    # print('tausolar: {}'.format(utils.image_value(tausolar).values()[0]))
-    # print('Rs_1: {}'.format(utils.image_value(Rs_1).values()[0]))
+
     Rs_c = Rs_1.expression(
         'Rs_1 * (1.0 - tausolar)', {'Rs_1': Rs_1, 'tausolar': tausolar})
     Rs_s = Rs_1.expression(
@@ -679,7 +646,7 @@ def albedo_separation(albedo, Rs_1, F, fc, aleafv, aleafn, aleafl, adeadv,
     return Rs_c, Rs_s, albedo_c, albedo_s
 
 
-def compute_G0(Rn, Rn_s, albedo, ndvi, t_rise, t_end, time, EF_s):
+def compute_G0(Rn, Rn_s, albedo, ndvi, t_noon, time, EF_s):
     """
 
     Parameters
@@ -688,8 +655,7 @@ def compute_G0(Rn, Rn_s, albedo, ndvi, t_rise, t_end, time, EF_s):
     Rn_s : ee.Image
     albedo : ee.Image
     ndvi : ee.Image
-    t_rise : ee.Image
-    t_end : ee.Image
+    t_noon: ee.Image
     time :
     EF_s :
 
@@ -704,9 +670,7 @@ def compute_G0(Rn, Rn_s, albedo, ndvi, t_rise, t_end, time, EF_s):
     # (0.35 for dry soil and 0.31 for wet soil)
     c_g = w.expression('(w * 0.35) + ((1 - w) * 0.31)', {'w': w})
     t_g = w.expression('(w * 100000.0) + ((1 - w) * 74000.0)', {'w': w})
-      
-    t_noon = t_rise.expression(
-        '0.5 * (t_rise + t_end)', {'t_rise': t_rise, 't_end': t_end})
+
     t_g0 = t_noon.expression(
         '(time - t_noon) * 3600.0', {'time': time, 't_noon': t_noon})
       
@@ -865,10 +829,10 @@ def compute_r_ah(u_attr, d0, z0h, z_t, fh):
 
     """
     r_ah = u_attr.expression(
-        '((log((z_t - d0) / z0h)) - fh) / u_attr / 0.41',
+        '(log((z_t - d0) / z0h) - fh) / u_attr / 0.41',
         {'d0': d0, 'fh': fh, 'u_attr': u_attr, 'z0h': z0h, 'z_t': z_t})
-    # CGM - The second conditional will overwrite the first one?
     r_ah = r_ah.where(r_ah.eq(0), 500)
+    # r_ah = r_ah.max(1)
     r_ah = r_ah.where(r_ah.lte(1.0), 1.0)
     return r_ah
 
@@ -1124,89 +1088,89 @@ def compute_Rn_s(albedo_s, T_air, T_c, T_s, e_atm, Rs_s, F):
     return Rn_s
 
 
-def temp_separation(H_c, fc, T_air, t0, r_ah, r_s, r_x, r_air, cp=1004.16):
-    """
-
-    Parameters
-    ----------
-    H_c : ee.Image
-    fc : ee.Image
-    T_air : ee.Image
-        Air temperature (Kelvin).
-    t0 :
-    r_ah : ee.Image
-    r_s : ee.Image
-        Soil aerodynamic resistance to heat transport (s m-1).
-    r_x : ee.Image
-        Bulk canopy aerodynamic resistance to heat transport (s m-1).
-    r_air : ee.Image
-    cp :
-
-    Returns
-    -------
-    T_c
-    T_s
-    Tac
-
-    """
-    
-    T_c_lin = fc.expression(
-        '((T_air / r_ah) + '
-        ' (t0 / r_s / (1 - fc)) + '
-        ' (H_c * r_x / r_air / cp * ((1 / r_ah) + (1 / r_s) + (1 / r_x)))) / '
-        '((1 / r_ah) + (1 / r_s) + (fc / r_s / (1 - fc)))',
-        {'cp': cp, 'fc': fc, 'H_c': H_c, 'r_ah': r_ah, 'r_air': r_air,
-         'r_s': r_s, 'r_x': r_x, 't0': t0, 'T_air': T_air})
-
-    Td = fc.expression(
-        '(T_c_lin * (1 + (r_s / r_ah))) - '
-        '(H_c * r_x / r_air / cp * (1 + (r_s / r_x) + (r_s / r_ah))) - '
-        '(T_air * r_s / r_ah)',
-        {'cp': cp, 'H_c': H_c, 'r_ah': r_ah, 'r_air': r_air, 'r_s': r_s,
-         'r_x': r_x, 'T_air': T_air, 'T_c_lin': T_c_lin})
-
-    delta_T_c = fc.expression(
-        '((t0 ** 4) - (fc * (T_c_lin ** 4)) - ((1 - fc) * (Td ** 4))) / '
-        '((4 * (1 - fc) * (Td ** 3) * (1 + (r_s / r_ah))) + (4 * fc * (T_c_lin ** 3)))',
-        {'fc': fc, 'r_ah': r_ah, 'r_s': r_s, 't0': t0, 'Td': Td,
-         'T_c_lin': T_c_lin})
-
-    T_c = fc \
-        .expression(
-            'T_c_lin + delta_T_c', {'T_c_lin': T_c_lin, 'delta_T_c': delta_T_c}) \
-        .where(fc.lt(0.10), t0) \
-        .where(fc.gt(0.90), t0)
-
-    # Get T_s
-    Delta = fc.expression(
-        '(t0 ** 4) - (fc * (T_c ** 4))', {'fc': fc, 't0': t0, 'T_c': T_c})
-    Delta = Delta.where(Delta.lte(0), 10)
-
-    # CGM - This could probably be simplified
-    T_s = fc \
-        .expression('(Delta / (1 - fc)) ** 0.25', {'Delta': Delta, 'fc': fc}) \
-        .where(
-            fc.expression(
-                '((t0 ** 4) - (fc * T_c ** 4)) <= 0.',
-                {'fc': fc, 't0': t0, 'T_c': T_c}),
-            fc.expression(
-                '(t0 - (fc * T_c)) / (1 - fc)',
-                {'fc': fc, 't0': t0, 'T_c': T_c})) \
-        .where(fc.lt(0.1), t0) \
-        .where(fc.gt(0.9), t0)
-
-    T_c = T_c.where(T_c.lte(T_air.subtract(10.0)), T_air.subtract(10.0))
-    T_c = T_c.where(T_c.gte(T_air.add(50.0)), T_air.add(50.0))
-    T_s = T_s.where(T_s.lte(T_air.subtract(10.0)), T_air.subtract(10.0))
-    T_s = T_s.where(T_s.gte(T_air.add(50.0)), T_air.add(50.0))
-
-    T_ac = fc.expression(
-        '((T_air / r_ah) + (T_s / r_s) + (T_c / r_x)) / '
-        '((1 / r_ah) + (1 / r_s) + (1 / r_x))',
-        {'r_ah': r_ah, 'r_s': r_s, 'r_x': r_x, 'T_c': T_c, 'T_s': T_s,
-         'T_air': T_air})
-
-    return T_c, T_s, T_ac
+# def temp_separation(H_c, fc, T_air, t0, r_ah, r_s, r_x, r_air, cp=1004.16):
+#     """
+#
+#     Parameters
+#     ----------
+#     H_c : ee.Image
+#     fc : ee.Image
+#     T_air : ee.Image
+#         Air temperature (Kelvin).
+#     t0 :
+#     r_ah : ee.Image
+#     r_s : ee.Image
+#         Soil aerodynamic resistance to heat transport (s m-1).
+#     r_x : ee.Image
+#         Bulk canopy aerodynamic resistance to heat transport (s m-1).
+#     r_air : ee.Image
+#     cp :
+#
+#     Returns
+#     -------
+#     T_c
+#     T_s
+#     Tac
+#
+#     """
+#
+#     T_c_lin = fc.expression(
+#         '((T_air / r_ah) + '
+#         ' (t0 / r_s / (1 - fc)) + '
+#         ' (H_c * r_x / r_air / cp * ((1 / r_ah) + (1 / r_s) + (1 / r_x)))) / '
+#         '((1 / r_ah) + (1 / r_s) + (fc / r_s / (1 - fc)))',
+#         {'cp': cp, 'fc': fc, 'H_c': H_c, 'r_ah': r_ah, 'r_air': r_air,
+#          'r_s': r_s, 'r_x': r_x, 't0': t0, 'T_air': T_air})
+#
+#     Td = fc.expression(
+#         '(T_c_lin * (1 + (r_s / r_ah))) - '
+#         '(H_c * r_x / r_air / cp * (1 + (r_s / r_x) + (r_s / r_ah))) - '
+#         '(T_air * r_s / r_ah)',
+#         {'cp': cp, 'H_c': H_c, 'r_ah': r_ah, 'r_air': r_air, 'r_s': r_s,
+#          'r_x': r_x, 'T_air': T_air, 'T_c_lin': T_c_lin})
+#
+#     delta_T_c = fc.expression(
+#         '((t0 ** 4) - (fc * (T_c_lin ** 4)) - ((1 - fc) * (Td ** 4))) / '
+#         '((4 * (1 - fc) * (Td ** 3) * (1 + (r_s / r_ah))) + (4 * fc * (T_c_lin ** 3)))',
+#         {'fc': fc, 'r_ah': r_ah, 'r_s': r_s, 't0': t0, 'Td': Td,
+#          'T_c_lin': T_c_lin})
+#
+#     T_c = fc \
+#         .expression(
+#             'T_c_lin + delta_T_c', {'T_c_lin': T_c_lin, 'delta_T_c': delta_T_c}) \
+#         .where(fc.lt(0.10), t0) \
+#         .where(fc.gt(0.90), t0)
+#
+#     # Get T_s
+#     Delta = fc.expression(
+#         '(t0 ** 4) - (fc * (T_c ** 4))', {'fc': fc, 't0': t0, 'T_c': T_c})
+#     Delta = Delta.where(Delta.lte(0), 10)
+#
+#     # CGM - This could probably be simplified
+#     T_s = fc \
+#         .expression('(Delta / (1 - fc)) ** 0.25', {'Delta': Delta, 'fc': fc}) \
+#         .where(
+#             fc.expression(
+#                 '((t0 ** 4) - (fc * T_c ** 4)) <= 0.',
+#                 {'fc': fc, 't0': t0, 'T_c': T_c}),
+#             fc.expression(
+#                 '(t0 - (fc * T_c)) / (1 - fc)',
+#                 {'fc': fc, 't0': t0, 'T_c': T_c})) \
+#         .where(fc.lt(0.1), t0) \
+#         .where(fc.gt(0.9), t0)
+#
+#     T_c = T_c.where(T_c.lte(T_air.subtract(10.0)), T_air.subtract(10.0))
+#     T_c = T_c.where(T_c.gte(T_air.add(50.0)), T_air.add(50.0))
+#     T_s = T_s.where(T_s.lte(T_air.subtract(10.0)), T_air.subtract(10.0))
+#     T_s = T_s.where(T_s.gte(T_air.add(50.0)), T_air.add(50.0))
+#
+#     T_ac = fc.expression(
+#         '((T_air / r_ah) + (T_s / r_s) + (T_c / r_x)) / '
+#         '((1 / r_ah) + (1 / r_s) + (1 / r_x))',
+#         {'r_ah': r_ah, 'r_s': r_s, 'r_x': r_x, 'T_c': T_c, 'T_s': T_s,
+#          'T_air': T_air})
+#
+#     return T_c, T_s, T_ac
 
 
 def temp_separation_tc(H_c, fc, T_air, t0, r_ah, r_s, r_x, r_air, cp=1004.16):
@@ -1256,9 +1220,10 @@ def temp_separation_tc(H_c, fc, T_air, t0, r_ah, r_s, r_x, r_air, cp=1004.16):
         'T_c_lin + delta_T_c', {'T_c_lin': T_c_lin, 'delta_T_c': delta_T_c}) \
         .where(fc.lt(0.10), t0) \
         .where(fc.gt(0.90), t0)
-    T_c = T_c.where(T_c.lte(T_air.subtract(10.0)), T_air.subtract(10.0))
-    T_c = T_c.where(T_c.gte(T_air.add(50.0)), T_air.add(50.0))
-    return T_c
+    return T_c.max(T_air.subtract(10.0)).min(T_air.add(50.0))
+    # T_c = T_c.where(T_c.lte(T_air.subtract(10.0)), T_air.subtract(10.0))
+    # T_c = T_c.where(T_c.gte(T_air.add(50.0)), T_air.add(50.0))
+    # return T_c
 
 
 def temp_separation_ts(T_c, fc, T_air, t0):
@@ -1294,9 +1259,10 @@ def temp_separation_ts(T_c, fc, T_air, t0):
                 {'fc': fc, 't0': t0, 'T_c': T_c})) \
         .where(fc.lt(0.1), t0) \
         .where(fc.gt(0.9), t0)
-    T_s = T_s.where(T_s.lte(T_air.subtract(10.0)), T_air.subtract(10.0))
-    T_s = T_s.where(T_s.gte(T_air.add(50.0)), T_air.add(50.0))
-    return T_s
+    return T_s.max(T_air.subtract(10.0)).min(T_air.add(50.0))
+    # T_s = T_s.where(T_s.lte(T_air.subtract(10.0)), T_air.subtract(10.0))
+    # T_s = T_s.where(T_s.gte(T_air.add(50.0)), T_air.add(50.0))
+    # return T_s
 
 
 def temp_separation_tac(T_c, T_s, fc, T_air, r_ah, r_s, r_x):

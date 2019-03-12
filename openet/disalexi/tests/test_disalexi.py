@@ -241,14 +241,14 @@ def test_Image_set_solar_vars_assets_interp(xy, rs1, rs24, tol=1E-4):
 
 
 @pytest.mark.parametrize(
-    'xy, t_rise, t_end',
+    'xy, t_noon',
     [
-        [ne1_xy, 11.02448526443880, 26.01087501850882],
-        [ne2_xy, 11.02404074400912, 26.01041448914592],
-        [ne3_xy, 11.02123229380177, 26.00918945690997],
+        [ne1_xy, 0.5 * (11.02448526443880 + 26.01087501850882)],
+        [ne2_xy, 0.5 * (11.02404074400912 + 26.01041448914592)],
+        [ne3_xy, 0.5 * (11.02123229380177 + 26.00918945690997)],
     ]
 )
-def test_Image_set_time_vars_defaults(xy, t_rise, t_end, tol=1E-8):
+def test_Image_set_time_vars_defaults(xy, t_noon, tol=1E-8):
     """Test setting the land cover image and type directly on the object
 
     High NDVI test point values
@@ -257,9 +257,7 @@ def test_Image_set_time_vars_defaults(xy, t_rise, t_end, tol=1E-8):
     d_obj = disalexi.Image(test_img)
     d_obj._set_time_vars()
     assert abs(utils.image_value(
-        ee.Image(d_obj.t_rise), xy)['t_rise'] - t_rise) <= tol
-    assert abs(utils.image_value(
-        ee.Image(d_obj.t_end), xy)['t_end'] - t_end) <= tol
+        ee.Image(d_obj.t_noon), xy)['t_noon'] - t_noon) <= tol
 
 
 def test_Image_windspeed_default(tol=0.01):

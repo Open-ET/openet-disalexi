@@ -192,187 +192,242 @@ class Image(object):
         self._set_solar_vars()
         self._set_time_vars()
 
+    # @lazy_property
+    # def ta_coarse(self):
+    #     """Compute ALEXI scale air temperature that minimizes bias between
+    #     Landsat scale ET and ALEXI ET
+    #
+    #     Returns
+    #     -------
+    #     image : ee.Image
+    #         ALEXI scale air temperature image
+    #
+    #     """
+    #     if self.ta_values is None:
+    #         ta_values = list(range(250, 251, 1))
+    #     else:
+    #         ta_values = self.ta_values
+    #
+    #     def ta_func(ta_ftr):
+    #         """Compute TSEB ET for the target T_air value
+    #
+    #         Assume the function is being mapped over a FC with a T_air property
+    #         Return bias (ALEXI ET - TSEB ET) as first band for quality mosaic
+    #         """
+    #         ta = ee.Number(ta_ftr.get('ta'))
+    #         ta_fine = self.lst.multiply(0).add(ta).rename(['ta'])
+    #         ta_coarse = self.alexi_et.multiply(0).add(ta).rename(['ta'])
+    #
+    #         et = tseb.tseb_pt(
+    #             T_air=ta_fine,
+    #             T_rad=self.lst,
+    #             u=self.windspeed,
+    #             p=self.pressure,
+    #             z=self.elevation,
+    #             Rs_1=self.rs1,
+    #             Rs24=self.rs24,
+    #             vza=0,
+    #             zs=self.sol_zenith,
+    #             aleafv=self.aleafv,
+    #             aleafn=self.aleafn,
+    #             aleafl=self.aleafl,
+    #             adeadv=self.adeadv,
+    #             adeadn=self.adeadn,
+    #             adeadl=self.adeadl,
+    #             albedo=self.albedo,
+    #             ndvi=self.ndvi,
+    #             lai=self.lai,
+    #             clump=self.clump,
+    #             hc=self.hc,
+    #             time=self.time,
+    #             t_noon=self.t_noon,
+    #             leaf_width=self.leaf_width,
+    #             a_PT_in=1.32,
+    #             stabil_iter=self.stabil_iter,
+    #             albedo_iter=self.albedo_iter,
+    #         )
+    #
+    #         # Intentionally compute bias based off ALEXI image
+    #         # Intentionally don't do any aggregation
+    #         bias = self.alexi_et.subtract(et).multiply(-1)
+    #         # bias = et_coarse.subtract(self.alexi_et)
+    #
+    #         # Invert the abs(bias) since quality mosaic sorts descending
+    #         qm_bias = bias.abs().multiply(-1)
+    #
+    #         return ee.Image([qm_bias, ta_coarse]).rename(['qm_bias', 'ta'])
+    #         # return ee.Image([qm_bias, ta_coarse, et_coarse, bias]) \
+    #         #     .rename(['qm_bias', 'ta', 'et', 'bias'])
+    #
+    #     # Get output for a range of Ta values
+    #     # Mapping over the list seemed a little slower than the FC
+    #     ta_coll = ee.FeatureCollection([
+    #         ee.Feature(None, {'ta': ta}) for ta in ta_values])
+    #     # T_air_values = ee.List.sequence(275, 335, 5)
+    #
+    #     # Return the air temperature associated with the lowest difference
+    #     #   in ET from the ALEXI ET value
+    #     return ee.ImageCollection(ta_coll.map(ta_func))\
+    #         .qualityMosaic('qm_bias') \
+    #         .select(['ta'])
+    #     #     .select(['ta', 'et', 'bias'])
+
+    # @lazy_property
+    # def ta_initial(self):
+    #     """Compute an initial guess for the ALEXI scale air temperature that
+    #     minimizes bias between Landsat scale ET and ALEXI ET
+    #
+    #     Returns
+    #     -------
+    #     image : ee.Image
+    #         ALEXI scale air temperature image
+    #
+    #     """
+    #     if self.ta_values is None:
+    #         ta_values = list(range(273, 331, 1))
+    #     else:
+    #         ta_values = self.ta_values
+    #
+    #     def ta_func(ta_ftr):
+    #         """Compute TSEB ET for the target T_air value
+    #
+    #         Assume the function is being mapped over a FC with a T_air property
+    #         Return bias (ALEXI ET - TSEB ET) as first band for quality mosaic
+    #         """
+    #         ta = ee.Number(ta_ftr.get('ta'))
+    #         ta_fine = self.lst.multiply(0).add(ta).rename(['ta'])
+    #         ta_coarse = self.alexi_et.multiply(0).add(ta).rename(['ta'])
+    #
+    #         et_fine = tseb.tseb_pt(
+    #             T_air=ta_fine, T_rad=self.lst,
+    #             u=self.windspeed, p=self.pressure, z=self.elevation,
+    #             Rs_1=self.rs1, Rs24=self.rs24,
+    #             vza=0, zs=self.sol_zenith,
+    #             aleafv=self.aleafv, aleafn=self.aleafn, aleafl=self.aleafl,
+    #             adeadv=self.adeadv, adeadn=self.adeadn, adeadl=self.adeadl,
+    #             albedo=self.albedo, ndvi=self.ndvi, lai=self.lai,
+    #             clump=self.clump, hc=self.hc,
+    #             time=self.time, t_noon=self.t_noon,
+    #             leaf_width=self.leaf_width, a_PT_in=1.32,
+    #             stabil_iter=self.stabil_iter, albedo_iter=self.albedo_iter,
+    #         )
+    #
+    #         # Aggregate the Landsat scale ET up to the ALEXI scale
+    #         et_coarse = ee.Image(et_fine) \
+    #             .reproject(crs=self.crs,
+    #                        crsTransform=[self.ta_cellsize, 0, 15,
+    #                                      0, -self.ta_cellsize, 15]) \
+    #             .reduceResolution(reducer=ee.Reducer.mean(), maxPixels=20000) \
+    #             .reproject(crs=self.et_crs, crsTransform=self.et_transform)
+    #         #     .updateMask(1)
+    #
+    #         bias = et_coarse.subtract(self.alexi_et)
+    #
+    #         # Invert the abs(bias) since quality mosaic sorts descending
+    #         qm_bias = bias.abs().multiply(-1)
+    #
+    #         return ee.Image([qm_bias, ta_coarse, et_coarse, bias]) \
+    #             .rename(['qm_bias', 'ta', 'et', 'bias'])
+    #         # return ee.Image([qm_bias, ta_coarse]).rename(['qm_bias', 'ta'])
+    #
+    #     # Get output for a range of Ta values
+    #     # Mapping over the list seemed a little slower than the FC
+    #     ta_coll = ee.FeatureCollection([
+    #         ee.Feature(None, {'ta': ta}) for ta in ta_values])
+    #     # T_air_values = ee.List.sequence(275, 335, 5)
+    #
+    #     # Return the air temperature associated with the lowest difference
+    #     #   in ET from the ALEXI ET value
+    #     return ee.ImageCollection(ta_coll.map(ta_func))\
+    #         .qualityMosaic('qm_bias') \
+    #         .select(['ta', 'et', 'bias'])
+    #     #     .select(['ta'])
+
+
+    # @lazy_property
+    # def ta_iter(self):
+    #     """Compute an initial guess for the ALEXI scale air temperature that
+    #     minimizes bias between Landsat scale ET and ALEXI ET
+    #
+    #     Returns
+    #     -------
+    #     image : ee.Image
+    #         ALEXI scale air temperature image
+    #
+    #     """
+    #
+    #     def ta_func(ta_img):
+    #         """Compute TSEB ET for the target T_air value
+    #
+    #         Assume the function is being mapped over a FC with a T_air property
+    #         Return bias (ALEXI ET - TSEB ET) as first band for quality mosaic
+    #         """
+    #         # ta_fine = self.lst.multiply(0).add(ta).rename(['ta'])
+    #         # ta_coarse = self.alexi_et.multiply(0).add(ta).rename(['ta'])
+    #
+    #         et_fine = tseb.tseb_pt(
+    #             T_air=ta_img, T_rad=self.lst,
+    #             u=self.windspeed, p=self.pressure, z=self.elevation,
+    #             Rs_1=self.rs1, Rs24=self.rs24,
+    #             vza=0, zs=self.sol_zenith,
+    #             aleafv=self.aleafv, aleafn=self.aleafn, aleafl=self.aleafl,
+    #             adeadv=self.adeadv, adeadn=self.adeadn, adeadl=self.adeadl,
+    #             albedo=self.albedo, ndvi=self.ndvi, lai=self.lai,
+    #             clump=self.clump, hc=self.hc,
+    #             time=self.time, t_noon=self.t_noon,
+    #             leaf_width=self.leaf_width, a_PT_in=1.32,
+    #             stabil_iter=self.stabil_iter, albedo_iter=self.albedo_iter,
+    #         )
+    #
+    #         # Aggregate the Landsat scale ET up to the ALEXI scale
+    #         et_coarse = ee.Image(et_fine) \
+    #             .reproject(crs=self.crs,
+    #                        crsTransform=[self.ta_cellsize, 0, 15,
+    #                                      0, -self.ta_cellsize, 15]) \
+    #             .reduceResolution(reducer=ee.Reducer.mean(), maxPixels=20000) \
+    #             .reproject(crs=self.et_crs, crsTransform=self.et_transform)
+    #         #     .updateMask(1)
+    #
+    #         bias = et_coarse.subtract(self.alexi_et)
+    #         return bias
+    #
+    #
+    #     ta_a_img = self.alexi_et.multiply(0).add(280).rename(['ta'])
+    #     ta_c_img = self.alexi_et.multiply(0).add(290).rename(['ta'])
+    #
+    #     et_a_img = ta_func(ta_a_img)
+    #     et_c_img = ta_func(ta_c_img)
+
     @lazy_property
-    def ta_coarse(self):
-        """Compute ALEXI scale air temperature that minimizes bias between
-        Landsat scale ET and ALEXI ET
+    def ta_count(self):
+        """Compute the number of valid Ta cells in the ALEXI cell
 
         Returns
         -------
         image : ee.Image
-            ALEXI scale air temperature image
+            Count of valid Ta cells in the ALEXI cell
 
         """
-        if self.ta_values is None:
-            ta_values = list(range(250, 251, 1))
-        else:
-            ta_values = self.ta_values
+        et_fine = tseb.tseb_pt(
+            T_air=self.alexi_et.multiply(0).add(290), T_rad=self.lst,
+            u=self.windspeed, p=self.pressure, z=self.elevation,
+            Rs_1=self.rs1, Rs24=self.rs24, vza=0, zs=self.sol_zenith,
+            aleafv=self.aleafv, aleafn=self.aleafn, aleafl=self.aleafl,
+            adeadv=self.adeadv, adeadn=self.adeadn, adeadl=self.adeadl,
+            albedo=self.albedo, ndvi=self.ndvi, lai=self.lai,
+            clump=self.clump, hc=self.hc, time=self.time, t_noon=self.t_noon,
+            leaf_width=self.leaf_width, a_PT_in=1.32,
+            stabil_iter=self.stabil_iter, albedo_iter=self.albedo_iter,
+        )
 
-        def ta_func(ta_ftr):
-            """Compute TSEB ET for the target T_air value
-
-            Assume the function is being mapped over a FC with a T_air property
-            Return bias (ALEXI ET - TSEB ET) as first band for quality mosaic
-            """
-            ta = ee.Number(ta_ftr.get('ta'))
-            ta_fine = self.lst.multiply(0).add(ta).rename(['ta'])
-            ta_coarse = self.alexi_et.multiply(0).add(ta).rename(['ta'])
-
-            et = tseb.tseb_pt(
-                T_air=ta_fine,
-                T_rad=self.lst,
-                u=self.windspeed,
-                p=self.pressure,
-                z=self.elevation,
-                Rs_1=self.rs1,
-                Rs24=self.rs24,
-                vza=0,
-                zs=self.sol_zenith,
-                aleafv=self.aleafv,
-                aleafn=self.aleafn,
-                aleafl=self.aleafl,
-                adeadv=self.adeadv,
-                adeadn=self.adeadn,
-                adeadl=self.adeadl,
-                albedo=self.albedo,
-                ndvi=self.ndvi,
-                lai=self.lai,
-                clump=self.clump,
-                hc=self.hc,
-                time=self.time,
-                t_rise=self.t_rise,
-                t_end=self.t_end,
-                leaf_width=self.leaf_width,
-                a_PT_in=1.32,
-                stabil_iter=self.stabil_iter,
-                albedo_iter=self.albedo_iter,
-            )
-
-            # Intentionally compute bias based off ALEXI image
-            # Intentionally don't do any aggregation
-            bias = self.alexi_et.subtract(et).multiply(-1)
-            # bias = et_coarse.subtract(self.alexi_et)
-
-            # Invert the abs(bias) since quality mosaic sorts descending
-            qm_bias = bias.abs().multiply(-1)
-
-            return ee.Image([qm_bias, ta_coarse]).rename(['qm_bias', 'ta'])
-            # return ee.Image([qm_bias, ta_coarse, et_coarse, bias]) \
-            #     .rename(['qm_bias', 'ta', 'et', 'bias'])
-
-        # Get output for a range of Ta values
-        # Mapping over the list seemed a little slower than the FC
-        ta_coll = ee.FeatureCollection([
-            ee.Feature(None, {'ta': ta}) for ta in ta_values])
-        # T_air_values = ee.List.sequence(275, 335, 5)
-
-        # Return the air temperature associated with the lowest difference
-        #   in ET from the ALEXI ET value
-        return ee.ImageCollection(ta_coll.map(ta_func))\
-            .qualityMosaic('qm_bias') \
-            .select(['ta'])
-        #     .select(['ta', 'et', 'bias'])
-
-    @lazy_property
-    def ta(self):
-        """Compute ALEXI scale air temperature that minimizes bias between
-        Landsat scale ET and ALEXI ET
-
-        Returns
-        -------
-        image : ee.Image
-            ALEXI scale air temperature image
-
-        """
-        if self.ta_values is None:
-            ta_values = list(range(273, 331, 1))
-        else:
-            ta_values = self.ta_values
-
-        def ta_func(ta_ftr):
-            """Compute TSEB ET for the target T_air value
-
-            Assume the function is being mapped over a FC with a T_air property
-            Return bias (ALEXI ET - TSEB ET) as first band for quality mosaic
-            """
-            ta = ee.Number(ta_ftr.get('ta'))
-            ta_fine = self.lst.multiply(0).add(ta).rename(['ta'])
-            ta_coarse = self.alexi_et.multiply(0).add(ta).rename(['ta'])
-
-            et_fine = tseb.tseb_pt(
-                T_air=ta_fine,
-                T_rad=self.lst,
-                u=self.windspeed,
-                p=self.pressure,
-                z=self.elevation,
-                Rs_1=self.rs1,
-                Rs24=self.rs24,
-                vza=0,
-                zs=self.sol_zenith,
-                aleafv=self.aleafv,
-                aleafn=self.aleafn,
-                aleafl=self.aleafl,
-                adeadv=self.adeadv,
-                adeadn=self.adeadn,
-                adeadl=self.adeadl,
-                albedo=self.albedo,
-                ndvi=self.ndvi,
-                lai=self.lai,
-                clump=self.clump,
-                hc=self.hc,
-                time=self.time,
-                t_rise=self.t_rise,
-                t_end=self.t_end,
-                leaf_width=self.leaf_width,
-                a_PT_in=1.32,
-                stabil_iter=self.stabil_iter,
-                albedo_iter=self.albedo_iter,
-            )
-
-            # Aggregate the Landsat scale ET up to the ALEXI scale
-            et_coarse = ee.Image(et_fine) \
-                .reproject(crs=self.crs,
-                           crsTransform=[self.ta_cellsize, 0, 15,
-                                         0, -self.ta_cellsize, 15]) \
-                .reduceResolution(reducer=ee.Reducer.mean(), maxPixels=10000) \
-                .reproject(crs=self.et_crs, crsTransform=self.et_transform)
-
-            # # Aggregate the Landsat scale ET up to the ALEXI scale
-            # et_coarse = ee.Image(et_fine) \
-            #     .reproject(crs=self.crs,
-            #                crsTransform=[30.0,0.0,15.0,0.0,-30.0,15.0]) \
-            #     .reduceResolution(reducer=ee.Reducer.mean(), maxPixels=10000) \
-            #     .reproject(crs=self.crs,
-            #                crsTransform=[240.0, 0.0, 15.0, 0.0, -240.0, 15.0]) \
-            #     .reduceResolution(reducer=ee.Reducer.mean(), maxPixels=10000) \
-            #     .reproject(crs=self.et_crs, crsTransform=self.et_transform)
-
-            # .updateMask(1)
-            # .reproject(crs='EPSG:32610', crsTransform=[120.0,0.0,499785.0,0.0,-120.0,4423215.0]) \
-            # .reproject(crs=self.crs, crsTransform=self.transform) \
-
-            #
-            bias = et_coarse.subtract(self.alexi_et)
-
-            # Invert the abs(bias) since quality mosaic sorts descending
-            qm_bias = bias.abs().multiply(-1)
-
-            return ee.Image([qm_bias, ta_coarse]).rename(['qm_bias', 'ta'])
-            # return ee.Image([qm_bias, ta_coarse, et_coarse, bias]) \
-            #     .rename(['qm_bias', 'ta', 'et', 'bias'])
-
-        # Get output for a range of Ta values
-        # Mapping over the list seemed a little slower than the FC
-        ta_coll = ee.FeatureCollection([
-            ee.Feature(None, {'ta': ta}) for ta in ta_values])
-        # T_air_values = ee.List.sequence(275, 335, 5)
-
-        # Return the air temperature associated with the lowest difference
-        #   in ET from the ALEXI ET value
-        return ee.ImageCollection(ta_coll.map(ta_func))\
-            .qualityMosaic('qm_bias') \
-            .select(['ta'])
-        #     .select(['ta', 'et', 'bias'])
+        return ee.Image(et_fine) \
+            .reproject(crs=self.crs,
+                       crsTransform=[self.ta_cellsize, 0, 15,
+                                     0, -self.ta_cellsize, 15]) \
+            .reduceResolution(reducer=ee.Reducer.count(), maxPixels=20000) \
+            .reproject(crs=self.et_crs, crsTransform=self.et_transform) \
+            .updateMask(1) \
+            .rename(['count'])
 
     @lazy_property
     def et(self):
@@ -392,38 +447,21 @@ class Image(object):
             ta_img = ee.Image(ee.ImageCollection(self.ta_source) \
                 .filterDate(self.date, self.date.advance(1, 'day')).first())
 
-        et_img = tseb.tseb_pt(
-            T_air=ta_img,
-            T_rad=self.lst,
-            u=self.windspeed,
-            p=self.pressure,
-            z=self.elevation,
-            Rs_1=self.rs1,
-            Rs24=self.rs24,
+        return tseb.tseb_pt(
+            T_air=ta_img, T_rad=self.lst,
+            u=self.windspeed, p=self.pressure, z=self.elevation,
+            Rs_1=self.rs1, Rs24=self.rs24,
             # CGM - Need to add GEE gaussian_filter call to Rs24
             # Rs24=ndimage.gaussian_filter(self.Rs24, sigma=5),
-            vza=0,
-            zs=self.sol_zenith,
-            aleafv=self.aleafv,
-            aleafn=self.aleafn,
-            aleafl=self.aleafl,
-            adeadv=self.adeadv,
-            adeadn=self.adeadn,
-            adeadl=self.adeadl,
-            albedo=self.albedo,
-            ndvi=self.ndvi,
-            lai=self.lai,
-            clump=self.clump,
-            hc=self.hc,
-            time=self.time,
-            t_rise=self.t_rise,
-            t_end=self.t_end,
-            leaf_width=self.leaf_width,
-            a_PT_in=1.32,
-            stabil_iter=self.stabil_iter,
-            albedo_iter=self.albedo_iter,
+            vza=0, zs=self.sol_zenith,
+            aleafv=self.aleafv, aleafn=self.aleafn, aleafl=self.aleafl,
+            adeadv=self.adeadv, adeadn=self.adeadn, adeadl=self.adeadl,
+            albedo=self.albedo, ndvi=self.ndvi, lai=self.lai,
+            clump=self.clump, hc=self.hc,
+            time=self.time, t_noon=self.t_noon,
+            leaf_width=self.leaf_width, a_PT_in=1.32,
+            stabil_iter=self.stabil_iter, albedo_iter=self.albedo_iter,
         )
-        return et_img.rename(['et'])
 
     # def smooth(self, T_air):
     #     """Resample image
@@ -636,10 +674,9 @@ class Image(object):
             seems like it should be the float hour.
 
         """
-        self.t_rise, self.t_end = tseb_utils.sunrise_sunset(
+        self.t_noon = tseb_utils.solar_noon(
             date=self.datetime,
-            lon=ee.Image.pixelLonLat().select(['longitude']).multiply(math.pi / 180),
-            lat=ee.Image.pixelLonLat().select(['latitude']).multiply(math.pi / 180))
+            lon=ee.Image.pixelLonLat().select(['longitude']).multiply(math.pi / 180))
         self.sol_zenith = tseb_utils.solar_zenith(
             date=self.datetime,
             lon=ee.Image.pixelLonLat().select(['longitude']).multiply(math.pi / 180),
