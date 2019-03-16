@@ -1,13 +1,15 @@
+import math
+
 import ee
 
 from . import tseb_utils
 from . import utils
 
 
-def tseb_pt(T_air, T_rad, u, p, z, Rs_1, Rs24, vza, zs,
+def tseb_pt(T_air, T_rad, u, p, z, Rs_1, Rs24, vza,
             aleafv, aleafn, aleafl, adeadv, adeadn, adeadl,
-            albedo, ndvi, lai, clump, hc, time, t_noon,
-            leaf_width, a_PT_in=1.32,
+            albedo, ndvi, lai, clump, hc, leaf_width,
+            datetime, lon=None, lat=None, a_PT_in=1.32,
             stabil_iter=36, albedo_iter=10):
     """Priestley-Taylor TSEB
 
@@ -32,8 +34,6 @@ def tseb_pt(T_air, T_rad, u, p, z, Rs_1, Rs24, vza, zs,
         Daily insolation (w m-2)
     vza : float
         View Zenith Angle (radians).
-    zs : ee.Image
-        Solar Zenith Angle (radians).
     aleafv : ee.Image
 
     aleafn : ee.Image
@@ -56,12 +56,14 @@ def tseb_pt(T_air, T_rad, u, p, z, Rs_1, Rs24, vza, zs,
 
     hc : ee.Image
         Canopy height (m).
-    time
-
-    t_noon : ee.Image
-
     leaf_width : ee.Image
-        Average/effective leaf width (m)
+        Average/effective leaf width (m).
+    datetime : ee.Date
+        Image datetime.
+    lon : ee.Image
+        Longitude [deg].  If not set will default to ee.Image.pixelLonLat().
+    lat : ee.Image
+        Latitude [deg].  If not set will default to ee.Image.pixelLonLat().
     a_PT_in : float, optional
         Priestley Taylor coefficient for canopy potential transpiration
         (the default is 1.32).
@@ -71,8 +73,6 @@ def tseb_pt(T_air, T_rad, u, p, z, Rs_1, Rs24, vza, zs,
     albedo_iter: int, optional
         Number of iterations of albedo separation calculation
         (the default is 10)
-    t_rise : ee.Image
-    t_end : ee.Image
 
     Returns
     -------
@@ -95,18 +95,37 @@ def tseb_pt(T_air, T_rad, u, p, z, Rs_1, Rs24, vza, zs,
     """
 
     # ************************************************************************
+    # CGM - Moved from disalexi.py to here since these are not parameters
+    #   you would typically vary and could be functions of the input images.
+    # CGM - time and t_noon could probably be moved into compute_G0 since that
+    #   is the only place they are used.
+    time = ee.Date(datetime).get('hour')\
+        .add(ee.Date(datetime).get('minute').divide(60))
+    if lon is None:
+        lon = ee.Image.pixelLonLat().select(['longitude'])
+    if lat is None:
+        lat = ee.Image.pixelLonLat().select(['latitude'])
+    t_noon = tseb_utils.solar_noon(
+        datetime=datetime, lon=lon.multiply(math.pi / 180))
+    zs = tseb_utils.solar_zenith(
+        datetime=datetime, lon=lon.multiply(math.pi / 180),
+        lat=lat.multiply(math.pi / 180))
+
+    # ************************************************************************
     # Correct Clumping Factor
     f_green = 1.
 
     # LAI for leaf spherical distribution
-    F = lai.expression('lai * clump', {'lai': lai, 'clump': clump})
+    F = lai.multiply(clump)
+    # F = lai.expression('lai * clump', {'lai': lai, 'clump': clump})
 
     # Fraction cover at nadir (view=0)
     fc = F.expression('1.0 - exp(-0.5 * F)', {'F': F}) \
         .clamp(0.01, 0.9)
 
     # LAI relative to canopy projection only
-    lai_c = lai.expression('lai / fc', {'lai': lai, 'fc': fc})
+    lai_c = lai.divide(fc)
+    # lai_c = lai.expression('lai / fc', {'lai': lai, 'fc': fc})
 
     # Houborg modification (according to Anderson et al. 2005)
     fc_q = lai \
@@ -114,10 +133,12 @@ def tseb_pt(T_air, T_rad, u, p, z, Rs_1, Rs24, vza, zs,
         .clamp(0.05, 0.90)
 
     # Brutsaert (1982)
-    z0m = hc.expression('hc * 0.123', {'hc': hc})
+    z0m = hc.multiply(0.123)
+    # z0m = hc.expression('hc * 0.123', {'hc': hc})
     # CGM - add(0) is to mimic numpy copy, check if needed
     z0h = z0m.add(0)
-    d_0 = hc.expression('hc * (2.0 / 3.0)', {'hc': hc})
+    d_0 = hc.multiply(2.0 / 3.0)
+    # d_0 = hc.expression('hc * (2.0 / 3.0)', {'hc': hc})
 
     # Correction of roughness parameters for bare soils (F < 0.1)
     d_0 = d_0.where(F.lte(0.1), 0.00001)
@@ -277,10 +298,12 @@ def tseb_pt(T_air, T_rad, u, p, z, Rs_1, Rs24, vza, zs,
 
         H_s = albedo.expression(
             'r_air * cp * (T_s - T_ac) / r_s',
-            {'r_air': r_air, 'cp': cp, 'T_s': T_s_iter, 'T_ac': T_ac, 'r_s': r_s_iter})
+            {'r_air': r_air, 'cp': cp, 'T_s': T_s_iter, 'T_ac': T_ac,
+             'r_s': r_s_iter})
         H_c = albedo.expression(
             'r_air * cp * (T_c - T_ac) / r_x',
-            {'r_air': r_air, 'cp': cp, 'T_c': T_c_iter, 'T_ac': T_ac, 'r_x': r_x_iter})
+            {'r_air': r_air, 'cp': cp, 'T_c': T_c_iter, 'T_ac': T_ac,
+             'r_x': r_x_iter})
         H = albedo.expression('H_s + H_c', {'H_s': H_s, 'H_c': H_c})
 
         LE_s = albedo.expression(

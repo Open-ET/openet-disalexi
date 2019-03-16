@@ -45,7 +45,7 @@ def test_to_jd(timestamp, expected, tol=0.001):
 def test_solar_noon_image(timestamp, xy, expected, tol=1E-10):
     """Check that the sunset_sunrise function works for real images"""
     output_images = tseb_utils.solar_noon(
-        date=ee.Date(timestamp),
+        datetime=ee.Date(timestamp),
         # date=ee.Date(datetime.datetime.utcfromtimestamp(timestamp / 1000)),
         lon=ee.Image.pixelLonLat().select(['longitude']).multiply(math.pi / 180))
     output = utils.image_value(
@@ -67,7 +67,7 @@ def test_solar_noon_image(timestamp, xy, expected, tol=1E-10):
 def test_solar_noon_constant(timestamp, xy, expected, tol=1E-10):
     """Check that the sunset_sunrise function works for constant images"""
     output_images = tseb_utils.solar_noon(
-        date=ee.Date(timestamp),
+        datetime=ee.Date(timestamp),
         lon=ee.Image.constant(xy[0]).multiply(math.pi / 180))
     output = utils.constant_image_value(ee.Image(output_images))['t_noon']
 
@@ -87,7 +87,7 @@ def test_solar_noon_constant(timestamp, xy, expected, tol=1E-10):
 def test_solar_zenith_image(timestamp, xy, expected, tol=1E-10):
     """Check that the solar zenith function works for real images"""
     output_images = tseb_utils.solar_zenith(
-        date=ee.Date(timestamp),
+        datetime=ee.Date(timestamp),
         lon=ee.Image.pixelLonLat().select(['longitude']).multiply(math.pi / 180),
         lat=ee.Image.pixelLonLat().select(['latitude']).multiply(math.pi / 180))
     output = utils.image_value(
@@ -109,7 +109,7 @@ def test_solar_zenith_image(timestamp, xy, expected, tol=1E-10):
 def test_solar_zenith_constant(timestamp, xy, expected, tol=1E-10):
     """Check that the solar_zenith function also works for constant images"""
     output_images = tseb_utils.solar_zenith(
-        date=ee.Date(timestamp),
+        datetime=ee.Date(timestamp),
         lon=ee.Image.constant(xy[0]).multiply(math.pi / 180),
         lat=ee.Image.constant(xy[1]).multiply(math.pi / 180))
     output = utils.constant_image_value(
@@ -369,19 +369,18 @@ def test_compute_Rn_s(albedo_s, T_air, T_c, T_s, e_atm, Rs_s, F,
 @pytest.mark.parametrize(
     'Rn, Rn_s, albedo, ndvi, t_rise, t_end, time, EF_s, expected',
     [
-
-        # # US-NE1
-        # [620.37512852869418, 145.97048553078571, 0.19908118247986,
-        #  0.84600001573563, ne1['t_rise'], ne1['t_end'], 17 + 5.0/60,
-        #  0.0, 47.91926135598481],
-        # # US-NE2
-        # [599.00575394345765, 388.06596376956912, 0.21406339108944,
-        #  0.51700001955032, ne2['t_rise'], ne2['t_end'], 17 + 5.0/60,
-        #  0.0, 127.38965973286223],
-        # # US-NE3
-        # [597.25727000940287, 365.85694730307142, 0.21599538624287,
-        #  0.54000002145767, ne3['t_rise'], ne3['t_end'], 17 + 5.0/60,
-        #  0.0, 120.07887402772921],
+        # US-NE1
+        [620.37512852869418, 145.97048553078571, 0.19908118247986,
+         0.84600001573563, ne1['t_rise'], ne1['t_end'], 17 + 5.0/60,
+         0.0, 47.91926135598481],
+        # US-NE2
+        [599.00575394345765, 388.06596376956912, 0.21406339108944,
+         0.51700001955032, ne2['t_rise'], ne2['t_end'], 17 + 5.0/60,
+         0.0, 127.38965973286223],
+        # US-NE3
+        [597.25727000940287, 365.85694730307142, 0.21599538624287,
+         0.54000002145767, ne3['t_rise'], ne3['t_end'], 17 + 5.0/60,
+         0.0, 120.07887402772921],
     ]
 )
 def test_compute_G0(Rn, Rn_s, albedo, ndvi, t_rise, t_end, time, EF_s,

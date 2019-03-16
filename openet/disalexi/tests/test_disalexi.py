@@ -43,7 +43,7 @@ def test_Image_init_dates():
     assert d_obj.date.format('yyyy-MM-dd').getInfo() == img_date_str
     assert d_obj.doy.getInfo() == img_doy
     assert int(d_obj.hour.getInfo()) == img_hour
-    assert float(d_obj.time.getInfo()) == img_time
+    # assert float(d_obj.time.getInfo()) == img_time
 
 
 # @pytest.mark.parametrize(
@@ -238,26 +238,6 @@ def test_Image_set_solar_vars_assets_interp(xy, rs1, rs24, tol=1E-4):
         ee.Image(d_obj.rs1), xy)['rs'] - rs1) <= tol
     assert abs(utils.image_value(
         ee.Image(d_obj.rs24), xy)['rs'] - rs24) <= tol
-
-
-@pytest.mark.parametrize(
-    'xy, t_noon',
-    [
-        [ne1_xy, 0.5 * (11.02448526443880 + 26.01087501850882)],
-        [ne2_xy, 0.5 * (11.02404074400912 + 26.01041448914592)],
-        [ne3_xy, 0.5 * (11.02123229380177 + 26.00918945690997)],
-    ]
-)
-def test_Image_set_time_vars_defaults(xy, t_noon, tol=1E-8):
-    """Test setting the land cover image and type directly on the object
-
-    High NDVI test point values
-    CGM - Should probably switch this to a constant image test
-    """
-    d_obj = disalexi.Image(test_img)
-    d_obj._set_time_vars()
-    assert abs(utils.image_value(
-        ee.Image(d_obj.t_noon), xy)['t_noon'] - t_noon) <= tol
 
 
 def test_Image_windspeed_default(tol=0.01):

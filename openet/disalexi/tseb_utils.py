@@ -8,12 +8,12 @@ deg2rad = math.pi / 180.0
 rad2deg = 180.0 / math.pi
 
 
-def solar_noon(date, lon):
+def solar_noon(datetime, lon):
     """Computes sunrise/sunset times
 
     Parameters
     ----------
-    date : ee.Date
+    datetime : ee.Date
     lon : ee.Image
         Longitude (radians)
     lat : ee.Image
@@ -25,7 +25,7 @@ def solar_noon(date, lon):
 
     """
     # Adjust image datetime to start of day
-    d, eq_t = _solar_time(ee.Date(date.format('yyyy-MM-dd')))
+    d, eq_t = _solar_time(ee.Date(datetime.format('yyyy-MM-dd')))
 
     t_noon = lon.expression(
         '(720.0 - 4 * lon - eq_t) / 1440 * 24.0',
@@ -33,12 +33,12 @@ def solar_noon(date, lon):
     return t_noon.rename(['t_noon'])
 
 
-def solar_zenith(date, lon, lat):
+def solar_zenith(datetime, lon, lat):
     """Computes zenith angle
 
     Parameters
     ----------
-    date : ee.Date
+    datetime : ee.Date
     lon : ee.Image
         Longitude (radians)
     lat : ee.Image
@@ -50,12 +50,12 @@ def solar_zenith(date, lon, lat):
 
     """
     # IDL is computing time_t as hours and fractional minutes (no seconds)
-    time_t = ee.Date(date).get('hour').add(
-        ee.Date(date).get('minute').divide(60))
+    time_t = ee.Date(datetime).get('hour').add(
+        ee.Date(datetime).get('minute').divide(60))
     # # This will return the hour floating point value
     # time_t = ee.Date(date).get('hour').add(ee.Date(date).getFraction('hour'))
 
-    d, eq_t = _solar_time(date)
+    d, eq_t = _solar_time(datetime)
 
     ts_time = lon.expression(
         '(time_t / 24.0 * 1440 + eq_t + 4.0 * lon) % 1440.',
@@ -74,12 +74,12 @@ def solar_zenith(date, lon, lat):
     return zs.rename(['zs'])
 
 
-def _solar_time(date):
+def _solar_time(datetime):
     """Computes solar time variables following Campbell & Norman 1998
 
     Parameters
     ----------
-    date : ee.Date
+    datetime : ee.Date
     lon : ee.Image
         Longitude (radians)
     lat : ee.Image
@@ -91,14 +91,14 @@ def _solar_time(date):
 
     """
     # IDL is computing time_t as hours and fractional minutes
-    time_t = ee.Date(date).get('hour').add(
-        ee.Date(date).get('minute').divide(60))
+    time_t = ee.Date(datetime).get('hour').add(
+        ee.Date(datetime).get('minute').divide(60))
 
     # This will return the hour floating point value
     # time_t = ee.Date(date).get('hour').add(ee.Date(date).getFraction('hour'))
 
     # CGM - DOY and hour could be images in order to make these expressions
-    julian = _to_jd(date)
+    julian = _to_jd(datetime)
 
     # Sunrise time
     julian_ = time_t.divide(24.0).add(julian)

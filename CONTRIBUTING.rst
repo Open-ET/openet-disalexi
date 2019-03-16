@@ -2,12 +2,12 @@
 Contributing to OpenET DisALEXI
 ===============================
 
-Thank you for your interesting in support the OpenET DisALEXI project.
+Thank you for your interest in support the OpenET DisALEXI project.
 
 Versioning
 ==========
 
-The OpenET DisALEXI project is currently in Beta and the version numbers should be "0.0.X" until a non-Beta release is made.
+OpenET SSEBop was developed for Python 3.6.  The code will likely work on other version of Python 3 but there are no plans to support Python 2.7 at this time.
 
 Coding Conventions
 ==================
