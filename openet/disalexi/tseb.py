@@ -8,7 +8,7 @@ from . import utils
 
 def tseb_pt(T_air, T_rad, u, p, z, Rs_1, Rs24, vza,
             aleafv, aleafn, aleafl, adeadv, adeadn, adeadl,
-            albedo, ndvi, lai, clump, hc, leaf_width,
+            albedo, ndvi, lai, clump, leaf_width, hc_min, hc_max,
             datetime, lon=None, lat=None, a_PT_in=1.32,
             stabil_iter=36, albedo_iter=10):
     """Priestley-Taylor TSEB
@@ -54,10 +54,12 @@ def tseb_pt(T_air, T_rad, u, p, z, Rs_1, Rs24, vza,
         Effective Leaf Area Index (m2 m-2).
     clump : ee.Image
 
-    hc : ee.Image
-        Canopy height (m).
     leaf_width : ee.Image
         Average/effective leaf width (m).
+    hc_min : ee.Image
+        Canopy height (m).
+    hc_max : ee.Image
+        Canopy height (m).
     datetime : ee.Date
         Image datetime.
     lon : ee.Image
@@ -122,6 +124,14 @@ def tseb_pt(T_air, T_rad, u, p, z, Rs_1, Rs24, vza,
     # Fraction cover at nadir (view=0)
     fc = F.expression('1.0 - exp(-0.5 * F)', {'F': F}) \
         .clamp(0.01, 0.9)
+
+    # Compute canopy height and roughness parameters
+    # CGM - Moved from _set_landcover_vars()
+    hc = lai \
+        .expression(
+            'hc_min + ((hc_max - hc_min) * fc)',
+            {'hc_min': hc_min, 'hc_max': hc_max, 'fc': fc}) \
+        .rename(['hc'])
 
     # LAI relative to canopy projection only
     lai_c = lai.divide(fc)

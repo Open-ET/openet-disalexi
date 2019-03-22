@@ -58,9 +58,9 @@ def test_tseb_pt(T_air, T_rad, u, p, z, Rs_1, Rs24, vza, aleafv, aleafn,
         ee.Image.constant(aleafv), ee.Image.constant(aleafn),
         ee.Image.constant(aleafl), ee.Image.constant(adeadv),
         ee.Image.constant(adeadn), ee.Image.constant(adeadl),
-        ee.Image.constant(albedo), ee.Image.constant(ndvi),
-        ee.Image.constant(lai), ee.Image.constant(clump),
-        ee.Image.constant(hc), ee.Image.constant(leaf_width),
+        ee.Image.constant(albedo), ee.Image.constant(ndvi), ee.Image.constant(lai),
+        ee.Image.constant(clump), ee.Image.constant(leaf_width),
+        ee.Image.constant(hc), ee.Image.constant(hc),
         ee.Date(datetime), ee.Image.constant(lon), ee.Image.constant(lat),
         ee.Image.constant(a_PT_in), stabil_iter, albedo_iter)
 

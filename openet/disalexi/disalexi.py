@@ -198,7 +198,8 @@ class Image(object):
         self._set_landcover_vars()
         self._set_solar_vars()
 
-    def ta_qm(self, cellsize=120, ta_values=list(range(250, 351, 1))):
+    def ta_qm(self, cellsize=120, ta_values=list(range(250, 351, 1)),
+              threshold=0.5):
         """Compute the air temperature for each ALEXI ET cell that minimizes
         the bias between Landsat scale ET and ALEXI ET for a fixed range of
         air temperature values
@@ -209,6 +210,7 @@ class Image(object):
             Cellsize for "fine" scale calculation and aggregation.
         ta_values : list, optional
             List of air temperature values that will be used in calculation.
+        threshold : float, optional
 
         Returns
         -------
@@ -229,25 +231,26 @@ class Image(object):
                 aleafv=self.aleafv, aleafn=self.aleafn, aleafl=self.aleafl,
                 adeadv=self.adeadv, adeadn=self.adeadn, adeadl=self.adeadl,
                 albedo=self.albedo, ndvi=self.ndvi, lai=self.lai,
-                clump=self.clump, hc=self.hc, leaf_width=self.leaf_width,
+                clump=self.clump, leaf_width=self.leaf_width,
+                hc_min=self.hc_min, hc_max=self.hc_max,
                 datetime=self.datetime, a_PT_in=1.32,
                 stabil_iter=self.stabil_iter, albedo_iter=self.albedo_iter,
             )
 
             # Aggregate the Landsat scale ET up to the ALEXI scale
-            et_coarse = ee.Image(et_fine) \
+            et_coarse = ee.Image(et_fine)\
                 .reproject(crs=self.crs,
-                           crsTransform=[cellsize, 0, 15, 0, -cellsize, 15]) \
-                .reduceResolution(reducer=ee.Reducer.mean(), maxPixels=20000) \
+                           crsTransform=[cellsize, 0, 15, 0, -cellsize, 15])\
+                .reduceResolution(reducer=ee.Reducer.mean(), maxPixels=20000)\
                 .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)
-
+            et_mask = et_coarse.mask().gt(threshold)
             bias = et_coarse.subtract(self.alexi_et)
-
             # Invert the abs(bias) since quality mosaic sorts descending
             qm_bias = bias.abs().multiply(-1)
 
-            return ee.Image([qm_bias, ta_coarse, et_coarse, bias]) \
-                .rename(['qm_bias', 'ta', 'et', 'bias'])
+            return ee.Image([qm_bias, ta_coarse, bias, et_coarse])\
+                .updateMask(et_mask)\
+                .rename(['qm_bias', 'ta', 'bias', 'et'])
 
         # Get output for a range of Ta values
         # Mapping over the list seemed a little slower than the FC
@@ -260,18 +263,24 @@ class Image(object):
         #   in ET from the ALEXI ET value
         return ee.ImageCollection(ta_coll.map(ta_func))\
             .qualityMosaic('qm_bias') \
-            .select(['ta', 'et', 'bias'])
+            .select(['ta', 'bias', 'et'])
 
-    def ta_iter(self, cellsize=120, iterations=2, method='bisect',
+    def ta_iter(self, cellsize=1920, iterations=2, method='golden',
                 ta_init=[250, 350]):
         """Compute the air temperature for each ALEXI ET cell that minimizes
-        the bias between Landsat scale ET and ALEXI ET for a fixed range of
-        air temperature values
+        the bias between Landsat scale ET and ALEXI ET over a range of air
+        temperature values.
 
         Parameters
         ----------
         cellsize : float, optional
             Cellsize for "fine" scale calculation and aggregation.
+        iterations : int, optional
+            Number of iterations (the default is 2).
+        method : str, optional
+            Iteration/optimization method (the default is 'golden').
+        ta_init : list, optional
+            The initial Ta air lower and upper bound values.
 
         Returns
         -------
@@ -280,8 +289,10 @@ class Image(object):
 
         """
 
-        def ta_func(ta_img):
-            """Compute TSEB ET for the target T_air value"""
+        def et_coarse(ta_img):
+            """Compute the Landsat ET summed to the ALEXI grid for the
+            specified air temperature image"""
+
             # ta_fine = self.lst.multiply(0).add(ta).rename(['ta'])
             # ta_coarse = self.alexi_et.multiply(0).add(ta).rename(['ta'])
 
@@ -292,98 +303,171 @@ class Image(object):
                 aleafv=self.aleafv, aleafn=self.aleafn, aleafl=self.aleafl,
                 adeadv=self.adeadv, adeadn=self.adeadn, adeadl=self.adeadl,
                 albedo=self.albedo, ndvi=self.ndvi, lai=self.lai,
-                clump=self.clump, hc=self.hc, leaf_width=self.leaf_width,
+                clump=self.clump, leaf_width=self.leaf_width,
+                hc_min=self.hc_min, hc_max=self.hc_max,
                 datetime=self.datetime, stabil_iter=self.stabil_iter,
                 albedo_iter=self.albedo_iter,
             )
 
             # Aggregate the Landsat scale ET up to the ALEXI scale
-            et_coarse = ee.Image(et_fine) \
+            return ee.Image(et_fine)\
                 .reproject(crs=self.crs,
-                           crsTransform=[cellsize, 0, 15, 0, -cellsize, 15]) \
-                .reduceResolution(reducer=ee.Reducer.mean(), maxPixels=20000) \
-                .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)
+                           crsTransform=[cellsize, 0, 15, 0, -cellsize, 15])\
+                .reduceResolution(reducer=ee.Reducer.mean(), maxPixels=20000)\
+                .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)\
+                .rename(['et'])
 
-            bias = et_coarse.subtract(self.alexi_et)
-            return ee.Image([et_coarse, bias]).rename(['et', 'bias'])
+        def et_bias(et_coarse_img):
+            return et_coarse_img.subtract(self.alexi_et).rename(['bias'])
 
         def bisect_func(n, prev):
-            x0_iter = ee.Image(ee.Dictionary(prev).get('x0'))
-            x1_iter = ee.Image(ee.Dictionary(prev).get('x1'))
-            y0_iter = ee.Image(ee.Dictionary(prev).get('y0'))
-            y1_iter = ee.Image(ee.Dictionary(prev).get('y1'))
+            # A is the lower bound, B is the upper bound
+            # The minimum should lie within this bound
+            ta_a = ee.Image(ee.Dictionary(prev).get('ta_a'))
+            ta_b = ee.Image(ee.Dictionary(prev).get('ta_b'))
+            bias_a = ee.Image(ee.Dictionary(prev).get('bias_a'))
+            bias_b = ee.Image(ee.Dictionary(prev).get('bias_b'))
 
-            x2_iter = x0_iter.add(x1_iter).multiply(0.5)
-            y2_iter = ta_func(x2_iter).select(['bias'])
-            # y2_mask = y2_iter.mask()
-            # x2_iter = x2_iter.updateMask(y2_mask)
+            # Generate new guess
+            ta_c = ta_a.add(ta_b).multiply(0.5)
+            # et_c = et_coarse(ta_c)
+            bias_c = et_bias(et_coarse(ta_c))
 
-            # Save new value so that values still bracket 0
-            sign_mask = y2_iter.multiply(y1_iter)
-            y0_iter = y0_iter.where(sign_mask.lt(0), y2_iter)
-            x0_iter = x0_iter.where(sign_mask.lt(0), x2_iter)
-            y1_iter = y1_iter.where(sign_mask.gte(0), y2_iter)
-            x1_iter = x1_iter.where(sign_mask.gte(0), x2_iter)
+            # Only use the new value if it causes [A, B] to bracket 0
+            mask1 = bias_c.lte(bias_b).And(bias_c.gte(0))
+            mask2 = bias_c.gte(bias_a).And(bias_c.lt(0))
 
-            return ee.Dictionary({
-                'x0': x0_iter, 'y0': y0_iter, 'x1': x1_iter, 'y1': y1_iter,
-                'x2': x2_iter, 'y2': y2_iter})
-
-        def false_pos_func(n, prev):
-            x0_iter = ee.Image(ee.Dictionary(prev).get('x0'))
-            x1_iter = ee.Image(ee.Dictionary(prev).get('x1'))
-            y0_iter = ee.Image(ee.Dictionary(prev).get('y0'))
-            y1_iter = ee.Image(ee.Dictionary(prev).get('y1'))
-
-            x2_iter = x0_iter.multiply(y1_iter)\
-                .subtract(x1_iter.multiply(y0_iter))\
-                .divide(y1_iter.subtract(y0_iter))
-            y2_iter = ta_func(x2_iter).select(['bias'])
-            # y2_mask = y2_iter.mask()
-            # x2_iter = x2_iter.updateMask(y2_mask)
-
-            # Save new value so that values still bracket 0
-            sign_mask = y2_iter.multiply(y1_iter)
-            y0_iter = y0_iter.where(sign_mask.lt(0), y2_iter)
-            x0_iter = x0_iter.where(sign_mask.lt(0), x2_iter)
-            y1_iter = y1_iter.where(sign_mask.gte(0), y2_iter)
-            x1_iter = x1_iter.where(sign_mask.gte(0), x2_iter)
+            ta_b = ta_b.where(mask1, ta_c)
+            bias_b = bias_b.where(mask1, bias_c)
+            ta_a = ta_a.where(mask2, ta_c)
+            bias_a = bias_a.where(mask2, bias_c)
 
             return ee.Dictionary({
-                'x0': x0_iter, 'y0': y0_iter, 'x1': x1_iter, 'y1': y1_iter,
-                'x2': x2_iter, 'y2': y2_iter})
+                'ta_a': ta_a, 'bias_a': bias_a, 'ta_b': ta_b, 'bias_b': bias_b
+            })
 
-        # Inputs to the iteration
-        x_dict = {
-            'x{}'.format(i): self.alexi_mask.add(ta).rename(['ta'])
-            for i, ta in enumerate(sorted(ta_init))}
-        input_dict = {
-            'y{}'.format(k[1:]): ta_func(v).select(['bias'])
-            for k, v in x_dict.items()}
-        input_dict.update(x_dict)
-        input_images = ee.Dictionary(input_dict)
+        # def false_pos_func(n, prev):
+        #     # A is the lower bound, B is the upper bound
+        #     # The minimum should lie within this bound
+        #     ta_a = ee.Image(ee.Dictionary(prev).get('ta_a'))
+        #     ta_b = ee.Image(ee.Dictionary(prev).get('ta_b'))
+        #     bias_a = ee.Image(ee.Dictionary(prev).get('bias_a'))
+        #     bias_b = ee.Image(ee.Dictionary(prev).get('bias_b'))
+        #
+        #     # Generate new guess
+        #     ta_c = ta_a.multiply(bias_b).subtract(ta_b.multiply(bias_a)) \
+        #         .divide(bias_b.subtract(bias_a))
+        #     # et_c = et_coarse(ta_c)
+        #     bias_c = et_bias(et_coarse(ta_c))
+        #
+        #     # Only use the new value if it causes [A, B] to bracket 0
+        #     mask1 = bias_c.lte(bias_b).And(bias_c.gte(0))
+        #     mask2 = bias_c.gte(bias_a).And(bias_c.lt(0))
+        #
+        #     ta_b = ta_b.where(mask1, ta_c)
+        #     bias_b = bias_b.where(mask1, bias_c)
+        #     ta_a = ta_a.where(mask2, ta_c)
+        #     bias_a = bias_a.where(mask2, bias_c)
+        #
+        #     return ee.Dictionary({
+        #         'ta_a': ta_a, 'bias_a': bias_a, 'ta_b': ta_b, 'bias_b': bias_b
+        #     })
+
+        def golden_func(n, prev):
+            """Golden section search function"""
+            # A is the lower bound, B is the upper bound
+            # The minimum should lie within this bound
+            ta_a = ee.Image(ee.Dictionary(prev).get('ta_a'))
+            ta_b = ee.Image(ee.Dictionary(prev).get('ta_b'))
+            ta_c = ee.Image(ee.Dictionary(prev).get('ta_c'))
+            ta_d = ee.Image(ee.Dictionary(prev).get('ta_d'))
+            bias_a = ee.Image(ee.Dictionary(prev).get('bias_a'))
+            bias_b = ee.Image(ee.Dictionary(prev).get('bias_b'))
+            bias_c = ee.Image(ee.Dictionary(prev).get('bias_c'))
+            bias_d = ee.Image(ee.Dictionary(prev).get('bias_d'))
+
+            # If f(c) < f(d): move the data from d to b and c to d
+            mask1 = bias_c.lt(bias_d)
+            # If f(c) > f(d): move the data from c to a and d to c
+            mask2 = bias_c.gte(bias_d)
+
+            ta_b = ta_b.where(mask1, ta_d)
+            bias_b = bias_b.where(mask1, bias_d)
+            # CGM - This isn't working but (re)computing below is?
+            #ta_d = ta_d.where(mask1, ta_c);
+            #bias_d = bias_d.where(mask1, bias_c);
+
+            ta_a = ta_a.where(mask2, ta_c)
+            bias_a = bias_a.where(mask2, bias_c)
+            # ta_c = ta_d.where(mask2, ta_d);
+            # bias_c = bias_d.where(mask2, bias_d)
+
+            # Compute new test points
+            ta_c = ta_b.subtract(ta_b.subtract(ta_a).multiply(0.618034))
+            ta_d = ta_a.add(ta_b.subtract(ta_a).multiply(0.618034))
+
+            # Compute the bias at the new test points
+            bias_c = et_bias(et_coarse(ta_c))
+            bias_d = et_bias(et_coarse(ta_d))
+
+            return ee.Dictionary({
+                'ta_a': ta_a, 'bias_a': bias_a,
+                'ta_b': ta_b, 'bias_b': bias_b,
+                'ta_c': ta_c, 'bias_c': bias_c,
+                'ta_d': ta_d, 'bias_d': bias_d,
+            })
 
         if method == 'bisect':
+            input_images = ee.Dictionary({
+                'ta_a': self.alexi_mask.add(ta_init[0]),
+                'ta_b': self.alexi_mask.add(ta_init[1]),
+                'bias_a': et_bias(et_coarse(self.alexi_mask.add(ta_init[0]))),
+                'bias_b': et_bias(et_coarse(self.alexi_mask.add(ta_init[1]))),
+            })
             output = ee.Dictionary(ee.List.sequence(1, iterations).iterate(
                 bisect_func, input_images))
-            ta = ee.Image(output.get('x2'))
-            bias = ee.Image(output.get('y2'))
-        elif method == 'false_pos':
+
+            # Use the average of the final bracketing values
+            ta = ee.Image(output.get('ta_a')).add(
+                ee.Image(output.get('ta_b'))).multiply(0.5)
+
+        elif method == 'golden':
+            gr = 0.618034 * (ta_init[1] - ta_init[0])
+            input_images = ee.Dictionary({
+                'ta_a': self.alexi_mask.add(ta_init[0]),
+                'ta_b': self.alexi_mask.add(ta_init[1]),
+                'ta_c': self.alexi_mask.add(ta_init[1] - gr),
+                'ta_d': self.alexi_mask.add(ta_init[0] + gr),
+                'bias_a': et_bias(et_coarse(self.alexi_mask.add(ta_init[0]))),
+                'bias_b': et_bias(et_coarse(self.alexi_mask.add(ta_init[1]))),
+                'bias_c': et_bias(et_coarse(self.alexi_mask.add(ta_init[1] - gr))),
+                'bias_d': et_bias(et_coarse(self.alexi_mask.add(ta_init[0] + gr))),
+            })
+
             output = ee.Dictionary(ee.List.sequence(1, iterations).iterate(
-                false_pos_func, input_images))
-            ta = ee.Image(output.get('x2'))
-            bias = ee.Image(output.get('y2'))
+                golden_func, input_images))
 
-        return ee.Image([ta, bias]).rename(['ta', 'bias'])
+            # Use the average of the final bracketing values
+            ta = ee.Image(output.get('ta_c')).add(
+                ee.Image(output.get('ta_d'))).multiply(0.5)
 
-    def ta_mask(self, threshold=0.4, cellsize=120, ta_value=290):
+        else:
+            raise ValueError('unsupported Ta iteration method')
+
+        et_img = et_coarse(ta)
+        return ee.Image([ta, et_bias(et_img), et_img])\
+            .rename(['ta', 'bias', 'et'])
+
+    def ta_mask(self, threshold=None, cellsize=30, ta_value=290):
         """Identify ALEXI scale pixels with sufficient cloud free non-water
         Landsat pixels to compute ALEXI scale air temperature.
 
         Parameters
         ----------
         threshold : float, optional
-            Fraction of Landsat pixels that must be clear (the default is 0.4).
+            Fraction of Landsat pixels that must be clear (the default is None).
+            If a threshold is set, cells below the threshold will be masked out.
+            If not set (or set to None) the mask percentage will be returned.
         cellsize : float, optional
             Cellsize for "fine" scale calculation and aggregation
             (the default is 120).
@@ -403,18 +487,26 @@ class Image(object):
             aleafv=self.aleafv, aleafn=self.aleafn, aleafl=self.aleafl,
             adeadv=self.adeadv, adeadn=self.adeadn, adeadl=self.adeadl,
             albedo=self.albedo, ndvi=self.ndvi, lai=self.lai,
-            clump=self.clump, hc=self.hc, leaf_width=self.leaf_width,
+            clump=self.clump, leaf_width=self.leaf_width,
+            hc_min=self.hc_min, hc_max=self.hc_max,
             datetime=self.datetime, stabil_iter=self.stabil_iter,
             albedo_iter=self.albedo_iter,
         )
-        mask_img = ee.Image(et_fine).multiply(0).add(1) \
+        mask_img = ee.Image(et_fine) \
             .reproject(crs=self.crs,
                        crsTransform=[cellsize, 0, 15, 0, -cellsize, 15]) \
-            .reduceResolution(reducer=ee.Reducer.mean(), maxPixels=20000) \
+            .reduceResolution(reducer=ee.Reducer.count(), maxPixels=20000) \
             .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo) \
-            .mask().gt(threshold)
-        # Would it make more sense to return the mask percentage as the value?
-        return mask_img.updateMask(mask_img).updateMask(1).rename(['mask'])
+            .mask()
+
+        if threshold is not None:
+            mask_img = mask_img.gt(threshold)
+            mask_img = mask_img.updateMask(mask_img).updateMask(1)
+
+        return mask_img.rename(['mask'])
+
+        # DEADBEEF
+        # return mask_img.updateMask(mask_img).updateMask(1).rename(['mask'])
 
     @lazy_property
     def et(self, ta_img):
@@ -443,7 +535,8 @@ class Image(object):
             aleafv=self.aleafv, aleafn=self.aleafn, aleafl=self.aleafl,
             adeadv=self.adeadv, adeadn=self.adeadn, adeadl=self.adeadl,
             albedo=self.albedo, ndvi=self.ndvi, lai=self.lai,
-            clump=self.clump, hc=self.hc, leaf_width=self.leaf_width,
+            clump=self.clump, leaf_width=self.leaf_width,
+            hc_min=self.hc_min, hc_max=self.hc_max,
             datetime=self.datetime, stabil_iter=self.stabil_iter,
             albedo_iter=self.albedo_iter,
         )
@@ -595,26 +688,10 @@ class Image(object):
         self.adeadv = lc_remap(self.lc_source, self.lc_type, 'adeadv')
         self.adeadn = lc_remap(self.lc_source, self.lc_type, 'adeadn')
         self.adeadl = lc_remap(self.lc_source, self.lc_type, 'adeadl')
-        hc_min = lc_remap(self.lc_source, self.lc_type, 'hmin')
-        hc_max = lc_remap(self.lc_source, self.lc_type, 'hmax')
+        self.hc_min = lc_remap(self.lc_source, self.lc_type, 'hmin')
+        self.hc_max = lc_remap(self.lc_source, self.lc_type, 'hmax')
         self.leaf_width = lc_remap(self.lc_source, self.lc_type, 'xl')
         self.clump = lc_remap(self.lc_source, self.lc_type, 'omega')
-
-        # LAI for leafs spherical distribution
-        F = self.lai.multiply(self.clump).rename(['F'])
-
-        # Fraction cover at nadir (view=0)
-        f_c = self.lai.expression('1.0 - exp(-0.5 * F)', {'F': F}) \
-            .clamp(0.01, 0.9) \
-            .rename(['f_c'])
-
-        # ======================================================================
-        # Compute canopy height and roughness parameters
-        self.hc = self.lai \
-            .expression(
-                'hc_min + ((hc_max - hc_min) * f_c)',
-                {'hc_min': hc_min, 'hc_max': hc_max, 'f_c': f_c}) \
-            .rename(['hc'])
 
     def _set_solar_vars(self, interpolate_flag=True):
         """Extract MERRA2 solar images for the target image time"""
