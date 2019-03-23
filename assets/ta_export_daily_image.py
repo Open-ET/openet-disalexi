@@ -53,6 +53,22 @@ def main(ini_path=None, overwrite_flag=False, delay=0, key=None):
         k.lower(): int(v) if utils.is_number(v) else v
         for k, v in dict(ini['TAIR']).items()}
 
+    if 'ta_retile' not in tair_args.keys():
+        tair_args['ta_retile'] = 0
+    ta_values = list(range(
+        tair_args['ta_start'], tair_args['ta_stop'], tair_args['ta_step']))
+    # if 'ta_iterations' not in tair_args.keys():
+    #     logging.info('  Iterations: {}'.format(tair_args['ta_iterations']))
+
+    logging.info('  Start: {}'.format(tair_args['ta_start']))
+    logging.info('  Stop:  {}'.format(tair_args['ta_stop']))
+    logging.info('  Step:  {}'.format(tair_args['ta_step']))
+    logging.info('  Cellsize: {}'.format(tair_args['ta_cellsize']))
+    logging.info('  Retile:   {}'.format(tair_args['ta_retile']))
+
+    # Output Ta daily image collection
+    ta_daily_coll_id = '{}'.format(ini['EXPORT']['export_coll'])
+
     logging.info('\nInitializing Earth Engine')
     if key:
         logging.info('  Using service account key file: {}'.format(key))
@@ -61,31 +77,31 @@ def main(ini_path=None, overwrite_flag=False, delay=0, key=None):
     else:
         ee.Initialize()
 
-    # Output Ta daily image collection
-    ta_daily_coll_id = '{}'.format(ini['EXPORT']['export_coll'])
-
-    ta_values = list(range(
-        int(ini['TAIR']['ta_start']), int(ini['TAIR']['ta_stop']),
-        int(ini['TAIR']['ta_step'])))
-
-    # Get a Tmax image to set the Ta values to
+    # Get an ET image to set the Ta values to
     logging.debug('\nALEXI ET properties')
     alexi_coll_id = ini['DISALEXI']['alexi_et_source']
     if alexi_coll_id.upper() == 'CONUS_V001':
         alexi_coll_id = 'projects/disalexi/alexi/CONUS_V001'
-    alexi_coll = ee.ImageCollection(alexi_coll_id)
-    alexi_mask = ee.Image(alexi_coll.first()).select([0]).multiply(0)
-    alexi_nodata = alexi_mask.updateMask(0)
+        alexi_mask = ee.Image('projects/disalexi/alexi/conus_v001_mask')
+    else:
+        raise ValueError('unsupported ALEXI source')
+    # alexi_coll = ee.ImageCollection(alexi_coll_id)
+    # alexi_proj = alexi_mask.projection().getInfo()
+    # alexi_geo = alexi_proj['transform']
+    # alexi_crs = alexi_proj['crs']
+    alexi_crs = 'EPSG:4326'
+    alexi_geo = [0.04, 0.0, -125.04, 0.0, -0.04, 49.8]
+    alexi_cs = 0.04
+    alexi_x, alexi_y = -125.04, 49.8
     logging.debug('  Collection: {}'.format(alexi_coll_id))
 
     logging.debug('\nExport properties')
     export_geo = ee.Image(alexi_mask).projection().getInfo()['transform']
-    export_crs = ee.Image(alexi_mask).projection().getInfo()['crs']
     export_shape = ee.Image(alexi_mask).getInfo()['bands'][0]['dimensions']
     export_extent = [
         export_geo[2], export_geo[5] + export_shape[1] * export_geo[4],
         export_geo[2] + export_shape[0] * export_geo[0], export_geo[5]]
-    logging.debug('  CRS: {}'.format(export_crs))
+    logging.debug('  CRS: {}'.format(alexi_crs))
     logging.debug('  Extent: {}'.format(export_extent))
     logging.debug('  Geo: {}'.format(export_geo))
     logging.debug('  Shape: {}'.format(export_shape))
@@ -97,7 +113,7 @@ def main(ini_path=None, overwrite_flag=False, delay=0, key=None):
     #     [-124, 35, -119, 42], proj='EPSG:4326', geodesic=False)  # California
 
     # If cell_size parameter is set in the INI,
-    # adjust the output cellsize and recompute the transform and shape
+    # adjust the output` cellsize and recompute the transform and shape
     try:
         export_cs = float(ini['EXPORT']['cell_size'])
         export_shape = [
@@ -111,13 +127,9 @@ def main(ini_path=None, overwrite_flag=False, delay=0, key=None):
         pass
 
     # Get current asset list
-    if ini['EXPORT']['export_dest'].upper() == 'ASSET':
-        logging.debug('\nGetting asset list')
-        # DEADBEEF - daily is hardcoded in the asset_id for now
-        asset_list = utils.get_ee_assets(ta_daily_coll_id)
-    else:
-        raise ValueError('invalid export destination: {}'.format(
-            ini['EXPORT']['export_dest']))
+    logging.debug('\nGetting asset list')
+    # DEADBEEF - daily is hardcoded in the asset_id for now
+    asset_list = utils.get_ee_assets(ta_daily_coll_id)
 
     # Get current running tasks
     tasks = utils.get_ee_tasks()
@@ -196,47 +208,43 @@ def main(ini_path=None, overwrite_flag=False, delay=0, key=None):
             continue
 
         export_id = ini['EXPORT']['export_id_fmt'] \
-            .format(
-                date=export_dt.strftime('%Y%m%d'),
-                export=ini['EXPORT']['export_dest'].lower())
+            .format(date=export_dt.strftime('%Y%m%d'))
         # export_id = '{}_coarse_{}_{}_{}_{}'.format(
-        export_id = '{}_test_{}_{}_{}_{}'.format(
+        export_id = '{}_qm_{}_{}_{}_{}_{}'.format(
             export_id,
             ini['DISALEXI']['stabil_iterations'],
             ini['DISALEXI']['albedo_iterations'],
-            int(ini['TAIR']['ta_step']),
-            int(ini['TAIR']['ta_cellsize']),
+            tair_args['ta_step'],
+            tair_args['ta_retile'],
+            tair_args['ta_cellsize'],
         )
         logging.debug('  Export ID: {}'.format(export_id))
 
-        if ini['EXPORT']['export_dest'] == 'ASSET':
-            # asset_id = '{}/{}_coarse_{}_{}_{}_{}'.format(
-            asset_id = '{}/{}_test_{}_{}_{}_{}'.format(
-                ta_daily_coll_id, export_dt.strftime('%Y%m%d'),
-                ini['DISALEXI']['stabil_iterations'],
-                ini['DISALEXI']['albedo_iterations'],
-                int(ini['TAIR']['ta_step']),
-                int(ini['TAIR']['ta_cellsize']),
-            )
-            logging.debug('  Asset ID: {}'.format(asset_id))
+        asset_id = '{}/{}_qm_{}_{}_{}_{}_{}'.format(
+            ta_daily_coll_id, export_dt.strftime('%Y%m%d'),
+            ini['DISALEXI']['stabil_iterations'],
+            ini['DISALEXI']['albedo_iterations'],
+            tair_args['ta_step'],
+            tair_args['ta_retile'],
+            tair_args['ta_cellsize'],
+        )
+        logging.debug('  Asset ID: {}'.format(asset_id))
 
         if overwrite_flag:
             if export_id in tasks.keys():
-                logging.debug('  Task already submitted, cancelling')
+                logging.info('  Task already submitted, cancelling')
                 ee.data.cancelTask(tasks[export_id])
             # This is intentionally not an "elif" so that a task can be
             # cancelled and an existing image/file/asset can be removed
-            if (ini['EXPORT']['export_dest'].upper() == 'ASSET' and
-                    asset_id in asset_list):
-                logging.debug('  Asset already exists, removing')
+            if asset_id in asset_list:
+                logging.info('  Asset already exists, removing')
                 ee.data.deleteAsset(asset_id)
         else:
             if export_id in tasks.keys():
-                logging.debug('  Task already submitted, exiting')
+                logging.info('  Task already submitted, exiting')
                 continue
-            elif (ini['EXPORT']['export_dest'].upper() == 'ASSET' and
-                    asset_id in asset_list):
-                logging.debug('  Asset already exists, skipping')
+            elif asset_id in asset_list:
+                logging.info('  Asset already exists, skipping')
                 continue
 
         # Build and merge the Landsat collections
@@ -271,91 +279,95 @@ def main(ini_path=None, overwrite_flag=False, delay=0, key=None):
         #                     float(ini['INPUTS']['cloud_cover'])) \
         #     .filterMetadata('DATA_TYPE', 'equals', 'L1TP')
 
-
-        #  # DEADBEEF - Yun's test image
-        #  l8_coll = l8_coll.filterBounds(ee.Geometry.Point(-76, 36))
-        #  l7_coll = l7_coll.filterBounds(ee.Geometry.Point(-76, 36))
-        # # l5_coll = l5_coll.filterBounds(ee.Geometry.Point(-76, 36))
-
-        # # DEADBEEF
-        # l8_coll = l8_coll.filterBounds(ee.Geometry.Point(-121.5265, 38.7399))
-        # l7_coll = l7_coll.filterBounds(ee.Geometry.Point(-121.5265, 38.7399))
-        # l5_coll = l5_coll.filterBounds(ee.Geometry.Point(-121.5265, 38.7399))
-
-        # l8_coll = l8_coll.filterBounds(ee.Geometry.Rectangle(-122, 38, -121, 39))
-        # l7_coll = l7_coll.filterBounds(ee.Geometry.Rectangle(-122, 38, -121, 39))
-        # l5_coll = l5_coll.filterBounds(ee.Geometry.Rectangle(-122, 38, -121, 39))
-
-
         # if export_date <= '1993-12-31':
         #     landsat_coll = ee.ImageCollection(l5_coll.merge(l4_coll))
         if export_date < '1999-01-01':
             landsat_coll = l5_coll
         elif export_date <= '2011-12-31':
             landsat_coll = ee.ImageCollection(l7_coll.merge(l5_coll))
-        if export_date <= '2013-03-24':
+        elif export_date <= '2013-03-24':
             landsat_coll = l7_coll
         else:
             landsat_coll = ee.ImageCollection(l8_coll.merge(l7_coll))
 
-        # # DEBUG
-        # landsat_img = ee.Image(landsat_coll.first())
-        # d_obj = disalexi.Image(
-        #     disalexi.LandsatTOA(landsat_img).prep(), ta_values=ta_values,
-        #     cell_size=int(ini['TAIR']['cell_size']), **model_args)
-        # test_pnt = ee.Geometry.Point(-76.7, 35.8)
-        # # test_pnt = ee.Geometry.Point(-122.24375, 39.21356)
-        # print('ALEXI ET: {}'.format(ee.ImageCollection(d_obj.alexi_et).getRegion(test_pnt, 30).getInfo()[1][4]))
-        # print('ta:       {}'.format(ee.ImageCollection(d_obj.ta).getRegion(test_pnt, 30).getInfo()[1][4]))
-        # print('ndvi:     {}'.format(ee.ImageCollection(d_obj.ndvi).getRegion(test_pnt, 30).getInfo()[1][4]))
-        # print('lai:      {}'.format(ee.ImageCollection(d_obj.lai).getRegion(test_pnt, 30).getInfo()[1][4]))
-        # print('lst:      {}'.format(ee.ImageCollection(d_obj.lst).getRegion(test_pnt, 30).getInfo()[1][4]))
-        # print('albedo:   {}'.format(ee.ImageCollection(d_obj.albedo).getRegion(test_pnt, 30).getInfo()[1][4]))
-        # print('rs1:      {}'.format(ee.ImageCollection(d_obj.rs1).getRegion(test_pnt, 30).getInfo()[1][4]))
-        # print('rs24:     {}'.format(ee.ImageCollection(d_obj.rs24).getRegion(test_pnt, 30).getInfo()[1][4]))
-        # print('wind:     {}'.format(ee.ImageCollection(d_obj.windspeed).getRegion(test_pnt, 30).getInfo()[1][4]))
-        # print('pressure: {}'.format(ee.ImageCollection(d_obj.pressure).getRegion(test_pnt, 30).getInfo()[1][4]))
-        # print('elev:     {}'.format(ee.ImageCollection(d_obj.elevation).getRegion(test_pnt, 30).getInfo()[1][4]))
-        # print('zs:       {}'.format(ee.ImageCollection(d_obj.sol_zenith).getRegion(test_pnt, 30).getInfo()[1][4]))
-        # print('clump:    {}'.format(ee.ImageCollection(d_obj.clump).getRegion(test_pnt, 30).getInfo()[1][4]))
-        # print('hc:       {}'.format(ee.ImageCollection(d_obj.hc).getRegion(test_pnt, 30).getInfo()[1][4]))
-        # print('time:     {}'.format(d_obj.time.getInfo()))
-        # print('t_rise:   {}'.format(ee.ImageCollection(d_obj.t_rise).getRegion(test_pnt, 30).getInfo()[1][4]))
-        # print('t_end:    {}'.format(ee.ImageCollection(d_obj.t_end).getRegion(test_pnt, 30).getInfo()[1][4]))
-        # print('leaf_width: {}'.format(ee.ImageCollection(d_obj.leaf_width).getRegion(test_pnt, 30).getInfo()[1][4]))
+
+
+        # # # image_id_list = landsat_coll.aggregate_array('system:id').getInfo()
+        # # wrs2_tile_list = sorted(list(set([
+        # #     x.split('/')[-1][5:11]
+        # #     for x in landsat_coll.aggregate_array('system:id').getInfo()])))
+        # # landsat_list = sorted(list(set(
+        # #     landsat_coll.aggregate_array('SPACECRAFT_ID').getInfo())))
+        # # print(wrs2_tile_list)
+        # # print(landsat_list)
+        # # input('ENTER')
         #
-        # d_obj = disalexi.Image(
-        #     disalexi.LandsatTOA(landsat_img).prep(), ta_source=290,
-        #     cell_size=int(ini['TAIR']['cell_size']), **model_args)
-        # print('et (290): {}'.format(ee.ImageCollection(d_obj.et).getRegion(test_pnt, 30).getInfo()[1][4]))
+        # def landsat_prep_func(image):
+        #     return disalexi.LandsatTOA(image).prep()
         #
-        # d_obj = disalexi.Image(
-        #     disalexi.LandsatTOA(landsat_img).prep(), ta_source=300,
-        #     cell_size=int(ini['TAIR']['cell_size']), **model_args)
-        # print('et (300): {}'.format(ee.ImageCollection(d_obj.et).getRegion(test_pnt, 30).getInfo()[1][4]))
+        # input_img = ee.ImageCollection(landsat_coll.map(landsat_prep_func))\
+        #     .mean()\
+        #     .set({'system:time_start': ee.Date(export_date).millis(),
+        #           'system:index': export_date})
         #
-        # d_obj = disalexi.Image(
-        #     disalexi.LandsatTOA(landsat_img).prep(), ta_source=310,
-        #     cell_size=int(ini['TAIR']['cell_size']), **model_args)
-        # print('et (310): {}'.format(ee.ImageCollection(d_obj.et).getRegion(test_pnt, 30).getInfo()[1][4]))
+        # properties = {
+        #     'system:time_start': utils.millis(export_dt),
+        #     'date_ingested': datetime.datetime.today().strftime('%Y-%m-%d'),
+        #     # 'landsat': ','.join(landsat_list),
+        #     # 'wrs2_tiles': ','.join(wrs2_tile_list),
+        #     'date': export_dt.strftime('%Y-%m-%d'),
+        #     'year': int(export_dt.year),
+        #     'month': int(export_dt.month),
+        #     'day': int(export_dt.day),
+        #     'doy': int(export_dt.strftime('%j')),
+        #     'cycle_day': ((export_dt - cycle_base_dt).days % 8) + 1,
+        #     'model_name': 'DISALEXI',
+        #     'model_version': disalexi.__version__,
+        #     'cloud_cover_max': float(ini['INPUTS']['cloud_cover']),
+        #     # 'collections': ', '.join(collections),
+        # }
+        # properties.update(model_args)
+        # properties.update(tair_args)
         #
-        # d_obj = disalexi.Image(
-        #     disalexi.LandsatTOA(landsat_img).prep(), ta_source=320,
-        #     cell_size=int(ini['TAIR']['cell_size']), **model_args)
-        # print('et (320): {}'.format(ee.ImageCollection(d_obj.et).getRegion(test_pnt, 30).getInfo()[1][4]))
+        # d_obj = disalexi.Image(input_img, **model_args)
+        # ta = d_obj.ta_qm(cellsize=tair_args['ta_cellsize'],
+        #                  ta_values=ta_values)
+        # # ta = d_obj.ta_iter(cellsize=tair_args['ta_cellsize'],
+        # #                    ta_init=[tair_args['ta_start'],
+        # #                             tair_args['ta_stop']],
+        # #                    iterations=tair_args['ta_iterations'],
+        # #                    method='golden')
+        # export_img = ta.select(['ta', 'bias']) \
+        #     .float().set(properties)
+        #     # .clip(ee.Image(image).geometry())
         #
-        # d_obj = disalexi.Image(
-        #     disalexi.LandsatTOA(landsat_img).prep(), ta_source=330,
-        #     cell_size=int(ini['TAIR']['cell_size']), **model_args)
-        # print('et (330): {}'.format(ee.ImageCollection(d_obj.et).getRegion(test_pnt, 30).getInfo()[1][4]))
+        # if tair_args['ta_retile'] and tair_args['ta_retile']  > 0:
+        #     export_img.retile(tair_args['ta_retile'])
         #
-        # input('ENTER')
+        # print(export_img.getInfo())
+        #
+        # # Build export tasks
+        # logging.debug('  Building export task')
+        # task = ee.batch.Export.image.toAsset(
+        #     image=export_img,
+        #     description=export_id,
+        #     assetId=asset_id,
+        #     crs=export_crs,
+        #     crsTransform='[' + ','.join(list(map(str, export_geo))) + ']',
+        #     dimensions='{0}x{1}'.format(*export_shape),
+        # )
+        # logging.info('  Starting export task')
+        # utils.ee_task_start(task)
+        #
+        # # Pause before starting next task
+        # utils.delay_task(delay)
+        # logging.debug('')
+
+
 
         def ta_img_func(image):
             d_obj = disalexi.Image(
-                disalexi.LandsatTOA(image).prep(),
-                ta_values=ta_values, ta_cellsize=int(ini['TAIR']['ta_cellsize']),
-                **model_args)
+                disalexi.LandsatTOA(image).prep(), **model_args)
 
             # Remove the merged collection indices from the system:index
             scene_id = ee.List(
@@ -364,36 +376,24 @@ def main(ini_path=None, overwrite_flag=False, delay=0, key=None):
                 .cat(ee.String(scene_id.get(1))).cat('_') \
                 .cat(ee.String(scene_id.get(2)))
 
-            return alexi_mask.add(d_obj.ta)\
-                .clip(ee.Image(image).geometry())\
-                .rename(['ta'])\
+            ta = d_obj.ta_qm(cellsize=tair_args['ta_cellsize'],
+                             ta_values=ta_values)
+            # ta = d_obj.ta_iter(cellsize=tair_args['ta_cellsize'],
+            #                    ta_init=[tair_args['ta_start'],
+            #                             tair_args['ta_stop']],
+            #                    iterations=tair_args['ta_iterations'],
+            #                    method='golden')
+
+            return alexi_mask.add(ta)\
+                .select(['ta', 'bias'])\
                 .set({
                     'system:time_start': image.get('system:time_start'),
                     'wrs2_tile': scene_id.slice(5, 11),
                     'spacecraft_id': image.get('SPACECRAFT_ID'),
                 })
-                # .rename(['ta', 'et', 'bias'])\
+                # .clip(ee.Image(image).geometry())\
 
-        ta_img_coll = ee.ImageCollection(landsat_coll.map(ta_img_func))
-
-        # # DEBUG
-        # pprint.pprint(ta_img_coll.getRegion(
-        #     ee.Geometry.Point(-122.24375, 39.21356), 30).getInfo())
-        # input('ENTER')
-
-        # There should not be more than two overlapping values on any day
-        # If there are no Ta values, return an empty image
-        ta_img = ee.Image(ee.Algorithms.If(
-            ta_img_coll.size().gt(0),
-            ta_img_coll.mean(),
-            alexi_nodata.rename(['ta'])))
-        #     ee.Image([alexi_nodata, alexi_nodata, alexi_nodata])
-        #         .rename(['ta', 'et', 'bias'])))
-
-        # # DEBUG
-        # pprint.pprint(ee.ImageCollection(ta_img.rename(['ta', 'et', 'bias']))
-        #               .getRegion(ee.Geometry.Point(-122.24375, 39.21356), 30).getInfo())
-        # input('ENTER')
+        ta_img_coll = ee.ImageCollection(landsat_coll.map(ta_img_func)).mean()
 
         def unique_properties(coll, property):
             return ee.String(ee.List(ee.Dictionary(
@@ -402,18 +402,6 @@ def main(ini_path=None, overwrite_flag=False, delay=0, key=None):
             ta_img_coll, 'wrs2_tile'))
         landsat_list = ee.String('').cat(unique_properties(
             ta_img_coll, 'spacecraft_id'))
-
-        # # Is there a better way of building these strings?
-        # wrs2_tile_list = ee.Algorithms.If(
-        #     ta_img_coll.size().gt(0),
-        #     ee.String(ee.List(ee.Dictionary(ta_img_coll \
-        #         .aggregate_histogram('wrs2_tile')).keys()).join(',')),
-        #     ee.String(''))
-        # landsat_list = ee.Algorithms.If(
-        #     ta_img_coll.size().gt(0),
-        #     ee.String(ee.List(ee.Dictionary(ta_img_coll\
-        #         .aggregate_histogram('spacecraft_id')).keys()).join(',')),
-        #     ee.String(''))
 
         properties = {
             'system:time_start': utils.millis(export_dt),
@@ -435,22 +423,24 @@ def main(ini_path=None, overwrite_flag=False, delay=0, key=None):
         properties.update(tair_args)
 
         # Cast to float and set properties
-        ta_img = ta_img.rename(['ta']).float().set(properties)
-        # ta_img = ta_img.rename(['ta', 'et', 'bias']).float().set(properties)
+        ta_img = ta_img.rename(['ta', 'bias']).float().set(properties)
+        # ta_img = ta_img.rename(['ta']).float().set(properties)
+
+        if tair_args['ta_retile'] and tair_args['ta_retile']  > 0:
+            ta_img.retile(tair_args['ta_retile'])
 
         # Build export tasks
-        if ini['EXPORT']['export_dest'] == 'ASSET':
-            logging.debug('  Building export task')
-            task = ee.batch.Export.image.toAsset(
-                image=ta_img,
-                description=export_id,
-                assetId=asset_id,
-                crs=export_crs,
-                crsTransform='[' + ','.join(list(map(str, export_geo))) + ']',
-                dimensions='{0}x{1}'.format(*export_shape),
-            )
-            logging.debug('  Starting export task')
-            utils.ee_task_start(task)
+        logging.debug('  Building export task')
+        task = ee.batch.Export.image.toAsset(
+            image=ta_img,
+            description=export_id,
+            assetId=asset_id,
+            crs=alexi_crs,
+            crsTransform='[' + ','.join(list(map(str, export_geo))) + ']',
+            dimensions='{0}x{1}'.format(*export_shape),
+        )
+        logging.info('  Starting export task')
+        utils.ee_task_start(task)
 
         # Pause before starting next task
         utils.delay_task(delay)

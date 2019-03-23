@@ -198,18 +198,16 @@ class Image(object):
         self._set_landcover_vars()
         self._set_solar_vars()
 
-    def ta_qm(self, cellsize=120, ta_values=list(range(250, 351, 1)),
-              threshold=0.5):
+    def ta_single(self, ta_img, cell_size=30, threshold=0.5):
         """Compute the air temperature for each ALEXI ET cell that minimizes
         the bias between Landsat scale ET and ALEXI ET for a fixed range of
         air temperature values
 
         Parameters
         ----------
-        cellsize : float, optional
+        ta_img : ee.Image
+        cell_size : float, optional
             Cellsize for "fine" scale calculation and aggregation.
-        ta_values : list, optional
-            List of air temperature values that will be used in calculation.
         threshold : float, optional
 
         Returns
@@ -218,14 +216,65 @@ class Image(object):
             ALEXI scale air temperature image
 
         """
-        def ta_func(ta_ftr):
+        et_fine = tseb.tseb_pt(
+            T_air=ta_img, T_rad=self.lst,
+            u=self.windspeed, p=self.pressure, z=self.elevation,
+            Rs_1=self.rs1, Rs24=self.rs24, vza=0,
+            aleafv=self.aleafv, aleafn=self.aleafn, aleafl=self.aleafl,
+            adeadv=self.adeadv, adeadn=self.adeadn, adeadl=self.adeadl,
+            albedo=self.albedo, ndvi=self.ndvi, lai=self.lai,
+            clump=self.clump, leaf_width=self.leaf_width,
+            hc_min=self.hc_min, hc_max=self.hc_max,
+            datetime=self.datetime, a_PT_in=1.32,
+            stabil_iter=self.stabil_iter, albedo_iter=self.albedo_iter,
+        )
+
+        # Aggregate the Landsat scale ET up to the ALEXI scale
+        et_coarse = ee.Image(et_fine)\
+            .reproject(crs=self.crs,
+                       crsTransform=[cell_size, 0, 15, 0, -cell_size, 15])\
+            .reduceResolution(reducer=ee.Reducer.mean(), maxPixels=20000)\
+            .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)
+        et_mask = et_coarse.mask().gt(threshold)
+        bias = et_coarse.subtract(self.alexi_et)
+        # Invert the abs(bias) since quality mosaic sorts descending
+        # qm_bias = bias.abs().multiply(-1)
+
+        return ee.Image([ta_img, bias, et_coarse])\
+            .updateMask(et_mask)\
+            .rename(['ta', 'bias', 'et'])
+
+    def ta_qm(self, ta_img, step_size, step_count, cell_size=30, threshold=0.5):
+        """Compute the air temperature for each ALEXI ET cell that minimizes
+        the bias between Landsat scale ET and ALEXI ET for a fixed range of
+        air temperature values
+
+        Parameters
+        ----------
+        ta_img : ee.Image
+        step_size : float
+            The size of each Ta step.
+        step_count : int
+            The number of + & - steps, so the total number of air temperatures
+            images/values will be ta_steps * 2 + 1.
+        cell_size : float, optional
+            Cellsize for "fine" scale calculation and aggregation.
+        threshold : float, optional
+
+        Returns
+        -------
+        image : ee.Image
+            ALEXI scale air temperature image
+
+        """
+        def ta_func(ta):
             """Compute TSEB ET for the target T_air value"""
-            ta = ee.Number(ta_ftr.get('ta'))
-            ta_fine = self.lst.multiply(0).add(ta).rename(['ta'])
-            ta_coarse = self.alexi_et.multiply(0).add(ta).rename(['ta'])
+            # ta = ee.Number(ta_ftr.get('ta'))
+            # ta_fine = self.lst.multiply(0).add(ta).rename(['ta'])
+            # ta_coarse = self.alexi_et.multiply(0).add(ta).rename(['ta'])
 
             et_fine = tseb.tseb_pt(
-                T_air=ta_fine, T_rad=self.lst,
+                T_air=ta, T_rad=self.lst,
                 u=self.windspeed, p=self.pressure, z=self.elevation,
                 Rs_1=self.rs1, Rs24=self.rs24, vza=0,
                 aleafv=self.aleafv, aleafn=self.aleafn, aleafl=self.aleafl,
@@ -240,7 +289,7 @@ class Image(object):
             # Aggregate the Landsat scale ET up to the ALEXI scale
             et_coarse = ee.Image(et_fine)\
                 .reproject(crs=self.crs,
-                           crsTransform=[cellsize, 0, 15, 0, -cellsize, 15])\
+                           crsTransform=[cell_size, 0, 15, 0, -cell_size, 15])\
                 .reduceResolution(reducer=ee.Reducer.mean(), maxPixels=20000)\
                 .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)
             et_mask = et_coarse.mask().gt(threshold)
@@ -248,21 +297,20 @@ class Image(object):
             # Invert the abs(bias) since quality mosaic sorts descending
             qm_bias = bias.abs().multiply(-1)
 
-            return ee.Image([qm_bias, ta_coarse, bias, et_coarse])\
+            return ee.Image([qm_bias, ta, bias, et_coarse])\
                 .updateMask(et_mask)\
                 .rename(['qm_bias', 'ta', 'bias', 'et'])
 
         # Get output for a range of Ta values
         # Mapping over the list seemed a little slower than the FC
-        ta_coll = ee.FeatureCollection([
-            ee.Feature(None, {'ta': ta}) for ta in ta_values])
-        # ta_coll = ee.List(ta_values)
-        # ta_coll = ee.List.sequence(250, 351, 1)
+        ta_coll = ee.ImageCollection([
+            ta_img.add(i * step_size)
+            for i in range(-step_count, step_count + 1)])
 
         # Return the air temperature associated with the lowest difference
         #   in ET from the ALEXI ET value
         return ee.ImageCollection(ta_coll.map(ta_func))\
-            .qualityMosaic('qm_bias') \
+            .qualityMosaic('qm_bias')\
             .select(['ta', 'bias', 'et'])
 
     def ta_iter(self, cellsize=1920, iterations=2, method='golden',
@@ -492,21 +540,19 @@ class Image(object):
             datetime=self.datetime, stabil_iter=self.stabil_iter,
             albedo_iter=self.albedo_iter,
         )
-        mask_img = ee.Image(et_fine) \
+        mask_img = ee.Image(et_fine)\
             .reproject(crs=self.crs,
-                       crsTransform=[cellsize, 0, 15, 0, -cellsize, 15]) \
-            .reduceResolution(reducer=ee.Reducer.count(), maxPixels=20000) \
-            .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo) \
+                       crsTransform=[cellsize, 0, 15, 0, -cellsize, 15])\
+            .reduceResolution(reducer=ee.Reducer.count(), maxPixels=20000)\
+            .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)\
             .mask()
+            # .retile(8)\
 
         if threshold is not None:
             mask_img = mask_img.gt(threshold)
             mask_img = mask_img.updateMask(mask_img).updateMask(1)
 
         return mask_img.rename(['mask'])
-
-        # DEADBEEF
-        # return mask_img.updateMask(mask_img).updateMask(1).rename(['mask'])
 
     @lazy_property
     def et(self, ta_img):
