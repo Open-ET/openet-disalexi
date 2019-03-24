@@ -103,6 +103,13 @@ class Image(object):
         # CGM - Applying cloud mask directly to input image
         #   instead of to a_pt in main TSEB function
         self.cfmask = image.select('cfmask')
+
+        # CGM - Buffer clouds
+        # cloud_buffer = [0, 120]
+        # if cloud_buffer and cloud_buffer
+        # self.mask = self.cfmask.gte(1) \
+        #     .reduceNeighborhood(ee.Reducer.min(), ee.Kernel.square(30, 'meters')) \
+        #     .reduceNeighborhood(ee.Reducer.max(), ee.Kernel.square(240, 'meters'))
         self.mask = self.cfmask.eq(0)
         input_image = ee.Image(image).updateMask(self.mask)
 
