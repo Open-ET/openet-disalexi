@@ -15,14 +15,15 @@ import random
 import sys
 
 import ee
-# from osgeo import ogr, osr
+from osgeo import ogr, osr
 
 import openet.disalexi as disalexi
-# from . import utils
 import utils
+# from . import utils
 
 
-def main(ini_path=None, overwrite_flag=False, delay=0, key=None):
+def main(ini_path=None, overwrite_flag=False, delay=0, key=None,
+         random_flag=False):
     """Compute WRS2 Ta images
 
     Parameters
@@ -35,6 +36,8 @@ def main(ini_path=None, overwrite_flag=False, delay=0, key=None):
         Delay time between each export task (the default is 0).
     key : str, optional
         File path to an Earth Engine json key file (the default is None).
+    random_flag : bool, optional
+        If True, process dates and tiles in random order (the default is False).
 
     """
     logging.info('\nCompute WRS2 Ta images')
@@ -49,10 +52,10 @@ def main(ini_path=None, overwrite_flag=False, delay=0, key=None):
 
     model_name = 'DISALEXI'
     # model_name = ini['INPUTS']['ET_MODEL'].upper()
+
     model_args = {
         k.lower(): float(v) if utils.is_number(v) else v
         for k, v in dict(ini[model_name]).items()}
-    # This seems unnecessary
     tair_args = {}
     for k, v in dict(ini['TAIR']).items():
         if utils.is_number(v):
@@ -67,13 +70,23 @@ def main(ini_path=None, overwrite_flag=False, delay=0, key=None):
     #     for k, v in dict(ini['TAIR']).items()}
 
     try:
+        collections = str(ini['INPUTS']['collections'])
+        collections = sorted([x.strip() for x in collections.split(',')])
+    except KeyError:
+        logging.info('\nINPUTS collections parameter was net set, '
+                        'default to Landsat 5/7/8 C01 SR collections')
+        collections = ['LANDSAT/LC08/C01/T1_SR', 'LANDSAT/LE07/C01/T1_SR',
+                       'LANDSAT/LT05/C01/T1_SR']
+    except Exception as e:
+        raise e
+
+    try:
         wrs2_tiles = str(ini['INPUTS']['wrs2_tiles'])
         wrs2_tiles = sorted([x.strip() for x in wrs2_tiles.split(',')])
         wrs2_tiles = [x.replace('p', '').replace('r', '') for x in wrs2_tiles]
     except KeyError:
-        logging.warning('\nwrs2_tiles parameter was net set, default to []')
+        logging.info('\nINPUTS wrs2_tiles parameter was net set, default to []')
         wrs2_tiles = []
-        # raise ValueError('"wrs2_tiles" parameter was not set in INI')
     except Exception as e:
         raise e
 
@@ -133,36 +146,36 @@ def main(ini_path=None, overwrite_flag=False, delay=0, key=None):
     logging.debug('  Collection: {}'.format(alexi_coll_id))
 
 
-    # if 'study_area_path' in ini['INPUTS'].keys():
-    #     logging.info('\nReading study area shapefile')
-    #     logging.info('  {}'.format(ini['INPUTS']['study_area_path']))
-    #     study_area_ds = ogr.Open(ini['INPUTS']['study_area_path'], 0)
-    #     study_area_lyr = study_area_ds.GetLayer()
-    #     study_area_osr = study_area_lyr.GetSpatialRef()
-    #     study_area_crs = str(study_area_osr.ExportToWkt())
-    #     # study_area_proj4 = study_area_osr.ExportToProj4()
-    #     logging.debug('  Study area projection: {}'.format(study_area_crs))
-    #
-    #     # Get the dissolved/unioned geometry of the study area
-    #     output_geom = ogr.Geometry(ogr.wkbMultiPolygon)
-    #     for study_area_ftr in study_area_lyr:
-    #         study_area_geom = output_geom.Union(study_area_ftr.GetGeometryRef())
-    #     study_area_ds = None
-    #
-    #     simplify_buffer = 0
-    #     if simplify_buffer:
-    #         study_area_geom = output_geom\
-    #             .SimplifyPreserveTopology(simplify_buffer)\
-    #             .buffer(simplify_buffer)
-    #     else:
-    #         # Added flatten call to change clockwise geometies to counter cw
-    #         study_area_geom.FlattenTo2D()
-    #
-    #     export_geom = ee.Geometry(
-    #         json.loads(study_area_geom.ExportToJson()), study_area_crs, False)
-    #
-    # else:
-    export_geom = alexi_mask.geometry()
+    if 'study_area_path' in ini['INPUTS'].keys():
+        logging.info('\nReading study area shapefile')
+        logging.info('  {}'.format(ini['INPUTS']['study_area_path']))
+        study_area_ds = ogr.Open(ini['INPUTS']['study_area_path'], 0)
+        study_area_lyr = study_area_ds.GetLayer()
+        study_area_osr = study_area_lyr.GetSpatialRef()
+        study_area_crs = str(study_area_osr.ExportToWkt())
+        # study_area_proj4 = study_area_osr.ExportToProj4()
+        logging.debug('  Study area projection: {}'.format(study_area_crs))
+
+        # Get the dissolved/unioned geometry of the study area
+        output_geom = ogr.Geometry(ogr.wkbMultiPolygon)
+        for study_area_ftr in study_area_lyr:
+            study_area_geom = output_geom.Union(study_area_ftr.GetGeometryRef())
+        study_area_ds = None
+
+        simplify_buffer = 0
+        if simplify_buffer:
+            study_area_geom = output_geom\
+                .SimplifyPreserveTopology(simplify_buffer)\
+                .buffer(simplify_buffer)
+        else:
+            # Added flatten call to change clockwise geometies to counter cw
+            study_area_geom.FlattenTo2D()
+
+        export_geom = ee.Geometry(
+            json.loads(study_area_geom.ExportToJson()), study_area_crs, False)
+
+    else:
+        export_geom = alexi_mask.geometry()
 
 
     # Get current asset list
@@ -177,20 +190,20 @@ def main(ini_path=None, overwrite_flag=False, delay=0, key=None):
         input('ENTER')
 
     # Limit by year and month
-    month_list = list(range(1, 13))
-    year_list = []
-    # try:
-    #     month_list = sorted(list(utils.parse_int_set(ini['TCORR']['months'])))
-    # except:
-    #     logging.info('\nTCORR "months" parameter not set in the INI,'
-    #                  '\n  Defaulting to all months (1-12)\n')
-    #     month_list = list(range(1, 13))
-    # try:
-    #     year_list = sorted(list(utils.parse_int_set(ini['TCORR']['years'])))
-    # except:
-    #     logging.info('\nTCORR "years" parameter not set in the INI,'
-    #                  '\n  Defaulting to all available years\n')
-    #     year_list = []
+    try:
+        month_list = sorted(list(utils.parse_int_set(ini['INPUTS']['months'])))
+    except:
+        logging.debug('\nINPUTS "months" parameter not set in the INI,'
+                      '\n  Defaulting to all months (1-12)\n')
+        month_list = list(range(1, 13))
+    try:
+        year_list = sorted(list(utils.parse_int_set(ini['INPUTS']['years'])))
+    except:
+        logging.debug('\nINPUTS "years" parameter not set in the INI,'
+                      '\n  Defaulting to all available years\n')
+        year_list = []
+    # month_list = list(range(1, 13))
+    # year_list = []
 
     # Key is cycle day, value is a reference date on that cycle
     # Data from: https://landsat.usgs.gov/landsat_acq
@@ -232,7 +245,8 @@ def main(ini_path=None, overwrite_flag=False, delay=0, key=None):
 
     # DEADBEEF - For testing, process the dates in random order
     date_list = list(utils.date_range(iter_start_dt, iter_end_dt))
-    random.shuffle(date_list)
+    if random_flag:
+        random.shuffle(date_list)
 
     # Iterate over date ranges
     for export_dt in date_list:
@@ -254,61 +268,64 @@ def main(ini_path=None, overwrite_flag=False, delay=0, key=None):
                 '  Script is currently hardcoded for Landsat 7 and 8 only')
             sys.exit()
 
-        # # Eventually build this using the model Collection class
         # Build and merge the Landsat collections
+        # Eventually build this using the model Collection class
         # Time filters are to remove bad (L5) and pre-op (L8) images
-        l8_coll = ee.ImageCollection('LANDSAT/LC08/C01/T1_SR')\
-            .filterDate(export_dt, export_dt + datetime.timedelta(days=1))\
-            .filterBounds(export_geom)\
-            .filter(ee.Filter.gt('system:time_start',
-                                 ee.Date('2013-03-24').millis()))\
-            .filterMetadata('CLOUD_COVER_LAND', 'less_than',
-                            float(ini['INPUTS']['cloud_cover']))
-        #    .filterMetadata('DATA_TYPE', 'equals', 'L1TP')\
-        l7_coll = ee.ImageCollection('LANDSAT/LE07/C01/T1_SR')\
-            .filterDate(export_dt, export_dt + datetime.timedelta(days=1))\
-            .filterBounds(export_geom)\
-            .filterMetadata('CLOUD_COVER_LAND', 'less_than',
-                            float(ini['INPUTS']['cloud_cover']))
-        #    .filterMetadata('DATA_TYPE', 'equals', 'L1TP')
-        # l5_coll = ee.ImageCollection('LANDSAT/LT05/C01/T1_SR')\
-        #     .filterDate(export_dt, export_dt + datetime.timedelta(days=1))\
-        #     .filterBounds(export_geom)\
-        #     .filterMetadata('CLOUD_COVER_LAND', 'less_than',
-        #                     float(ini['INPUTS']['cloud_cover']))\
-        #     .filter(ee.Filter.lt('system:time_start',
-        #                          ee.Date('2011-12-31').millis()))
-        # #     .filterMetadata('DATA_TYPE', 'equals', 'L1TP')
-        # l4_coll = ee.ImageCollection('LANDSAT/LT04/C01/T1_SR')\
-        #     .filterDate(export_dt, export_dt + datetime.timedelta(days=1))\
-        #     .filterBounds(export_geom)\
-        #     .filterMetadata('CLOUD_COVER_LAND', 'less_than',
-        #                     float(ini['INPUTS']['cloud_cover']))
-        # #     .filterMetadata('DATA_TYPE', 'equals', 'L1TP')
+        landsat_coll = ee.ImageCollection([])
+        if ('LANDSAT/LC08/C01/T1_SR' in collections and
+                export_date > '2013-03-24'):
+            l8_coll = ee.ImageCollection('LANDSAT/LC08/C01/T1_SR')\
+                .filterDate(export_dt, export_dt + datetime.timedelta(days=1))\
+                .filterBounds(export_geom)\
+                .filter(ee.Filter.gt('system:time_start',
+                                     ee.Date('2013-03-24').millis()))\
+                .filterMetadata('CLOUD_COVER_LAND', 'less_than',
+                                float(ini['INPUTS']['cloud_cover']))
+            landsat_coll = ee.ImageCollection(landsat_coll.merge(l8_coll))
+        if ('LANDSAT/LE07/C01/T1_SR' in collections and
+                export_date >= '1999-01-01'):
+            l7_coll = ee.ImageCollection('LANDSAT/LE07/C01/T1_SR')\
+                .filterDate(export_dt, export_dt + datetime.timedelta(days=1))\
+                .filterBounds(export_geom)\
+                .filterMetadata('CLOUD_COVER_LAND', 'less_than',
+                                float(ini['INPUTS']['cloud_cover']))
+            landsat_coll = ee.ImageCollection(landsat_coll.merge(l7_coll))
+        if ('LANDSAT/LT05/C01/T1_SR' in collections and
+                export_date <= '2011-12-31'):
+            l5_coll = ee.ImageCollection('LANDSAT/LT05/C01/T1_SR')\
+                .filterDate(export_dt, export_dt + datetime.timedelta(days=1))\
+                .filterBounds(export_geom)\
+                .filter(ee.Filter.lt('system:time_start',
+                                     ee.Date('2011-12-31').millis()))\
+                .filterMetadata('CLOUD_COVER_LAND', 'less_than',
+                                float(ini['INPUTS']['cloud_cover']))
+            landsat_coll = ee.ImageCollection(landsat_coll.merge(l5_coll))
+        if ('LANDSAT/LT04/C01/T1_SR' in collections and
+                export_date <= '1993-12-01'):
+            l4_coll = ee.ImageCollection('LANDSAT/LT04/C01/T1_SR')\
+                .filterDate(export_dt, export_dt + datetime.timedelta(days=1))\
+                .filterBounds(export_geom)\
+                .filterMetadata('CLOUD_COVER_LAND', 'less_than',
+                                float(ini['INPUTS']['cloud_cover']))
+            landsat_coll = ee.ImageCollection(landsat_coll.merge(l4_coll))
 
-        # if export_date <= '1993-12-31':
-        #     landsat_coll = ee.ImageCollection(l5_coll.merge(l4_coll))
-        # if export_date < '1999-01-01':
-        #     landsat_coll = l5_coll
-        # elif export_date <= '2011-12-31':
-        #     landsat_coll = ee.ImageCollection(l7_coll.merge(l5_coll))
-        # elif export_date <= '2013-03-24':
-        #     landsat_coll = l7_coll
-        # else:
-        #     landsat_coll = ee.ImageCollection(l8_coll.merge(l7_coll))
-        landsat_coll = ee.ImageCollection(l8_coll.merge(l7_coll))
-        # print(landsat_coll.getInfo())
+        # DATA_TYPE filter only needed if using TOA collections
+        #     .filterMetadata('DATA_TYPE', 'equals', 'L1TP')
 
-        image_id_list = landsat_coll.aggregate_array('system:id').getInfo()
-        # print(image_id_list)
-        # input('ENTER')
+        image_id_list = sorted(list(set(
+            landsat_coll.aggregate_array('system:id').getInfo())))
+        if not image_id_list:
+            logging.info('  Empty image ID list, skipping')
+            continue
+        # if random_flag:
+        #     random.shuffle(image_id_list)
 
         for image_id in image_id_list:
             scene_id = image_id.split('/')[-1]
             landsat, path, row, year, month, day = parse_landsat_id(scene_id)
             image_dt = datetime.datetime.strptime(
                 '{:04d}{:02d}{:02d}'.format(year, month, day), '%Y%m%d')
-            image_date = image_dt.date().isoformat()
+            # image_date = image_dt.date().isoformat()
             # logging.debug('  Date: {}'.format(image_date))
             # logging.debug('  DOY: {}'.format(doy))
 
@@ -321,25 +338,9 @@ def main(ini_path=None, overwrite_flag=False, delay=0, key=None):
 
             export_id = ini['EXPORT']['export_id_fmt'] \
                 .format(index=scene_id.lower())
-            # export_id = '{}_qm_{}_{}_{}_{}_{}'.format(
-            #     export_id,
-            #     ini['DISALEXI']['stabil_iterations'],
-            #     ini['DISALEXI']['albedo_iterations'],
-            #     tair_args['step_size'],
-            #     tair_args['retile'],
-            #     tair_args['cell_size'],
-            # )
             logging.debug('  Export ID: {}'.format(export_id))
 
             asset_id = '{}/{}'.format(ta_wrs2_coll_id, scene_id)
-            # asset_id = '{}/{}_qm_{}_{}_{}_{}_{}'.format(
-            #     ta_wrs2_coll_id, scene_id,
-            #     ini['DISALEXI']['stabil_iterations'],
-            #     ini['DISALEXI']['albedo_iterations'],
-            #     tair_args['step_size'],
-            #     tair_args['retile'],
-            #     tair_args['cell_size'],
-            # )
             logging.debug('  Asset ID: {}'.format(asset_id))
 
             if overwrite_flag:
@@ -353,7 +354,7 @@ def main(ini_path=None, overwrite_flag=False, delay=0, key=None):
                     ee.data.deleteAsset(asset_id)
             else:
                 if export_id in tasks.keys():
-                    logging.info('  Task already submitted, exiting')
+                    logging.info('  Task already submitted, skipping')
                     continue
                 elif asset_id in asset_list:
                     logging.info('  Asset already exists, skipping')
@@ -372,7 +373,7 @@ def main(ini_path=None, overwrite_flag=False, delay=0, key=None):
                 'cycle_day': ((export_dt - cycle_base_dt).days % 8) + 1,
                 'model_name': 'DISALEXI',
                 'model_version': disalexi.__version__,
-                'cloud_cover_max': float(ini['INPUTS']['cloud_cover']),
+                # 'cloud_cover_max': float(ini['INPUTS']['cloud_cover']),
             }
             properties.update(model_args)
             properties.update(tair_args)
@@ -407,29 +408,12 @@ def main(ini_path=None, overwrite_flag=False, delay=0, key=None):
                     'system:index': landsat_img.get('system:index'),
                     'system:time_start': landsat_img.get('system:time_start'),
                     'spacecraft_id': landsat_img.get('SATELLITE'),
+                    'cloud_cover_land': landsat_img.get('CLOUD_COVER_LAND'),
                 })\
                 .set(properties)
 
             if tair_args['retile'] and tair_args['retile'] > 0:
                 export_img = export_img.retile(tair_args['retile'])
-
-            # pprint.pprint(ee.ImageCollection(ta_source_img).getRegion(
-            #     ee.Geometry.Point(-121.3022, 39.5785), scale=1000).getInfo())
-            # pprint.pprint(ee.ImageCollection(ta_source_img).getRegion(
-            #     ee.Geometry.Point(-121.2624, 39.5806), scale=1000).getInfo())
-            # input('ENTER')
-            #
-            # pprint.pprint(ee.ImageCollection(d_obj.ta_single(ee.Image.constant(280))).getRegion(
-            #     ee.Geometry.Point(-121.3022, 39.5785), scale=1000).getInfo())
-            # pprint.pprint(ee.ImageCollection(d_obj.ta_single(ee.Image.constant(280))).getRegion(
-            #     ee.Geometry.Point(-121.2624, 39.5806), scale=1000).getInfo())
-            # input('ENTER')
-            #
-            # pprint.pprint(ee.ImageCollection(d_obj.ta_qm(ee.Image.constant(280))).getRegion(
-            #     ee.Geometry.Point(-121.3022, 39.5785), scale=1000).getInfo())
-            # pprint.pprint(ee.ImageCollection(d_obj.ta_qm(ee.Image.constant(280))).getRegion(
-            #     ee.Geometry.Point(-121.2624, 39.5806), scale=1000).getInfo())
-            # input('ENTER')
 
             # Build the export transform and shape from the Landsat image
             image_xy = landsat_img.geometry().bounds(1, 'EPSG:4326')\
@@ -511,6 +495,9 @@ def arg_parse():
         '--key', type=utils.arg_valid_file, metavar='FILE',
         help='JSON key file')
     parser.add_argument(
+        '--random', default=False, action='store_true',
+        help='Process dates and tiles in random order')
+    parser.add_argument(
         '-o', '--overwrite', default=False, action='store_true',
         help='Force overwrite of existing files')
     parser.add_argument(
@@ -537,4 +524,4 @@ if __name__ == "__main__":
         'Script:', os.path.basename(sys.argv[0])))
 
     main(ini_path=args.ini, overwrite_flag=args.overwrite, delay=args.delay,
-         key=args.key)
+         key=args.key, random_flag=args.random)
