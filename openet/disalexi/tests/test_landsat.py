@@ -78,7 +78,7 @@ def test_LandsatTOA_albedo(blue, green, red, nir, swir1, swir2, tol=0.000001):
         .rename(['B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B10', 'BQA']) \
         .set(l8_properties)
     albedo = ee.Image(landsat.LandsatTOA(ee.Image(raw_img))._albedo)
-    assert abs(utils.image_value(albedo)['albedo'] - expected) <= tol
+    assert abs(utils.constant_image_value(albedo)['albedo'] - expected) <= tol
 
 
 @pytest.mark.parametrize(
@@ -99,7 +99,7 @@ def test_LandsatTOA_cfmask(bqa, expected):
         .rename(['B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B10', 'BQA']) \
         .set(l8_properties)
     cfmask = ee.Image(landsat.LandsatTOA(input_img)._cfmask)
-    assert utils.image_value(cfmask)['cfmask'] == expected
+    assert utils.constant_image_value(cfmask)['cfmask'] == expected
 
 
 def test_LandsatTOA_lai(red=0.2, nir=0.7, expected=1.200, tol=0.001):
@@ -107,7 +107,7 @@ def test_LandsatTOA_lai(red=0.2, nir=0.7, expected=1.200, tol=0.001):
         .rename(['B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B10', 'BQA']) \
         .set(l8_properties)
     lai = ee.Image(landsat.LandsatTOA(input_img)._lai)
-    assert abs(utils.image_value(lai)['lai'] - expected) <= tol
+    assert abs(utils.constant_image_value(lai)['lai'] - expected) <= tol
 
 
 @pytest.mark.parametrize(
@@ -124,7 +124,7 @@ def test_LandsatTOA_lst(red, nir, bt, expected, tol=0.001):
         .rename(['B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B10', 'BQA']) \
         .set(l8_properties)
     lst = ee.Image(landsat.LandsatTOA(input_img)._lst)
-    assert abs(utils.image_value(lst)['lst'] - expected) <= tol
+    assert abs(utils.constant_image_value(lst)['lst'] - expected) <= tol
 
 
 def test_LandsatTOA_ndvi(red=0.2, nir=0.7, expected=0.5556, tol=0.001):
@@ -191,7 +191,7 @@ def test_LandsatSR_albedo(blue, green, red, nir, swir1, swir2, tol=0.000001):
         .divide(sr_scalars) \
         .set(l8_properties)
     albedo = ee.Image(landsat.LandsatSR(ee.Image(raw_img))._albedo)
-    assert abs(utils.image_value(albedo)['albedo'] - expected) <= tol
+    assert abs(utils.constant_image_value(albedo)['albedo'] - expected) <= tol
 
 
 @pytest.mark.parametrize(
@@ -217,7 +217,7 @@ def test_LandsatSR_cfmask(pixel_qa, expected):
         .rename(['B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B10', 'pixel_qa']) \
         .set(l8_properties)
     cfmask = ee.Image(landsat.LandsatSR(input_img)._cfmask)
-    assert utils.image_value(cfmask)['cfmask'] == expected
+    assert utils.constant_image_value(cfmask)['cfmask'] == expected
 
 
 def test_LandsatSR_lai(red=0.2, nir=0.7, expected=1.200, tol=0.001):
@@ -227,7 +227,7 @@ def test_LandsatSR_lai(red=0.2, nir=0.7, expected=1.200, tol=0.001):
         .divide(sr_scalars) \
         .set(l8_properties)
     lai = ee.Image(landsat.LandsatSR(input_img)._lai)
-    assert abs(utils.image_value(lai)['lai'] - expected) <= tol
+    assert abs(utils.constant_image_value(lai)['lai'] - expected) <= tol
 
 
 @pytest.mark.parametrize(
@@ -247,7 +247,7 @@ def test_LandsatSR_lst(red, nir, bt, expected, tol=0.001):
         .divide(sr_scalars) \
         .set(l8_properties)
     lst = ee.Image(landsat.LandsatSR(input_img)._lst)
-    assert abs(utils.image_value(lst)['lst'] - expected) <= tol
+    assert abs(utils.constant_image_value(lst)['lst'] - expected) <= tol
 
 
 def test_LandsatSR_ndvi(red=0.2, nir=0.7, expected=0.5556, tol=0.001):

@@ -295,8 +295,9 @@ def tseb_pt(T_air, T_rad, u, p, z, Rs_1, Rs24, vza,
                 {'f_green': f_green, 'a_PT': a_PT_iter, 'Ss': Ss, 'g': g,
                  'Rn_c': Rn_c}) \
             .max(0)
-        H_c = albedo.expression(
-            'Rn_c - LE_c', {'Rn_c': Rn_c, 'LE_c': LE_c})
+        H_c = Rn_c.subtract(LE_c)
+        # H_c = albedo.expression(
+        #     'Rn_c - LE_c', {'Rn_c': Rn_c, 'LE_c': LE_c})
 
         T_c_iter = tseb_utils.temp_separation_tc(
             H_c, fc_q, T_air, T_rad, r_ah_iter, r_s_iter, r_x_iter, r_air, cp)
@@ -316,9 +317,11 @@ def tseb_pt(T_air, T_rad, u, p, z, Rs_1, Rs24, vza,
              'r_x': r_x_iter})
         H = albedo.expression('H_s + H_c', {'H_s': H_s, 'H_c': H_c})
 
-        LE_s = albedo.expression(
-            'Rn_s - G - H_s', {'Rn_s': Rn_s, 'G': G, 'H_s': H_s})
-        LE_c = albedo.expression('Rn_c - H_c', {'Rn_c': Rn_c, 'H_c': H_c})
+        LE_s = Rn_s.subtract(G).subtract(H_s)
+        LE_c = Rn_c.subtract(H_c)
+        # LE_s = albedo.expression(
+        #     'Rn_s - G - H_s', {'Rn_s': Rn_s, 'G': G, 'H_s': H_s})
+        # LE_c = albedo.expression('Rn_c - H_c', {'Rn_c': Rn_c, 'H_c': H_c})
 
         # CGM - Is there a reason this isn't up with the H calculation?
         H = H.where(H.eq(0), 10.0)
@@ -364,8 +367,9 @@ def tseb_pt(T_air, T_rad, u, p, z, Rs_1, Rs24, vza,
         den_s = den_s.updateMask(den_s.neq(0))
         # den_s[den_s == 0.] = np.nan
 
-        EF_s_iter = albedo.expression(
-            'LE_s / den_s', {'LE_s': LE_s, 'den_s': den_s})
+        EF_s_iter = LE_s.divide(den_s)
+        # EF_s_iter = albedo.expression(
+        #     'LE_s / den_s', {'LE_s': LE_s, 'den_s': den_s})
 
         return ee.Dictionary({
             'a_PT': a_PT_iter, 'EF_s': EF_s_iter, 'G': G,
@@ -421,9 +425,11 @@ def tseb_pt(T_air, T_rad, u, p, z, Rs_1, Rs24, vza,
     # LE_c = LE_c.where(ind, Rn_c.add(100))
     H_c = H_c.where(ind, -100)
 
-    LE_s = albedo.expression(
-        'Rn_s - G - H_s', {'Rn_s': Rn_s, 'G': G, 'H_s': H_s})
-    LE_c = albedo.expression('Rn_c - H_c', {'Rn_c': Rn_c, 'H_c': H_c})
+    LE_s = Rn_s.subtract(G).subtract(H_s)
+    LE_c = Rn_c.subtract(H_c)
+    # LE_s = albedo.expression(
+    #     'Rn_s - G - H_s', {'Rn_s': Rn_s, 'G': G, 'H_s': H_s})
+    # LE_c = albedo.expression('Rn_c - H_c', {'Rn_c': Rn_c, 'H_c': H_c})
 
     # The latent heat of vaporization is 2.45 MJ kg-1
     # Assume Rs24 is still in W m-2 day-1 and convert to MJ kg-1

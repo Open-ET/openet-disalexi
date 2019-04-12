@@ -42,13 +42,13 @@ def test_to_jd(timestamp, expected, tol=0.001):
         [ne2['timestamp'], ne3['xy'], 0.5 * (ne3['t_rise'] + ne3['t_end'])],
     ]
 )
-def test_solar_noon_image(timestamp, xy, expected, tol=1E-10):
+def test_solar_noon_image(timestamp, xy, expected, tol=1E-6):
     """Check that the sunset_sunrise function works for real images"""
     output_images = tseb_utils.solar_noon(
         datetime=ee.Date(timestamp),
         # date=ee.Date(datetime.datetime.utcfromtimestamp(timestamp / 1000)),
         lon=ee.Image.pixelLonLat().select(['longitude']).multiply(math.pi / 180))
-    output = utils.image_value(
+    output = utils.point_image_value(
         ee.Image(output_images).rename(['t_noon']), xy=xy)['t_noon']
 
     logging.debug('  Target values: {:.12f}'.format(expected))
@@ -64,7 +64,7 @@ def test_solar_noon_image(timestamp, xy, expected, tol=1E-10):
         [ne2['timestamp'], ne3['xy'], 0.5 * (ne3['t_rise'] + ne3['t_end'])],
     ]
 )
-def test_solar_noon_constant(timestamp, xy, expected, tol=1E-10):
+def test_solar_noon_constant(timestamp, xy, expected, tol=1E-6):
     """Check that the sunset_sunrise function works for constant images"""
     output_images = tseb_utils.solar_noon(
         datetime=ee.Date(timestamp),
@@ -84,13 +84,13 @@ def test_solar_noon_constant(timestamp, xy, expected, tol=1E-10):
         [ne3['timestamp'], ne3['xy'], ne3['zs']],
     ]
 )
-def test_solar_zenith_image(timestamp, xy, expected, tol=1E-10):
+def test_solar_zenith_image(timestamp, xy, expected, tol=1E-6):
     """Check that the solar zenith function works for real images"""
     output_images = tseb_utils.solar_zenith(
         datetime=ee.Date(timestamp),
         lon=ee.Image.pixelLonLat().select(['longitude']).multiply(math.pi / 180),
         lat=ee.Image.pixelLonLat().select(['latitude']).multiply(math.pi / 180))
-    output = utils.image_value(
+    output = utils.point_image_value(
         ee.Image(output_images).rename(['vs']), xy=xy)['vs']
 
     logging.debug('\n  Target values: {}'.format(expected))

@@ -114,6 +114,7 @@ class LandsatTOA(Landsat):
 
         """
         self.raw_image = ee.Image(raw_image)
+        self._id = self.raw_image.get('system:id')
         self._index = self.raw_image.get('system:index')
         self._time_start = self.raw_image.get('system:time_start')
 
@@ -145,6 +146,7 @@ class LandsatTOA(Landsat):
             .set({
                 'system:time_start': self._time_start,
                 'system:index': self._index,
+                'system:id': self._id,
                 'k1_constant': ee.Number(output_k1),
                 'k2_constant': ee.Number(output_k2)})
         super()
@@ -170,6 +172,7 @@ class LandsatTOA(Landsat):
         self.prep_image = self.prep_image.set({
             'system:time_start': self._time_start,
             'system:index': self._index,
+            'system:id': self._id,
         })
         return self.prep_image
 
@@ -299,6 +302,7 @@ class LandsatSR(Landsat):
         scalars = [0.0001, 0.0001, 0.0001, 0.0001, 0.0001, 0.0001, 0.1, 1]
 
         self.raw_image = ee.Image(raw_image)
+        self._id = self.raw_image.get('system:id')
         self._index = self.raw_image.get('system:index')
         self._time_start = self.raw_image.get('system:time_start')
 
@@ -326,6 +330,7 @@ class LandsatSR(Landsat):
             .set({
                 'system:time_start': self._time_start,
                 'system:index': self._index,
+                'system:id': self._id,
                 'k1_constant': ee.Number(k1.get(self._spacecraft_id)),
                 'k2_constant': ee.Number(k2.get(self._spacecraft_id))})
         super()
@@ -353,6 +358,7 @@ class LandsatSR(Landsat):
         self.prep_image = ee.Image(self.prep_image.set({
             'system:time_start': self._time_start,
             'system:index': self._index,
+            'system:id': self._id,
         }))
         return self.prep_image
 
