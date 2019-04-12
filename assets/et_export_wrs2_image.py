@@ -1,6 +1,6 @@
 #--------------------------------
-# Name:         ta_export_wrs2_image.py
-# Purpose:      Compute/Export WRS2 Ta images
+# Name:         et_export_wrs2_image.py
+# Purpose:      Compute/Export WRS2 ET images
 #--------------------------------
 
 import argparse
@@ -24,7 +24,7 @@ import utils
 
 def main(ini_path=None, overwrite_flag=False, delay=0, key=None,
          random_flag=False):
-    """Compute WRS2 Ta images
+    """Compute WRS2 ET images
 
     Parameters
     ----------
@@ -40,7 +40,7 @@ def main(ini_path=None, overwrite_flag=False, delay=0, key=None,
         If True, process dates and tiles in random order (the default is False).
 
     """
-    logging.info('\nCompute WRS2 Ta images')
+    logging.info('\nCompute WRS2 ET images')
 
     ini = utils.read_ini(ini_path)
 
@@ -56,18 +56,18 @@ def main(ini_path=None, overwrite_flag=False, delay=0, key=None,
     model_args = {
         k.lower(): float(v) if utils.is_number(v) else v
         for k, v in dict(ini[model_name]).items()}
-    tair_args = {}
-    for k, v in dict(ini['TAIR']).items():
-        if utils.is_number(v):
-            if v.isdigit():
-                tair_args[k.lower()] = int(v)
-            else:
-                tair_args[k.lower()] = float(v)
-        else:
-            tair_args[k.lower()] = v
-    # tair_args = {
-    #     k.lower(): int(v) if utils.is_number(v) else v
-    #     for k, v in dict(ini['TAIR']).items()}
+    # tair_args = {}
+    # for k, v in dict(ini['TAIR']).items():
+    #     if utils.is_number(v):
+    #         if v.isdigit():
+    #             tair_args[k.lower()] = int(v)
+    #         else:
+    #             tair_args[k.lower()] = float(v)
+    #     else:
+    #         tair_args[k.lower()] = v
+    # # tair_args = {
+    # #     k.lower(): int(v) if utils.is_number(v) else v
+    # #     for k, v in dict(ini['TAIR']).items()}
 
     try:
         collections = str(ini['INPUTS']['collections'])
@@ -90,34 +90,12 @@ def main(ini_path=None, overwrite_flag=False, delay=0, key=None,
     except Exception as e:
         raise e
 
-    if 'cell_size' not in tair_args.keys():
-        tair_args['cell_size'] = 30
-    if 'retile' not in tair_args.keys():
-        tair_args['retile'] = 0
-    if ('source_coll' not in tair_args.keys() or
-            tair_args['source_coll'].lower() == 'none'):
-        tair_args['source_coll'] = None
-    if tair_args['source_coll'] is None and 'ta_seed' in tair_args.keys():
-        ta_seed = tair_args['ta_seed']
-        logging.debug('  Seeding QM with Ta={}'.format(ta_seed))
-
-    logging.info('\nTAIR Parameters')
-    logging.info('  Source:     {}'.format(tair_args['source_coll']))
-    logging.info('  Cell size:  {}'.format(tair_args['cell_size']))
-    logging.info('  Retile:     {}'.format(tair_args['retile']))
-    logging.info('  Step Size:  {}'.format(tair_args['step_size']))
-    logging.info('  Step Count: {}'.format(tair_args['step_count']))
+    logging.info('\nDISALEXI Parameters')
+    logging.info('  Stabil iter: {}'.format(int(model_args['stabil_iterations'])))
+    logging.info('  Albedo iter: {}'.format(int(model_args['albedo_iterations'])))
 
     # Output Ta daily image collection
-    ta_wrs2_coll_id = '{}'.format(ini['EXPORT']['export_coll'])
-
-    # ta_values = list(range(tair_args['ta_start'], tair_args['ta_stop'],
-    #                        tair_args['ta_step']))
-    # logging.info('  Start: {}'.format(tair_args['ta_start']))
-    # logging.info('  Stop:  {}'.format(tair_args['ta_stop']))
-    # logging.info('  Step:  {}'.format(tair_args['ta_step']))
-    # if 'ta_iterations' not in tair_args.keys():
-    #     logging.info('  Iterations: {}'.format(tair_args['ta_iterations']))
+    et_wrs2_coll_id = '{}'.format(ini['EXPORT']['export_coll'])
 
     logging.info('\nInitializing Earth Engine')
     if key:
@@ -181,7 +159,7 @@ def main(ini_path=None, overwrite_flag=False, delay=0, key=None,
     # Get current asset list
     logging.debug('\nGetting asset list')
     # DEADBEEF - daily is hardcoded in the asset_id for now
-    asset_list = utils.get_ee_assets(ta_wrs2_coll_id)
+    asset_list = utils.get_ee_assets(et_wrs2_coll_id)
 
     # Get current running tasks
     tasks = utils.get_ee_tasks()
@@ -315,7 +293,7 @@ def main(ini_path=None, overwrite_flag=False, delay=0, key=None,
         image_id_list = sorted(list(set(
             landsat_coll.aggregate_array('system:id').getInfo())))
         if not image_id_list:
-            logging.info('  Empty image ID list, skipping')
+            logging.debug('  Empty image ID list, skipping')
             continue
         # if random_flag:
         #     random.shuffle(image_id_list)
@@ -340,7 +318,7 @@ def main(ini_path=None, overwrite_flag=False, delay=0, key=None,
                 .format(index=scene_id.lower())
             logging.debug('  Export ID: {}'.format(export_id))
 
-            asset_id = '{}/{}'.format(ta_wrs2_coll_id, scene_id)
+            asset_id = '{}/{}'.format(et_wrs2_coll_id, scene_id)
             logging.debug('  Asset ID: {}'.format(asset_id))
 
             if overwrite_flag:
@@ -376,33 +354,19 @@ def main(ini_path=None, overwrite_flag=False, delay=0, key=None,
                 # 'cloud_cover_max': float(ini['INPUTS']['cloud_cover']),
             }
             properties.update(model_args)
-            properties.update(tair_args)
+            # properties.update(tair_args)
 
-            # Either Ta is being read from an existing collection
-            #   or it will be computed f
-            if tair_args['source_coll'] is not None:
-                ta_source_coll = ee.ImageCollection(tair_args['source_coll'])\
-                    .filterMetadata('id', 'equals', image_id)
-                if ta_source_coll.size().getInfo() == 0:
-                    logging.info('  No images in Ta source coll, skipping')
-                    continue
-                ta_source_img = ee.Image(ta_source_coll.first()).select(['ta'])
-            else:
-                ta_source_img = alexi_mask.add(ta_seed)
-
+            # if tair_args['iteration'] <= 0:
             landsat_img = ee.Image(image_id)
-            d_obj = disalexi.Image(
-                disalexi.LandsatSR(landsat_img).prep(), **model_args)
-            ta_img = d_obj.ta_qm(ta_img=ta_source_img,
-                                 step_size=tair_args['step_size'],
-                                 step_count=tair_args['step_count'],
-                                 cell_size=tair_args['cell_size'])
-            # ta = d_obj.ta_iter(cellsize=tair_args['ta_cellsize'],
-            #                    ta_init=[tair_args['ta_start'],
-            #                             tair_args['ta_stop']],
-            #                    iterations=tair_args['ta_iterations'],
-            #                    method='golden')
-            export_img = ta_img.select(['ta', 'bias']).float()\
+            d_obj = disalexi.Image(disalexi.LandsatSR(landsat_img).prep(),
+                                   **model_args)
+            et_a = d_obj.et(ta_img=ee.Image.constant(250)) \
+                .select(['et'], ['et_a']).float()
+            # et_d = d_obj.et(ta_img=ee.Image.constant(350)) \
+            #     .select(['et'], ['et_d']).float()
+
+            # export_img = ee.Image([et_a, et_d])\
+            export_img = et_a\
                 .set({
                     'id': landsat_img.get('system:id'),
                     'system:index': landsat_img.get('system:index'),
@@ -412,32 +376,16 @@ def main(ini_path=None, overwrite_flag=False, delay=0, key=None,
                 })\
                 .set(properties)
 
-            if tair_args['retile'] and tair_args['retile'] > 0:
-                export_img = export_img.retile(tair_args['retile'])
+            # DEADBEEF - Trying to see if retile will help
+            # if tair_args['retile'] and tair_args['retile'] > 0:
+            #     export_img = export_img.retile(tair_args['retile'])
+            export_img = export_img.retile(8)
 
-            # Build the export transform and shape from the Landsat image
-            image_xy = landsat_img.geometry().bounds(1, 'EPSG:4326')\
-                .coordinates().get(0).getInfo()
-            export_extent = [min([xy[0] for xy in image_xy]),
-                             min([xy[1] for xy in image_xy]),
-                             max([xy[0] for xy in image_xy]),
-                             max([xy[1] for xy in image_xy])]
-            # Adjust extent to the cell size
-            export_extent[0] = math.floor((
-                export_extent[0] - alexi_x) / alexi_cs) * alexi_cs + alexi_x
-            export_extent[1] = math.floor((
-                export_extent[1] - alexi_y) / alexi_cs) * alexi_cs + alexi_y
-            export_extent[2] = math.ceil((
-                export_extent[2] - alexi_x) / alexi_cs) * alexi_cs + alexi_x
-            export_extent[3] = math.ceil((
-                export_extent[3] - alexi_y) / alexi_cs) * alexi_cs + alexi_y
-            export_geo = [alexi_cs, 0, export_extent[0], 0,
-                          -alexi_cs, export_extent[3]]
-            export_shape = [
-                int(abs(export_extent[2] - export_extent[0]) / alexi_cs),
-                int(abs(export_extent[3] - export_extent[1]) / alexi_cs)]
-            logging.debug('  CRS: {}'.format(alexi_crs))
-            logging.debug('  Extent: {}'.format(export_extent))
+            landsat_info = landsat_img.select([0]).getInfo()
+            export_crs = landsat_info['bands'][0]['crs']
+            export_geo = landsat_info['bands'][0]['crs_transform']
+            export_shape = landsat_info['bands'][0]['dimensions']
+            logging.debug('  CRS: {}'.format(export_crs))
             logging.debug('  Geo: {}'.format(export_geo))
             logging.debug('  Shape: {}'.format(export_shape))
 
@@ -447,7 +395,7 @@ def main(ini_path=None, overwrite_flag=False, delay=0, key=None,
                 image=export_img,
                 description=export_id,
                 assetId=asset_id,
-                crs=alexi_crs,
+                crs=export_crs,
                 crsTransform='[' + ','.join(list(map(str, export_geo))) + ']',
                 dimensions='{0}x{1}'.format(*export_shape),
             )
@@ -483,7 +431,7 @@ def parse_landsat_id(system_index):
 def arg_parse():
     """"""
     parser = argparse.ArgumentParser(
-        description='Compute/export WRS2 Ta images',
+        description='Compute/export WRS2 ET images',
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument(
         '-i', '--ini', type=utils.arg_valid_file,
