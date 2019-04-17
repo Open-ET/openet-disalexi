@@ -31,6 +31,29 @@ def point_coll_value(tol=0.001):
 
 
 @pytest.mark.parametrize(
+    # Note: These are made up values
+    'input, expected',
+    [
+        ['True', True],
+        ['true', True],
+        ['t', True],
+        ['False', False],
+        ['false', False],
+        ['f', False],
+        [True, True],
+        [False, False],
+    ]
+)
+def test_boolean(input, expected):
+    assert utils.boolean(input) == expected
+
+
+def test_boolean_exception():
+    with pytest.raises(ValueError):
+        utils.boolean('DEADBEEF')
+
+
+@pytest.mark.parametrize(
     'input, expected',
     [
         ['2015-07-13T18:33:39', 1436745600000],

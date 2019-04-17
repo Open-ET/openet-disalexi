@@ -70,6 +70,21 @@ def point_coll_value(coll, xy, scale=1):
     # return pd.DataFrame.from_dict(info_dict)
 
 
+def boolean(x):
+    """Convert boolean like objects to boolean"""
+    if type(x) is str:
+        if x.upper() in ['TRUE', 'T']:
+            return True
+        elif x.upper() in ['FALSE', 'F']:
+            return False
+        else:
+            raise ValueError('"{}" could not be interpreted as bool'.format(x))
+    elif type(x) is bool:
+        return x
+    else:
+        raise ValueError('"{}" could not be interpreted as bool'.format(x))
+
+
 def date_to_time_0utc(date):
     """Get the 0 UTC time_start for a date
 
@@ -119,3 +134,5 @@ def valid_date(date_str, date_fmt='%Y-%m-%d'):
         return True
     except Exception as e:
         return False
+
+

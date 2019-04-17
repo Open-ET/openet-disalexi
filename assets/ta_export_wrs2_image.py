@@ -367,7 +367,7 @@ def main(ini_path=None, overwrite_flag=False, delay=0, key=None,
                     .format(index=scene_id.lower(), iter=iteration)
                 logging.debug('  Export ID: {}'.format(export_id))
 
-                asset_id = '{}/{}_{}'.format(
+                asset_id = '{}/{}_{:02d}'.format(
                     ta_wrs2_coll_id, scene_id, iteration)
                 logging.debug('  Asset ID: {}'.format(asset_id))
 
@@ -411,6 +411,7 @@ def main(ini_path=None, overwrite_flag=False, delay=0, key=None,
                                        **model_args)
 
                 if iteration <= 0:
+                    # For initial iteration compute bias at 250 and 350 K
                     a_img = d_obj.ta_coarse(
                             ta_img=ee.Image.constant(250),
                             cell_size=tair_args['cell_size']) \
@@ -425,9 +426,37 @@ def main(ini_path=None, overwrite_flag=False, delay=0, key=None,
                     export_img = ee.Image([a_img, b_img])\
                         .updateMask(a_img.select(['bias_a']).And(
                             b_img.select(['bias_b'])))\
-                        .float()
+                        .double()
+                # elif iteration <= 4:
+                #     # Interpolate new Ta from the bias and test directly
+                #     # Roughly equivalent to false position method
+                #     ta_img = ee.Image('{}/{}_{:02d}'.format(
+                #         ta_wrs2_coll_id, scene_id, iteration - 1))
+                #     # ta_img = ee.Image(ta_coll
+                #     #     .filterMetadata('date', 'equals', export_date)
+                #     #     .filterMetadata('iteration', 'equals', iteration - 1)
+                #     #     .first())
+                #     ta_a = ta_img.select(['ta_a'])
+                #     ta_b = ta_img.select(['ta_b'])
+                #     bias_a = ta_img.select(['bias_a'])
+                #     bias_b = ta_img.select(['bias_b'])
+                #
+                #     ta_x = bias_a.multiply(ta_b).subtract(bias_b.multiply(ta_a))\
+                #         .divide(bias_a.subtract(bias_b))
+                #     bias_x = d_obj.et_bias(d_obj.et_coarse(ta_x))
+                #
+                #     # Use the new value if it minimizes the bias and brackets 0
+                #     mask1 = bias_x.lt(bias_b).And(bias_x.gt(0))
+                #     mask2 = bias_x.gt(bias_a).And(bias_x.lt(0))
+                #     ta_b = ta_b.where(mask1, ta_x)
+                #     bias_b = bias_b.where(mask1, bias_x)
+                #     ta_a = ta_a.where(mask2, ta_x)
+                #     bias_a = bias_a.where(mask2, bias_x)
+                #     export_img = ee.Image([ta_a, bias_a, ta_b, bias_b])
                 else:
-                    ta_img = ee.Image('{}/{}_{}'.format(
+                    # Generate test Ta randomly from a triangular distribution
+                    # Center the distribution on the interpolated zero bias Ta
+                    ta_img = ee.Image('{}/{}_{:02d}'.format(
                         ta_wrs2_coll_id, scene_id, iteration - 1))
                     # ta_img = ee.Image(ta_coll
                     #     .filterMetadata('date', 'equals', export_date)
@@ -437,28 +466,68 @@ def main(ini_path=None, overwrite_flag=False, delay=0, key=None,
                     ta_b = ta_img.select(['ta_b'])
                     bias_a = ta_img.select(['bias_a'])
                     bias_b = ta_img.select(['bias_b'])
-                    # abs_a = ta_img.select(['bias_a']).abs()
-                    # abs_b = ta_img.select(['bias_b']).abs()
 
-                    # Compute new test Ta and biases
-                    ta_c = ta_b.subtract(ta_b.subtract(ta_a).multiply(0.618034))
-                    ta_d = ta_a.add(ta_b.subtract(ta_a).multiply(0.618034))
-                    bias_c = d_obj.et_bias(d_obj.et_coarse(ta_c))
-                    bias_d = d_obj.et_bias(d_obj.et_coarse(ta_d))
-                    abs_c = bias_c.abs()
-                    abs_d = bias_d.abs()
+                    ta_c = bias_a.multiply(ta_b).subtract(bias_b.multiply(ta_a))\
+                        .divide(bias_a.subtract(bias_b))
+                    # ta_c = ta_a.add(ta_b).multiply(0.5)
 
-                    # Use the new values if they minimize the bias
-                    # If f(c) < f(d): move the data from d to b and c to d
-                    mask1 = abs_c.lt(abs_d)
-                    # If f(c) > f(d): move the data from c to a and d to c
-                    mask2 = abs_c.gte(abs_d)
-                    ta_b = ta_b.where(mask1, ta_d)
-                    bias_b = bias_b.where(mask1, bias_d)
-                    ta_a = ta_a.where(mask2, ta_c)
-                    bias_a = bias_a.where(mask2, bias_c)
+                    # For now use a single random number for the whole scene
+                    # Need to check if ee.Image.random() will work though
+                    u = ta_b.multiply(0).add(random.random())
+                    # u = ta_b.multiply(0).add(ee.Image.random(0))
 
-                    export_img = ee.Image([ta_a, ta_b, bias_a, bias_b])
+                    a = u.multiply(ta_b.subtract(ta_a))\
+                        .multiply(ta_c.subtract(ta_a)).sqrt().add(ta_a)
+                    b = u.multiply(-1).add(1)\
+                        .multiply(ta_b.subtract(ta_a))\
+                        .multiply(ta_b.subtract(ta_c))\
+                        .sqrt().multiply(-1).add(ta_b)
+                    fc = ta_c.subtract(ta_a).divide(ta_b.subtract(ta_a))
+                    ta_x = a.where(u.gt(fc), b)
+                    bias_x = d_obj.et_bias(d_obj.et_coarse(ta_x))
+
+                    # Use the new value if it minimizes the bias and brackets 0
+                    mask1 = bias_x.lt(bias_b).And(bias_x.gt(0))
+                    mask2 = bias_x.gt(bias_a).And(bias_x.lt(0))
+                    ta_b = ta_b.where(mask1, ta_x)
+                    bias_b = bias_b.where(mask1, bias_x)
+                    ta_a = ta_a.where(mask2, ta_x)
+                    bias_a = bias_a.where(mask2, bias_x)
+                    export_img = ee.Image([ta_a, bias_a, ta_b, bias_b])
+
+                # else:
+                #     ta_img = ee.Image('{}/{}_{}'.format(
+                #         ta_wrs2_coll_id, scene_id, iteration - 1))
+                #     # ta_img = ee.Image(ta_coll
+                #     #     .filterMetadata('date', 'equals', export_date)
+                #     #     .filterMetadata('iteration', 'equals', iteration - 1)
+                #     #     .first())
+                #     ta_a = ta_img.select(['ta_a'])
+                #     ta_b = ta_img.select(['ta_b'])
+                #     bias_a = ta_img.select(['bias_a'])
+                #     bias_b = ta_img.select(['bias_b'])
+                #     # abs_a = ta_img.select(['bias_a']).abs()
+                #     # abs_b = ta_img.select(['bias_b']).abs()
+                #
+                #     # Compute new test Ta and biases
+                #     ta_c = ta_b.subtract(ta_b.subtract(ta_a).multiply(0.618034))
+                #     ta_d = ta_a.add(ta_b.subtract(ta_a).multiply(0.618034))
+                #     bias_c = d_obj.et_bias(d_obj.et_coarse(ta_c))
+                #     bias_d = d_obj.et_bias(d_obj.et_coarse(ta_d))
+                #     abs_c = bias_c.abs()
+                #     abs_d = bias_d.abs()
+                #
+                #     # Use the new values if they minimize the bias
+                #     # If f(c) < f(d): move the data from d to b and c to d
+                #     mask1 = abs_c.lt(abs_d)
+                #     # If f(c) > f(d): move the data from c to a and d to c
+                #     mask2 = abs_c.gte(abs_d)
+                #     ta_b = ta_b.where(mask1, ta_d)
+                #     bias_b = bias_b.where(mask1, bias_d)
+                #     ta_a = ta_a.where(mask2, ta_c)
+                #     bias_a = bias_a.where(mask2, bias_c)
+                #
+                #     export_img = ee.Image([ta_a, bias_a, ta_b, bias_b])
 
                 export_img = export_img\
                     .set({

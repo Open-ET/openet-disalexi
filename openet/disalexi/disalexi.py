@@ -44,7 +44,11 @@ class Image(object):
             stabil_iterations=6,
             albedo_iterations=3,
             ta_interp_flag=True,
+            ta_smooth_flag=True,
             rs_interp_flag=True,
+            # etr_source=None,
+            # etr_band=None,
+            # etr_factor=None,
         ):
         """Initialize an image for computing DisALEXI
 
@@ -73,6 +77,7 @@ class Image(object):
         albedo_iterations : int
             Number albedo separation iterations (the default is 10).
         ta_interp_flag : bool
+        ta_smooth_flag : bool
         rs_interp_flag : bool
 
         Notes
@@ -157,29 +162,9 @@ class Image(object):
         self.windspeed_source = windspeed_source
         self.stabil_iter = int(stabil_iterations)
         self.albedo_iter = int(albedo_iterations)
-        self.ta_interp_flag = ta_interp_flag
-        self.rs_interp_flag = rs_interp_flag
-
-        # Convert flags from string to bool if necessary
-        # This should be moved to a utils function
-        if type(self.ta_interp_flag) is str:
-            if self.ta_interp_flag.upper() in ['TRUE', 'T']:
-                self.ta_interp_flag = True
-            elif self.ta_interp_flag.upper() in ['FALSE', 'F']:
-                self.ta_interp_flag = False
-            else:
-                raise ValueError(
-                    'ta_interp_flag "{}" could not be interpreted as '
-                    'bool'.format(self.ta_interp_flag))
-        if type(self.rs_interp_flag) is str:
-            if self.rs_interp_flag.upper() in ['TRUE', 'T']:
-                self.rs_interp_flag = True
-            elif self.rs_interp_flag.upper() in ['FALSE', 'F']:
-                self.rs_interp_flag = False
-            else:
-                raise ValueError(
-                    'rs_interp_flag "{}" could not be interpreted as '
-                    'bool'.format(self.rs_interp_flag))
+        self.ta_interp_flag = utils.boolean(ta_interp_flag)
+        self.ta_smooth_flag = utils.boolean(ta_smooth_flag)
+        self.rs_interp_flag = utils.boolean(rs_interp_flag)
 
         # Set default land cover image and type
         # For now default to CONUS and use default if image and type were not set
@@ -219,7 +204,8 @@ class Image(object):
         # self.transform = image.select([0]).projection().getInfo()['transform']
 
         # CGM - This should probably be set in et_alexi() but that wasn't working
-        if self.alexi_source.upper() == 'CONUS_V001':
+        if (type(self.alexi_source) is str and
+                self.alexi_source.upper() == 'CONUS_V001'):
             self.alexi_geo = [0.04, 0, -125.04, 0, -0.04, 49.8]
             self.alexi_crs = 'EPSG:4326'
         else:
@@ -374,7 +360,9 @@ class Image(object):
             datetime=self.date, stabil_iter=self.stabil_iter,
             albedo_iter=self.albedo_iter,
         )
-        return et.rename(['et']).set(self.properties).double()
+        return et.rename(['et']).double()\
+            .set(self.properties)\
+            .set({'ta_iteration': self.ta.get('iteration')})
 
     # @lazy_property
     # def etr(self):
@@ -528,11 +516,13 @@ class Image(object):
         # if self.ta_source is None:
         #     raise ValueError('ta_source must be set to compute et')
         if utils.is_number(self.ta_source):
-            ta_img = ee.Image.constant(float(self.ta_source))
+            ta_img = ee.Image.constant(float(self.ta_source))\
+                .set({'ta_iteration': 'constant'})
         elif isinstance(self.ta_source, ee.computedobject.ComputedObject):
-            ta_img = self.ta_source
+            ta_img = ee.Image(self.ta_source)\
+                .set({'ta_iteration': 'image'})
         elif self.ta_source.upper() == 'CONUS_V001':
-            ta_coll_id = 'projects/disalexi/ta/CONUS_V001'
+            ta_coll_id = 'projects/disalexi/ta/CONUS_V001_wrs2'
             ta_coll = ee.ImageCollection(ta_coll_id)\
                 .filterMetadata('id', 'equals', self.id)\
                 .limit(1, 'iteration', False)
@@ -547,11 +537,16 @@ class Image(object):
             ta_b = input_img.select(['ta_b'])
             ta_img = ta_a.multiply(bias_b).subtract(ta_b.multiply(bias_a))\
                 .divide(bias_b.subtract(bias_a))
-            ta_img = ee.Image(ta_img.copyProperties(input_img))
+            ta_img = ee.Image(ta_img.copyProperties(input_img))\
+                .set({'ta_iteration': ee.Number(input_img.get('iteration')).int()})
         else:
             raise ValueError('Unsupported ta_source: {}\n'.format(
                 self.ta_source))
-        return ta_img.rename(['ta'])
+
+        if self.ta_smooth_flag:
+            ta_img = ta_img.resample('bilinear')
+
+        return ta_img.rename(['ta']).set(self.properties)
 
     @lazy_property
     def time(self):
@@ -810,20 +805,3 @@ class Image(object):
     def et_bias(self, et_coarse_img):
         """Compute the bias between the computed ET and the ALEXI ET"""
         return et_coarse_img.subtract(self.et_alexi).rename(['bias'])
-
-    # def smooth(self, T_air):
-    #     """Resample image
-    #
-    #     Parameters
-    #     ----------
-    #     T_air
-    #
-    #     Returns
-    #     -------
-    #     image : ee.Image
-    #
-    #     """
-    #     T_air = ee.Image(T_air) \
-    #         .resample('bilinear') \
-    #         .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)
-    #     return T_air

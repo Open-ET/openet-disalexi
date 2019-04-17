@@ -148,13 +148,13 @@ def test_Image_init_date_properties():
 @pytest.mark.parametrize(
     'source, xy, expected',
     [
-        ['CONUS_V001', TEST_POINT, 294.8],
+        ['CONUS_V001', TEST_POINT, 295.9595],
         [ee.Image('USGS/SRTMGL1_003').multiply(0).add(10), TEST_POINT, 10],
         ['294.8', TEST_POINT, 294.8],  # Check constant values
         [294.8, TEST_POINT, 294.8],    # Check constant values
     ]
 )
-def test_Image_ta_sources(source, xy, expected, tol=0.1):
+def test_Image_ta_sources(source, xy, expected, tol=0.01):
     d = disalexi.Image(default_image(), ta_source=source)
     output = utils.point_image_value(ee.Image(d.ta), xy)
     assert abs(output['ta'] - expected) <= tol
@@ -165,9 +165,14 @@ def test_Image_ta_sources_exception():
         utils.getinfo(disalexi.Image(default_image(), ta_source='').ta)
 
 
-def test_Image_ta_band_name():
-    output = utils.getinfo(disalexi.Image(default_image()).ta)['bands'][0]['id']
-    assert output == 'ta'
+def test_Image_ta_properties():
+    """Test if properties are set on the ET image"""
+    output =  utils.getinfo(default_image_obj().ta)
+    assert output['bands'][0]['id'] == 'ta'
+    assert output['properties']['system:index'] == SCENE_ID
+    assert output['properties']['system:time_start'] == SCENE_TIME
+    assert output['properties']['image_id'] == COLL_ID + SCENE_ID
+    assert output['properties']['ta_iteration'] == 9
 
 
 @pytest.mark.parametrize(
@@ -355,13 +360,14 @@ def test_Image_et_values(tol=0.0001):
     assert abs(output['et'] - 12.00397) <= tol
 
 
-def test_Image_et_properties(tol=0.0001):
+def test_Image_et_properties():
     """Test if properties are set on the ET image"""
     output =  utils.getinfo(default_image_obj().et)
     assert output['bands'][0]['id'] == 'et'
     assert output['properties']['system:index'] == SCENE_ID
     assert output['properties']['system:time_start'] == SCENE_TIME
     assert output['properties']['image_id'] == COLL_ID + SCENE_ID
+    assert output['properties']['ta_iteration'] == 9
 
 
 # @pytest.mark.parametrize(
