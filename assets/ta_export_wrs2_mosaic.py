@@ -56,6 +56,7 @@ def main(ini_path=None, overwrite_flag=False, delay=0, key=None,
     model_args = {
         k.lower(): float(v) if utils.is_number(v) else v
         for k, v in dict(ini[model_name]).items()}
+
     tair_args = {}
     for k, v in dict(ini['TAIR']).items():
         if utils.is_number(v):
@@ -97,12 +98,17 @@ def main(ini_path=None, overwrite_flag=False, delay=0, key=None,
     if ('source_coll' not in tair_args.keys() or
             tair_args['source_coll'].lower() == 'none'):
         tair_args['source_coll'] = None
-    if tair_args['source_coll'] is None and 'ta_seed' in tair_args.keys():
-        ta_seed = tair_args['ta_seed']
-        logging.debug('  Seeding QM with Ta={}'.format(ta_seed))
+    # Clear Ta start value if is source is set
+    if tair_args['source_coll'] is not None:
+        tair_args['ta_start'] = None
+
+    logging.info('\nDISALEXI Parameters')
+    logging.info('  Stabil iter: {}'.format(int(model_args['stabil_iterations'])))
+    logging.info('  Albedo iter: {}'.format(int(model_args['albedo_iterations'])))
 
     logging.info('\nTAIR Parameters')
     logging.info('  Source:     {}'.format(tair_args['source_coll']))
+    logging.info('  Ta Start:   {}'.format(tair_args['ta_start']))
     logging.info('  Cell size:  {}'.format(tair_args['cell_size']))
     logging.info('  Retile:     {}'.format(tair_args['retile']))
     logging.info('  Step Size:  {}'.format(tair_args['step_size']))
@@ -110,14 +116,6 @@ def main(ini_path=None, overwrite_flag=False, delay=0, key=None,
 
     # Output Ta daily image collection
     ta_wrs2_coll_id = '{}'.format(ini['EXPORT']['export_coll'])
-
-    # ta_values = list(range(tair_args['ta_start'], tair_args['ta_stop'],
-    #                        tair_args['ta_step']))
-    # logging.info('  Start: {}'.format(tair_args['ta_start']))
-    # logging.info('  Stop:  {}'.format(tair_args['ta_stop']))
-    # logging.info('  Step:  {}'.format(tair_args['ta_step']))
-    # if 'ta_iterations' not in tair_args.keys():
-    #     logging.info('  Iterations: {}'.format(tair_args['ta_iterations']))
 
     logging.info('\nInitializing Earth Engine')
     if key:
@@ -129,10 +127,11 @@ def main(ini_path=None, overwrite_flag=False, delay=0, key=None,
 
     # Get an ET image to set the Ta values to
     logging.debug('\nALEXI ET properties')
-    alexi_coll_id = ini['DISALEXI']['alexi_et_source']
+    alexi_coll_id = ini['DISALEXI']['alexi_source']
     if alexi_coll_id.upper() == 'CONUS_V001':
         alexi_coll_id = 'projects/disalexi/alexi/CONUS_V001'
-        alexi_mask = ee.Image('projects/disalexi/alexi/conus_v001_mask')
+        alexi_mask = ee.Image('projects/disalexi/alexi/conus_v001_mask')\
+            .double().multiply(0)
     else:
         raise ValueError('unsupported ALEXI source')
     # alexi_coll = ee.ImageCollection(alexi_coll_id)
@@ -323,8 +322,8 @@ def main(ini_path=None, overwrite_flag=False, delay=0, key=None,
         for image_id in image_id_list:
             scene_id = image_id.split('/')[-1]
             landsat, path, row, year, month, day = parse_landsat_id(scene_id)
-            image_dt = datetime.datetime.strptime(
-                '{:04d}{:02d}{:02d}'.format(year, month, day), '%Y%m%d')
+            # image_dt = datetime.datetime.strptime(
+            #     '{:04d}{:02d}{:02d}'.format(year, month, day), '%Y%m%d')
             # image_date = image_dt.date().isoformat()
             # logging.debug('  Date: {}'.format(image_date))
             # logging.debug('  DOY: {}'.format(doy))
@@ -386,30 +385,38 @@ def main(ini_path=None, overwrite_flag=False, delay=0, key=None,
                 if ta_source_coll.size().getInfo() == 0:
                     logging.info('  No images in Ta source coll, skipping')
                     continue
-                ta_source_img = ee.Image(ta_source_coll.first()).select(['ta'])
+
+                # A lot code to figure out the starting Ta value
+                # This identifies the first Ta that has a positive bias and
+                #   a bias that is larger than the previous bias
+                # It then selects the Ta for the previous step
+                # This should bracket a bias of zero but it is not guaranteed
+                input_img = ee.Image(ta_source_coll.first())
+                ta_array = input_img.select('step_\\d+_ta').toArray()
+                bias_array = input_img.select('step_\\d+_bias').toArray()
+                diff = bias_array.arraySlice(0, 1)\
+                    .subtract(bias_array.arraySlice(0, 0, -1))
+                index = diff.gt(0).And(bias_array.arraySlice(0, 1).gt(0))
+                # Intentionally use 0,0,-1 slice here (instead of 0,1)
+                #   to get Ta before bias goes positive
+                ta_source_img = ta_array.arraySlice(0, 0, -1).arrayMask(index)\
+                    .arraySlice(0, 0, 1).arrayFlatten([['array']])\
+                    .rename(['ta'])
             else:
-                ta_source_img = alexi_mask.add(ta_seed)
+                ta_source_img = alexi_mask.add(float(tair_args['ta_start']))\
+                    .rename(['ta'])
 
             landsat_img = ee.Image(image_id)
-            d_obj = disalexi.Image(
-                disalexi.LandsatSR(landsat_img).prep(), **model_args)
-            ta_img = d_obj.ta_qm(ta_img=ta_source_img,
-                                 step_size=tair_args['step_size'],
-                                 step_count=tair_args['step_count'],
-                                 cell_size=tair_args['cell_size'])
-            # ta = d_obj.ta_iter(cellsize=tair_args['ta_cellsize'],
-            #                    ta_init=[tair_args['ta_start'],
-            #                             tair_args['ta_stop']],
-            #                    iterations=tair_args['ta_iterations'],
-            #                    method='golden')
-            export_img = ta_img.select(['ta', 'bias']).float()\
-                .set({
-                    'id': landsat_img.get('system:id'),
-                    'system:index': landsat_img.get('system:index'),
-                    'system:time_start': landsat_img.get('system:time_start'),
-                    'spacecraft_id': landsat_img.get('SATELLITE'),
-                    'cloud_cover_land': landsat_img.get('CLOUD_COVER_LAND'),
-                })\
+            d_obj = disalexi.Image(disalexi.LandsatSR(landsat_img).prep(),
+                                   **model_args)
+            export_img = d_obj.ta_mosaic(ta_img=ta_source_img,
+                                         step_size=tair_args['step_size'],
+                                         step_count=tair_args['step_count'])\
+                .set({'id': landsat_img.get('system:id'),
+                      'system:index': landsat_img.get('system:index'),
+                      'system:time_start': landsat_img.get('system:time_start'),
+                      'spacecraft_id': landsat_img.get('SATELLITE'),
+                      'cloud_cover_land': landsat_img.get('CLOUD_COVER_LAND')})\
                 .set(properties)
 
             if tair_args['retile'] and tair_args['retile'] > 0:
@@ -422,15 +429,16 @@ def main(ini_path=None, overwrite_flag=False, delay=0, key=None,
                              min([xy[1] for xy in image_xy]),
                              max([xy[0] for xy in image_xy]),
                              max([xy[1] for xy in image_xy])]
+
             # Adjust extent to the cell size
-            export_extent[0] = math.floor((
-                export_extent[0] - alexi_x) / alexi_cs) * alexi_cs + alexi_x
-            export_extent[1] = math.floor((
-                export_extent[1] - alexi_y) / alexi_cs) * alexi_cs + alexi_y
-            export_extent[2] = math.ceil((
-                export_extent[2] - alexi_x) / alexi_cs) * alexi_cs + alexi_x
-            export_extent[3] = math.ceil((
-                export_extent[3] - alexi_y) / alexi_cs) * alexi_cs + alexi_y
+            export_extent[0] = round(math.floor((
+                export_extent[0] - alexi_x) / alexi_cs) * alexi_cs + alexi_x, 8)
+            export_extent[1] = round(math.floor((
+                export_extent[1] - alexi_y) / alexi_cs) * alexi_cs + alexi_y, 8)
+            export_extent[2] = round(math.ceil((
+                export_extent[2] - alexi_x) / alexi_cs) * alexi_cs + alexi_x, 8)
+            export_extent[3] = round(math.ceil((
+                export_extent[3] - alexi_y) / alexi_cs) * alexi_cs + alexi_y, 8)
             export_geo = [alexi_cs, 0, export_extent[0], 0,
                           -alexi_cs, export_extent[3]]
             export_shape = [
