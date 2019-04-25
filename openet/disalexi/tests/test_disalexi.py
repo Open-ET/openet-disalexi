@@ -24,7 +24,7 @@ img_date_start = ee.Date('2014-07-08', 'GMT').millis()
 # img_hour = ee.Date('2014-05-21T17:05', 'GMT').millis()
 img_date = ee.Date('2014-07-08', 'GMT').millis()
 # Time used in IDL is hours and fractional minutes (no seconds)
-img_time = 17 + 5.0/60
+img_time = 17 + 5.0 / 60
 
 test_img = ee.Image([
     ee.Image(asset_ws + 'albedo'),

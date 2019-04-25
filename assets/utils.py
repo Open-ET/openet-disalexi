@@ -170,6 +170,27 @@ def get_ee_tasks(states=['RUNNING', 'READY'], verbose=True):
     return tasks
 
 
+def getinfo(ee_obj, n=4):
+    """Make an exponential back off getInfo call on an Earth Engine object"""
+    output = None
+    for i in range(1, n):
+        try:
+            output = ee_obj.getInfo()
+        except ee.ee_exception.EEException as e:
+            if 'Earth Engine memory capacity exceeded' in str(e):
+                logging.info('    Resending query ({}/10)'.format(i))
+                logging.debug('    {}'.format(e))
+                time.sleep(i ** 2)
+            else:
+                raise e
+
+        if output:
+            break
+
+    # output = ee_obj.getInfo()
+    return output
+
+
 def image_exists(asset_id):
     try:
         ee.Image(asset_id).getInfo()
@@ -227,6 +248,14 @@ def parse_int_set(nputstr=""):
     # Report invalid tokens before returning valid selection
     # print "Invalid set: " + str(invalid)
     return selection
+
+
+def point_image_value(image, xy, scale=1):
+    """Extract the output value from a calculation at a point"""
+    return getinfo(ee.Image(image).reduceRegion(
+        reducer=ee.Reducer.first(), geometry=ee.Geometry.Point(xy),
+        scale=scale))
+
 
 def read_ini(ini_path):
     logging.debug('\nReading Input File')

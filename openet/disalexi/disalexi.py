@@ -41,7 +41,7 @@ class Image(object):
             rs_daily_source='MERRA2',
             rs_hourly_source='MERRA2',
             windspeed_source='CFSV2',
-            stabil_iterations=6,
+            stabil_iterations=10,
             albedo_iterations=3,
             ta_interp_flag=True,
             ta_smooth_flag=True,
@@ -160,8 +160,8 @@ class Image(object):
         self.rs_daily_source = rs_daily_source
         self.rs_hourly_source = rs_hourly_source
         self.windspeed_source = windspeed_source
-        self.stabil_iter = int(stabil_iterations)
-        self.albedo_iter = int(albedo_iterations)
+        self.stabil_iter = int(stabil_iterations + 0.5)
+        self.albedo_iter = int(albedo_iterations + 0.5)
         self.ta_interp_flag = utils.boolean(ta_interp_flag)
         self.ta_smooth_flag = utils.boolean(ta_smooth_flag)
         self.rs_interp_flag = utils.boolean(rs_interp_flag)
@@ -347,11 +347,11 @@ class Image(object):
 
         """
         et = tseb.tseb_pt(
-            T_air=self.ta, T_rad=self.lst,
+            t_air=self.ta, t_rad=self.lst,
             u=self.windspeed, p=self.pressure, z=self.elevation,
-            Rs_1=self.rs1, Rs24=self.rs24, vza=0,
-            # CGM - Need to add GEE gaussian_filter call to Rs24
-            # Rs24=ndimage.gaussian_filter(self.Rs24, sigma=5),
+            rs_1=self.rs1, rs24=self.rs24, vza=0,
+            # CGM - Need to add GEE gaussian_filter call to rs24
+            # rs24=ndimage.gaussian_filter(self.rs24, sigma=5),
             aleafv=self.aleafv, aleafn=self.aleafn, aleafl=self.aleafl,
             adeadv=self.adeadv, adeadn=self.adeadn, adeadl=self.adeadl,
             albedo=self.albedo, ndvi=self.ndvi, lai=self.lai,
@@ -360,9 +360,8 @@ class Image(object):
             datetime=self.date, stabil_iter=self.stabil_iter,
             albedo_iter=self.albedo_iter,
         )
-        return et.rename(['et']).double()\
-            .set(self.properties)\
-            .set({'ta_iteration': self.ta.get('iteration')})
+        return et.rename(['et']).double().set(self.properties)
+        #     .set({'ta_step_size': self.ta.get('ta_step_size')})
 
     # @lazy_property
     # def etr(self):
@@ -377,7 +376,11 @@ class Image(object):
 
     @lazy_property
     def et_alexi(self):
-        """Extract ALEXI ET image for the target image time"""
+        """Extract ALEXI ET image for the target image time
+
+        ALEXI ET is converted from MJ m-2 d-1 to mm d-1
+
+        """
         if utils.is_number(self.alexi_source):
             # Interpret numbers as constant images
             alexi_img = ee.Image.constant(float(self.alexi_source))
@@ -387,7 +390,8 @@ class Image(object):
             alexi_coll_id = 'projects/disalexi/alexi/CONUS_V001'
             alexi_coll = ee.ImageCollection(alexi_coll_id) \
                 .filterDate(self.date, self.date.advance(1, 'day'))
-            alexi_img = ee.Image(alexi_coll.first())
+            alexi_img = ee.Image(alexi_coll.first())\
+                .multiply(0.408)
             # self.alexi_geo = [0.04, 0, -125.04, 0, -0.04, 49.8]
             # self.alexi_crs = 'EPSG:4326'
         else:
@@ -516,35 +520,52 @@ class Image(object):
         # if self.ta_source is None:
         #     raise ValueError('ta_source must be set to compute et')
         if utils.is_number(self.ta_source):
-            ta_img = ee.Image.constant(float(self.ta_source))\
-                .set({'ta_iteration': 'constant'})
+            ta_img = ee.Image.constant(float(self.ta_source))
+            #     .set({'ta_iteration': 'constant'})
         elif isinstance(self.ta_source, ee.computedobject.ComputedObject):
-            ta_img = ee.Image(self.ta_source)\
-                .set({'ta_iteration': 'image'})
+            ta_img = ee.Image(self.ta_source)
+            #     .set({'ta_iteration': 'image'})
         elif self.ta_source.upper() == 'CONUS_V001':
             ta_coll_id = 'projects/disalexi/ta/CONUS_V001_wrs2'
             ta_coll = ee.ImageCollection(ta_coll_id)\
                 .filterMetadata('id', 'equals', self.id)\
-                .limit(1, 'iteration', False)
+                .limit(1, 'step_size', False)
             input_img = ee.Image(ta_coll.first())
 
-            # Compute new Ta as mean of bracketing values
-            # ta_img = input_img.select(['ta_a', 'ta_b']).reduce(ee.Reducer.mean())
-            # Interpolate new Ta based on bias values
-            bias_a = input_img.select(['bias_a'])
-            bias_b = input_img.select(['bias_b'])
-            ta_a = input_img.select(['ta_a'])
-            ta_b = input_img.select(['ta_b'])
+            # Compute new Ta as mean of bracketing values from mosaics
+            ta_array = input_img.select('step_\\d+_ta').toArray()
+            bias_array = input_img.select('step_\\d+_bias').toArray()
+            diff_array = bias_array.arraySlice(0, 1)\
+                .subtract(bias_array.arraySlice(0, 0, -1))
+            index = diff_array.gt(0).And(bias_array.arraySlice(0, 1).gt(0))
+            ta_a = ta_array.arraySlice(0, 0, -1).arrayMask(index)\
+                .arraySlice(0, 0, 1).arrayFlatten([['array']])
+            ta_b = ta_array.arraySlice(0, 1).arrayMask(index)\
+                .arraySlice(0, 0, 1).arrayFlatten([['array']])
+            bias_a = bias_array.arraySlice(0, 0, -1).arrayMask(index)\
+                .arraySlice(0, 0, 1).arrayFlatten([['array']])
+            bias_b = bias_array.arraySlice(0, 1).arrayMask(index)\
+                .arraySlice(0, 0, 1).arrayFlatten([['array']])
+
+            # This calculation only works correctly if a/b bracket the 0 bias
             ta_img = ta_a.multiply(bias_b).subtract(ta_b.multiply(bias_a))\
                 .divide(bias_b.subtract(bias_a))
-            ta_img = ee.Image(ta_img.copyProperties(input_img))\
-                .set({'ta_iteration': ee.Number(input_img.get('iteration')).int()})
+            # Uncomment to remove any pixels that don't bracket 0
+            #     .updateMask(bias_a.lt(0))
+            ta_img = ee.Image(ta_img.copyProperties(input_img))
+            #     .set({'ta_step_size': input_img.get('step_size')})
         else:
             raise ValueError('Unsupported ta_source: {}\n'.format(
                 self.ta_source))
 
         if self.ta_smooth_flag:
-            ta_img = ta_img.resample('bilinear')
+            # CGM suggested using a radius of 4, trying 2 for now
+            ta_img = ta_img.focal_mean(2, 'circle', 'pixels')\
+                .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)
+            # CGM - This approach doesn't mask nodata correctly
+            # ta_img = ta_img.convolve(
+            #     ee.Kernel.square(radius=4, units='pixels', normalize=True))
+            # ta_img = ta_img.resample('bilinear')
 
         return ta_img.rename(['ta']).set(self.properties)
 
@@ -642,8 +663,9 @@ class Image(object):
         self.leaf_width = lc_remap(self.lc_source, self.lc_type, 'xl')
         self.clump = lc_remap(self.lc_source, self.lc_type, 'omega')
 
-    # Helper functions for compute Ta
-    def ta_coarse(self, ta_img, cell_size=30, threshold=0.5):
+
+    # Helper functions for computing Ta (and ET)
+    def ta_coarse(self, ta_img, threshold=0.5):
         """Compute the air temperature for each ALEXI ET cell that minimizes
         the bias between Landsat scale ET and ALEXI ET for a fixed range of
         air temperature values
@@ -651,8 +673,6 @@ class Image(object):
         Parameters
         ----------
         ta_img : ee.Image
-        cell_size : float, optional
-            Cellsize for "fine" scale calculation and aggregation.
         threshold : float, optional
 
         Returns
@@ -661,35 +681,37 @@ class Image(object):
             ALEXI scale air temperature image
 
         """
+        # lat = self.lst.multiply(0).add(ee.Image.pixelLonLat().select(['latitude']))
+        # lon = self.lst.multiply(0).add(ee.Image.pixelLonLat().select(['longitude']))
+
         et_fine = tseb.tseb_pt(
-            T_air=ta_img, T_rad=self.lst,
+            t_air=ta_img, t_rad=self.lst,
+            # t_air=ta_img.reproject(crs=self.crs, crsTransform=self.transform),
+            # lat=lat, lon=lon,
             u=self.windspeed, p=self.pressure, z=self.elevation,
-            Rs_1=self.rs1, Rs24=self.rs24, vza=0,
+            rs_1=self.rs1, rs24=self.rs24, vza=0,
             aleafv=self.aleafv, aleafn=self.aleafn, aleafl=self.aleafl,
             adeadv=self.adeadv, adeadn=self.adeadn, adeadl=self.adeadl,
             albedo=self.albedo, ndvi=self.ndvi, lai=self.lai,
             clump=self.clump, leaf_width=self.leaf_width,
             hc_min=self.hc_min, hc_max=self.hc_max,
-            datetime=self.date, a_PT_in=1.32,
+            datetime=self.date, a_pt_in=1.32,
             stabil_iter=self.stabil_iter, albedo_iter=self.albedo_iter,
         )
 
         # Aggregate the Landsat scale ET up to the ALEXI scale
         et_coarse = ee.Image(et_fine)\
-            .reproject(crs=self.crs,
-                       crsTransform=[cell_size, 0, 15, 0, -cell_size, 15])\
-            .reduceResolution(reducer=ee.Reducer.mean(), maxPixels=20000)\
+            .reproject(crs=self.crs, crsTransform=self.transform)\
+            .reduceResolution(reducer=ee.Reducer.mean().unweighted(),
+                              maxPixels=30000)\
             .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)
-        et_mask = et_coarse.mask().gt(threshold)
+        et_mask = et_coarse.mask().gte(threshold)
         bias = et_coarse.subtract(self.et_alexi)
-        # Invert the abs(bias) since quality mosaic sorts descending
-        # qm_bias = bias.abs().multiply(-1)
-
         return ee.Image([ta_img, bias, et_coarse])\
             .updateMask(et_mask)\
             .rename(['ta', 'bias', 'et'])
 
-    def ta_qm(self, ta_img, step_size, step_count, cell_size=30, threshold=0.5):
+    def ta_qm(self, ta_img, step_size, step_count, threshold=0.5):
         """Compute the air temperature for each ALEXI ET cell that minimizes
         the bias between Landsat scale ET and ALEXI ET for a fixed range of
         air temperature values
@@ -700,10 +722,7 @@ class Image(object):
         step_size : float
             The size of each Ta step.
         step_count : int
-            The number of + & - steps, so the total number of air temperatures
-            images/values will be ta_steps * 2 + 1.
-        cell_size : float, optional
-            Cellsize for "fine" scale calculation and aggregation.
+            The number of Ta steps.
         threshold : float, optional
 
         Returns
@@ -714,29 +733,29 @@ class Image(object):
         """
         # CGM - This is basically identical to ta_coarse()
         # Can't use ta_coarse since a mapped function can only have one input
-        # Redefining it here allows cell_size and threshold to be passed in
+        # Redefining it here allows threshold to be passed in
         def ta_func(ta):
-            """Compute TSEB ET for the target T_air value"""
+            """Compute TSEB ET for the target t_air value"""
             et_fine = tseb.tseb_pt(
-                T_air=ta, T_rad=self.lst,
+                t_air=ta, t_rad=self.lst,
                 u=self.windspeed, p=self.pressure, z=self.elevation,
-                Rs_1=self.rs1, Rs24=self.rs24, vza=0,
+                rs_1=self.rs1, rs24=self.rs24, vza=0,
                 aleafv=self.aleafv, aleafn=self.aleafn, aleafl=self.aleafl,
                 adeadv=self.adeadv, adeadn=self.adeadn, adeadl=self.adeadl,
                 albedo=self.albedo, ndvi=self.ndvi, lai=self.lai,
                 clump=self.clump, leaf_width=self.leaf_width,
                 hc_min=self.hc_min, hc_max=self.hc_max,
-                datetime=self.date, a_PT_in=1.32,
+                datetime=self.date, a_pt_in=1.32,
                 stabil_iter=self.stabil_iter, albedo_iter=self.albedo_iter,
             )
 
             # Aggregate the Landsat scale ET up to the ALEXI scale
             et_coarse = ee.Image(et_fine)\
-                .reproject(crs=self.crs,
-                           crsTransform=[cell_size, 0, 15, 0, -cell_size, 15])\
-                .reduceResolution(reducer=ee.Reducer.mean(), maxPixels=20000)\
+                .reproject(crs=self.crs, crsTransform=self.transform)\
+                .reduceResolution(reducer=ee.Reducer.mean().unweighted(),
+                                  maxPixels=30000)\
                 .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)
-            et_mask = et_coarse.mask().gt(threshold)
+            et_mask = et_coarse.mask().gte(threshold)
             bias = et_coarse.subtract(self.alexi_et)
             # Invert the abs(bias) since quality mosaic sorts descending
             qm_bias = bias.abs().multiply(-1)
@@ -749,7 +768,7 @@ class Image(object):
         # Mapping over the list seemed a little slower than the FC
         ta_coll = ee.ImageCollection([
             ta_img.add(i * step_size)
-            for i in range(-step_count, step_count + 1)])
+            for i in range(step_count + 1)])
 
         # Return the air temperature associated with the lowest difference
         #   in ET from the ALEXI ET value
@@ -757,15 +776,72 @@ class Image(object):
             .qualityMosaic('qm_bias')\
             .select(['ta', 'bias', 'et'])
 
-    def et_coarse(self, ta_img, cell_size=30, threshold=0.5):
+    def ta_mosaic(self, ta_img, step_size, step_count, threshold=0.5):
+        """
+
+        Parameters
+        ----------
+        ta_img : ee.Image
+        step_size : float
+            The size of each Ta step.
+        step_count : int
+            The number of Ta steps.
+        threshold : float, optional
+
+        Returns
+        -------
+        image : ee.Image
+            ALEXI scale air temperature image
+
+        """
+        # CGM - This is basically identical to ta_coarse()
+        # Can't use ta_coarse since a mapped function can only have one input
+        # Redefining it here allows threshold to be passed in
+        def ta_func(ta):
+            """Compute TSEB ET for the target t_air value"""
+            et_fine = tseb.tseb_pt(
+                t_air=ta, t_rad=self.lst,
+                # t_air=ta.reproject(crs=self.crs, crsTransform=self.transform),
+                u=self.windspeed, p=self.pressure, z=self.elevation,
+                rs_1=self.rs1, rs24=self.rs24, vza=0,
+                aleafv=self.aleafv, aleafn=self.aleafn, aleafl=self.aleafl,
+                adeadv=self.adeadv, adeadn=self.adeadn, adeadl=self.adeadl,
+                albedo=self.albedo, ndvi=self.ndvi, lai=self.lai,
+                clump=self.clump, leaf_width=self.leaf_width,
+                hc_min=self.hc_min, hc_max=self.hc_max,
+                datetime=self.date, a_pt_in=1.32,
+                stabil_iter=self.stabil_iter, albedo_iter=self.albedo_iter,
+            )
+            # Aggregate the Landsat scale ET up to the ALEXI scale
+            et_coarse = ee.Image(et_fine)\
+                .reproject(crs=self.crs, crsTransform=self.transform)\
+                .reduceResolution(reducer=ee.Reducer.mean().unweighted(),
+                                  maxPixels=30000)\
+                .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)
+            et_mask = et_coarse.mask().gte(threshold)
+            bias = et_coarse.subtract(self.et_alexi)
+            return ee.Image([ta, bias]).updateMask(et_mask)\
+                .rename(['ta', 'bias'])\
+                .set({'system:index': ee.Image(ta).get('system:index')})
+
+        # CGM - Adding one extra Ta step and beginning and end to handle
+        #   rounding or reduceResolution/projection error
+        ta_coll = ee.ImageCollection([
+            ta_img.add(j * step_size).set({'system:index': 'step_{}'.format(i)})
+            for i, j in enumerate(range(-1, step_count + 2))])
+        # ta_coll = ee.ImageCollection([
+        #     ta_img.add(i * step_size).set({'system:index': 'step_{}'.format(i)})
+        #     for i in range(step_count + 1)])
+
+        return ee.ImageCollection(ta_coll.map(ta_func)).toBands()
+
+    def et_coarse(self, ta_img, threshold=0.5):
         """Compute the Landsat ET summed to the ALEXI grid for the
         specified air temperature image
 
         Parameters
         ----------
         ta_img : ee.Image
-        cell_size : float, optional
-            Cellsize for "fine" scale calculation and aggregation.
         threshold : float, optional
 
         Returns
@@ -778,13 +854,18 @@ class Image(object):
         # ta_fine = self.lst.multiply(0).add(ta).rename(['ta'])
         # ta_coarse = self.alexi_et.multiply(0).add(ta).rename(['ta'])
 
+        # lat = self.lst.multiply(0).add(ee.Image.pixelLonLat().select(['latitude']))
+        # lon = self.lst.multiply(0).add(ee.Image.pixelLonLat().select(['longitude']))
+
         # Aggregate the Landsat scale ET up to the ALEXI scale
         et_fine = tseb.tseb_pt(
-            T_air=ta_img, T_rad=self.lst,
+            t_air=ta_img, t_rad=self.lst,
+            # t_air=ta_img.reproject(crs=self.crs, crsTransform=self.transform),
+            # lat=lat, lon=lon,
             u=self.windspeed, p=self.pressure, z=self.elevation,
-            Rs_1=self.rs1, Rs24=self.rs24, vza=0,
-            # CGM - Need to add GEE gaussian_filter call to Rs24
-            # Rs24=ndimage.gaussian_filter(self.Rs24, sigma=5),
+            rs_1=self.rs1, rs24=self.rs24, vza=0,
+            # CGM - Need to add GEE gaussian_filter call to rs24
+            # rs24=ndimage.gaussian_filter(self.rs24, sigma=5),
             aleafv=self.aleafv, aleafn=self.aleafn, aleafl=self.aleafl,
             adeadv=self.adeadv, adeadn=self.adeadn, adeadl=self.adeadl,
             albedo=self.albedo, ndvi=self.ndvi, lai=self.lai,
@@ -794,14 +875,49 @@ class Image(object):
             albedo_iter=self.albedo_iter,
         )
         et_coarse = et_fine\
-            .reproject(crs=self.crs,
-                       crsTransform=[cell_size, 0, 15, 0, -cell_size, 15])\
-            .reduceResolution(reducer=ee.Reducer.mean(), maxPixels=20000)\
+            .reproject(crs=self.crs, crsTransform=self.transform)\
+            .reduceResolution(reducer=ee.Reducer.mean().unweighted(),
+                              maxPixels=30000)\
             .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)\
             .rename(['et'])
-        et_mask = et_coarse.mask().gt(threshold)
+        et_mask = et_coarse.mask().gte(threshold)
         return et_coarse.updateMask(et_mask)
 
     def et_bias(self, et_coarse_img):
         """Compute the bias between the computed ET and the ALEXI ET"""
         return et_coarse_img.subtract(self.et_alexi).rename(['bias'])
+
+    def et_fine(self, ta_img):
+        """Compute Landsat scale DisALEXI ET
+
+        Parameters
+        ----------
+        ta_img : ee.Image
+
+        Returns
+        -------
+        image : ee.Image
+            DisALEXI ET image
+
+        """
+        # lat = self.lst.multiply(0).add(ee.Image.pixelLonLat().select(['latitude']))
+        # lon = self.lst.multiply(0).add(ee.Image.pixelLonLat().select(['longitude']))
+
+        et = tseb.tseb_pt(
+            t_air=ta_img, t_rad=self.lst,
+            # t_air=ta_img.reproject(crs=self.crs, crsTransform=self.transform),
+            # lat=lat, lon=lon,
+            u=self.windspeed, p=self.pressure, z=self.elevation,
+            rs_1=self.rs1, rs24=self.rs24, vza=0,
+            # CGM - Need to add GEE gaussian_filter call to rs24
+            # rs24=ndimage.gaussian_filter(self.rs24, sigma=5),
+            aleafv=self.aleafv, aleafn=self.aleafn, aleafl=self.aleafl,
+            adeadv=self.adeadv, adeadn=self.adeadn, adeadl=self.adeadl,
+            albedo=self.albedo, ndvi=self.ndvi, lai=self.lai,
+            clump=self.clump, leaf_width=self.leaf_width,
+            hc_min=self.hc_min, hc_max=self.hc_max,
+            datetime=self.date, stabil_iter=self.stabil_iter,
+            albedo_iter=self.albedo_iter,
+        )
+        return et.rename(['et']).double().set(self.properties)
+        #     .reproject(crs=self.crs, crsTransform=self.transform)
