@@ -148,7 +148,8 @@ def test_Image_init_date_properties():
 @pytest.mark.parametrize(
     'source, xy, expected',
     [
-        ['CONUS_V001', TEST_POINT, 291.10235],
+        # CGM - Commented out while Ta assets are being rebuilt
+        # ['CONUS_V001', TEST_POINT, 291.10235],
         [ee.Image('USGS/SRTMGL1_003').multiply(0).add(10), TEST_POINT, 10],
         ['294.8', TEST_POINT, 294.8],  # Check constant values
         [294.8, TEST_POINT, 294.8],    # Check constant values
@@ -349,14 +350,40 @@ def test_Image_windspeed_band_name():
     assert output == 'windspeed'
 
 
-def test_Image_et_values(tol=0.0001):
+@pytest.mark.parametrize(
+    'albedo, cfmask, lai, lst, ndvi, ta, '
+    'alexi, elevation, landcover, rs_daily, rs_hourly, windspeed, '
+    'stabil_iter, albedo_iter, lat, lon, expected',
+    [
+        # Rounded values based on high NDVI site (below)
+        [0.125, 0, 4.7, 306, 0.875, 300,
+         3.25, 10.0, 82, 8600, 950, 3.25,
+         36, 10, 38.7399, -121.5265, 6.94218],
+        # Same as above but with fewer iterations
+        [0.125, 0, 4.7, 306, 0.875, 300,
+         3.25, 10.0, 82, 8600, 950, 3.25,
+         6, 3, 38.7399, -121.5265, 6.94414],
+        # High NDVI site in LC08_044033_20170716
+        [0.1259961, 0, 4.6797005913579, 305.92253850611, 0.87439300744578, 300,
+         3.35975885, 3.0, 82, 8603.212890625, 946.69066527778, 3.2665367230039,
+         36, 10, 38.7399, -121.5265, 6.9511],
+        # Low NDVI site in LC08_044033_20170716
+        [0.17163020, 0, 0.029734416071998, 323.59893135545, 0.16195230171936, 300,
+         3.35975885, 4.0, 82, 8603.212890625, 946.69066527778, 3.2665367230039,
+         36, 10, 38.71776, -121.50822, 4.1705],
+    ]
+)
+def test_Image_et_values(albedo, cfmask, lai, lst, ndvi, ta, alexi, elevation,
+                         landcover, rs_daily, rs_hourly, windspeed, stabil_iter,
+                         albedo_iter, lat, lon, expected, tol=0.0001):
     output_img = model.Image(
-        default_image(albedo=0.125, cfmask=0, lai=4.7, lst=306, ndvi=0.875),
-        ta_source=295, alexi_source=10,elevation_source=10,
-        landcover_source=82, rs_daily_source=8600, rs_hourly_source=950,
-        windspeed_source=3.25, stabil_iterations=6, albedo_iterations=3).et
+        default_image(albedo=albedo, cfmask=cfmask, lai=lai, lst=lst, ndvi=ndvi),
+        ta_source=ta, alexi_source=alexi,elevation_source=elevation,
+        landcover_source=landcover, rs_daily_source=rs_daily,
+        rs_hourly_source=rs_hourly, windspeed_source=windspeed, lat=lat, lon=lon,
+        stabil_iterations=stabil_iter, albedo_iterations=albedo_iter).et
     output = utils.point_image_value(output_img, TEST_POINT)
-    assert abs(output['et'] - 12.00397) <= tol
+    assert abs(output['et'] - expected) <= tol
 
 
 def test_Image_et_properties():
@@ -482,13 +509,13 @@ def test_Image_calculate_values(tol=0.0001):
     """Test if the calculate method returns values"""
     output_img = model.Image(
             default_image(albedo=0.125, cfmask=0, lai=4.7, lst=306, ndvi=0.875),
-            ta_source=295, alexi_source=10, elevation_source=10,
+            ta_source=300, alexi_source=10, elevation_source=10,
             landcover_source=82, rs_daily_source=8600, rs_hourly_source=950,
             windspeed_source=3.25, stabil_iterations=6, albedo_iterations=3)\
         .calculate(['et'])
     #     .calculate(['et', 'etr', 'etf'])
     output = utils.point_image_value(output_img, TEST_POINT)
-    assert abs(output['et'] - 12.00397) <= tol
+    assert abs(output['et'] - 6.94414) <= tol
     # assert abs(output['etr'] - 10) <= tol
     # assert abs(output['etf'] - 0.58) <= tol
 

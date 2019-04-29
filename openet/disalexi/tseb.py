@@ -5,6 +5,14 @@ import ee
 from . import tseb_utils
 from . import utils
 
+# DEADBEEF
+# test_xy = [-121.50822, 38.71776] # Low NDVI
+# test_xy = [-121.5265, 38.7399] # High NDVI A
+test_xy = [-121.51465, 38.71846] # High NDVI B
+def debug(x_var, x_str, xy=test_xy, scale=1):
+    print('{:12s} {:>20.14}'.format(x_str+':', float(utils.point_image_value(
+        x_var.rename(['test']), xy=xy, scale=scale)['test'])))
+
 
 def tseb_pt(t_air, t_rad, u, p, z, rs_1, rs24, vza,
             aleafv, aleafn, aleafl, adeadv, adeadn, adeadl,
@@ -79,7 +87,7 @@ def tseb_pt(t_air, t_rad, u, p, z, rs_1, rs24, vza,
     Returns
     -------
     ET : ee.Image
-        Evapotranspiration (mm).
+        Evapotranspiration [mm].
 
     References
     ----------
@@ -95,6 +103,29 @@ def tseb_pt(t_air, t_rad, u, p, z, rs_1, rs24, vza,
         Agricultural and Forest Meteorology, Volume 94, Issue 1, Pages 13-29,
         http://dx.doi.org/10.1016/S0168-1923(99)00005-2.
     """
+
+    # # DEADBEEF
+    # print('\nInputs')
+    # debug(t_air, 't_air')
+    # debug(t_rad, 't_rad')
+    # debug(u, 'u')
+    # debug(p, 'p')
+    # debug(z, 'z')
+    # debug(rs_1, 'Rs_1')
+    # debug(rs24, 'Rs24')
+    # debug(albedo, 'albedo')
+    # debug(ndvi, 'ndvi')
+    # debug(lai, 'lai')
+    # debug(aleafv, 'aleafv')
+    # debug(aleafn, 'aleafn')
+    # debug(aleafl, 'aleafl')
+    # debug(adeadv, 'adeadv')
+    # debug(adeadn, 'adeadn')
+    # debug(adeadl, 'adeadl')
+    # debug(clump, 'clump')
+    # debug(leaf_width, 'leaf_width')
+    # debug(hc_min, 'hc_min')
+    # debug(hc_max, 'hc_max')
 
     # ************************************************************************
     # CGM - Moved from disalexi.py to here since these are not parameters
@@ -122,16 +153,15 @@ def tseb_pt(t_air, t_rad, u, p, z, rs_1, rs24, vza,
     # F = lai.expression('lai * clump', {'lai': lai, 'clump': clump})
 
     # Fraction cover at nadir (view=0)
-    fc = F.expression('1.0 - exp(-0.5 * F)', {'F': F}) \
-        .clamp(0.01, 0.9)
+    fc = F.multiply(-0.5).exp().multiply(-1).add(1.0).clamp(0.01, 0.9)
+    # fc = lai.expression('1.0 - exp(-0.5 * F)', {'F': F}).clamp(0.01, 0.9)
 
     # Compute canopy height and roughness parameters
     # CGM - Moved from _set_landcover_vars()
-    hc = lai \
-        .expression(
-            'hc_min + ((hc_max - hc_min) * fc)',
-            {'hc_min': hc_min, 'hc_max': hc_max, 'fc': fc}) \
-        .rename(['hc'])
+    hc = hc_max.subtract(hc_min).multiply(fc).add(hc_min)
+    # hc = lai.expression(
+    #     'hc_min + ((hc_max - hc_min) * fc)',
+    #     {'hc_min': hc_min, 'hc_max': hc_max, 'fc': fc})
 
     # LAI relative to canopy projection only
     lai_c = lai.divide(fc)
@@ -147,18 +177,18 @@ def tseb_pt(t_air, t_rad, u, p, z, rs_1, rs24, vza,
     # z0m = hc.expression('hc * 0.123', {'hc': hc})
     # CGM - add(0) is to mimic numpy copy, check if needed
     z0h = z0m.add(0)
-    d_0 = hc.multiply(2.0 / 3.0)
-    # d_0 = hc.expression('hc * (2.0 / 3.0)', {'hc': hc})
+    d0 = hc.multiply(2.0 / 3.0)
+    # d0 = hc.expression('hc * (2.0 / 3.0)', {'hc': hc})
 
     # Correction of roughness parameters for bare soils (F < 0.1)
-    d_0 = d_0.where(F.lte(0.1), 0.00001)
+    d0 = d0.where(F.lte(0.1), 0.00001)
     z0m = z0m.where(F.lte(0.1), 0.01)
     z0h = z0h.where(F.lte(0.1), 0.0001)
 
     # Correction of roughness parameters for water bodies
     # (NDVI < 0 and albedo < 0.05)
     water_mask = ndvi.lte(0).And(albedo.lte(0.05))
-    d_0 = d_0.where(water_mask, 0.00001)
+    d0 = d0.where(water_mask, 0.00001)
     z0m = z0m.where(water_mask, 0.00035)
     z0h = z0h.where(water_mask, 0.00035)
 
@@ -237,24 +267,24 @@ def tseb_pt(t_air, t_rad, u, p, z, rs_1, rs24, vza,
     # Assume neutral conditions on first iteration (use t_air for Ts and Tc)
     # CGM - Using lai for F to match Python code
     u_attr = tseb_utils.compute_u_attr(
-        u=u, d0=d_0, z0m=z0m, z_u=z_u, fm=0)
+        u=u, d0=d0, z0m=z0m, z_u=z_u, fm=0)
     r_ah = tseb_utils.compute_r_ah(
-        u_attr=u_attr, d0=d_0, z0h=z0h, z_t=z_t, fh=0)
+        u_attr=u_attr, d0=d0, z0h=z0h, z_t=z_t, fh=0)
     # CGM - Why is this function is passing "lai" to "F"?
     r_s = tseb_utils.compute_r_s(
-        u_attr=u_attr, T_s=t_air, T_c=t_air, hc=hc, F=lai, d0=d_0, z0m=z0m,
+        u_attr=u_attr, T_s=t_air, T_c=t_air, hc=hc, F=lai, d0=d0, z0m=z0m,
         leaf=leaf, leaf_s=leaf_s, fm_h=0)
     r_x = tseb_utils.compute_r_x(
-        u_attr=u_attr, hc=hc, F=lai, d0=d_0, z0m=z0m, xl=leaf_width,
+        u_attr=u_attr, hc=hc, F=lai, d0=d0, z0m=z0m, xl=leaf_width,
         leaf_c=leaf_c, fm_h=0)
     # r_ah, r_s, r_x, u_attr = tseb_utils.compute_resistance(
-    #     u, t_air, t_air, hc, lai, d_0, z0m, z0h, z_u, z_t, leaf_width, leaf,
+    #     u, t_air, t_air, hc, lai, d0, z0m, z0h, z_u, z_t, leaf_width, leaf,
     #     leaf_s, leaf_c, 0, 0, 0)
 
-    T_c = t_air
+    T_c = t_air.multiply(1)
     # DEADBEEF - In IDL, this calculation is in C, not K?
     T_s = lai.expression(
-        '((t_rad - 273.16) - (fc_q * (T_c - 273.16))) / (1 - fc_q) + 273.16',
+        '(((t_rad - 273.16) - (fc_q * (T_c - 273.16))) / (1 - fc_q)) + 273.16',
         {'t_rad': t_rad, 'T_c': T_c, 'fc_q': fc_q})
     # T_s = lai.expression(
     #     '(t_rad - (fc_q * T_c)) / (1 - fc_q)',
@@ -264,6 +294,39 @@ def tseb_pt(t_air, t_rad, u, p, z, rs_1, rs24, vza,
     # This doesn't seem to do anything, commenting out for now
     # H_iter = t_air.multiply(0).add(200.16)
     EF_s = t_air.multiply(0)
+
+    # # DEADBEEF
+    # debug(t_noon, 't_noon')
+    # print('{:12s} {:>20.14}'.format('time:', time.getInfo()))
+    # debug(zs, 'zs')
+    # debug(F, 'F')
+    # debug(fc, 'fc')
+    # debug(hc, 'hc')
+    # debug(lai_c, 'lai_c')
+    # debug(fc_q, 'fc_q')
+    # debug(d0, 'd0')
+    # debug(z0h, 'z0h')
+    # debug(z0m, 'z0m')
+    # debug(leaf, 'leaf')
+    # debug(leaf_c, 'leaf_c')
+    # debug(leaf_s, 'leaf_s')
+    # debug(e_s, 'e_s')
+    # debug(Ss, 'Ss')
+    # debug(lambda1, 'lambda1')
+    # debug(g, 'g')
+    # debug(Rs_c, 'Rs_c')
+    # debug(Rs_s, 'Rs_s')
+    # debug(albedo_c, 'albedo_c')
+    # debug(albedo_s, 'albedo_s')
+    # debug(e_atm, 'e_atm')
+    # debug(r_air, 'r_air')
+    # debug(u_attr, 'u_attr')
+    # debug(r_ah, 'r_ah')
+    # debug(r_s, 'r_s')
+    # debug(r_x, 'r_x')
+    # debug(T_c, 'T_c')
+    # debug(T_s, 'T_s')
+    # debug(EF_s, 'EF_s')
 
     # ************************************************************************
     # Start Loop for Stability Correction and Water Stress
@@ -289,18 +352,18 @@ def tseb_pt(t_air, t_rad, u, p, z, rs_1, rs24, vza,
         G = tseb_utils.compute_G0(
             Rn, Rn_s, albedo, ndvi, t_noon, time, EF_s_iter)
 
-        LE_c = albedo \
+        LE_c_init = albedo \
             .expression(
                 'f_green * (a_pt * Ss / (Ss + g)) * Rn_c',
                 {'f_green': f_green, 'a_pt': a_pt_iter, 'Ss': Ss, 'g': g,
                  'Rn_c': Rn_c}) \
             .max(0)
-        H_c = Rn_c.subtract(LE_c)
+        H_c_init = Rn_c.subtract(LE_c_init)
         # H_c = albedo.expression(
         #     'Rn_c - LE_c', {'Rn_c': Rn_c, 'LE_c': LE_c})
 
         T_c_iter = tseb_utils.temp_separation_tc(
-            H_c, fc_q, t_air, t_rad, r_ah_iter, r_s_iter, r_x_iter, r_air, cp)
+            H_c_init, fc_q, t_air, t_rad, r_ah_iter, r_s_iter, r_x_iter, r_air, cp)
         T_s_iter = tseb_utils.temp_separation_ts(T_c_iter, fc_q, t_air, t_rad)
         T_ac = tseb_utils.temp_separation_tac(
             T_c_iter, T_s_iter, fc_q, t_air, r_ah_iter, r_s_iter, r_x_iter)
@@ -335,28 +398,28 @@ def tseb_pt(t_air, t_rad, u, p, z, rs_1, rs24, vza,
         # chk_iter = np.sum(mask_iter) / np.size(mask_iter)
 
         fh = tseb_utils.compute_stability_fh(
-            H, t_rad, u_attr_iter, r_air, z_t, d_0, cp)
+            H, t_rad, u_attr_iter, r_air, z_t, d0, cp)
         fm = tseb_utils.compute_stability_fm(
-            H, t_rad, u_attr_iter, r_air, z_u, d_0, z0m, cp)
+            H, t_rad, u_attr_iter, r_air, z_u, d0, z0m, cp)
         fm_h = tseb_utils.compute_stability_fm_h(
-            H, t_rad, u_attr_iter, r_air, hc, d_0, z0m, cp)
+            H, t_rad, u_attr_iter, r_air, hc, d0, z0m, cp)
         # CGM - z0h is not used in this function, should it be?
         # fm, fh, fm_h = tseb_utils.compute_stability(
-        #     H, t_rad, r_air, cp, u_attr, z_u, z_t, hc, d_0, z0m, z0h)
+        #     H, t_rad, r_air, cp, u_attr, z_u, z_t, hc, d0, z0m, z0h)
 
         u_attr_iter = tseb_utils.compute_u_attr(
-            u=u, d0=d_0, z0m=z0m, z_u=z_u, fm=fm)
+            u=u, d0=d0, z0m=z0m, z_u=z_u, fm=fm)
         r_ah_iter = tseb_utils.compute_r_ah(
-            u_attr=u_attr_iter, d0=d_0, z0h=z0h, z_t=z_t, fh=fh)
+            u_attr=u_attr_iter, d0=d0, z0h=z0h, z_t=z_t, fh=fh)
         r_s_iter = tseb_utils.compute_r_s(
             u_attr=u_attr_iter, T_s=T_s_iter, T_c=T_c_iter, hc=hc, F=lai,
-            d0=d_0, z0m=z0m, leaf=leaf, leaf_s=leaf_s, fm_h=fm_h)
+            d0=d0, z0m=z0m, leaf=leaf, leaf_s=leaf_s, fm_h=fm_h)
         # CGM - Why is this function is passing "lai" to "F"?
         r_x_iter = tseb_utils.compute_r_x(
-            u_attr=u_attr_iter, hc=hc, F=lai, d0=d_0, z0m=z0m, xl=leaf_width,
+            u_attr=u_attr_iter, hc=hc, F=lai, d0=d0, z0m=z0m, xl=leaf_width,
             leaf_c=leaf_c, fm_h=fm_h)
         # r_ah_iter, r_s_iter, r_x_iter, u_attr_iter = tseb_utils.compute_resistance(
-        #     u, T_s_iter, T_c_iter, hc, lai, d_0, z0m, z0h, z_u, z_t,
+        #     u, T_s_iter, T_c_iter, hc, lai, d0, z0m, z0h, z_u, z_t,
         #     leaf_width, leaf, leaf_s, leaf_c, fm, fh, fm_h)
 
         a_pt_iter = a_pt_iter \
@@ -401,12 +464,32 @@ def tseb_pt(t_air, t_rad, u, p, z, rs_1, rs24, vza,
     H_s = ee.Image(iter_output.get('H_s'))
     LE_c = ee.Image(iter_output.get('LE_c'))
     LE_s = ee.Image(iter_output.get('LE_s'))
-    # T_ac = ee.Image(iter_output.get('T_ac'))
-    # T_c = ee.Image(iter_output.get('T_c'))
-    # T_s = ee.Image(iter_output.get('T_s'))
-    # r_ah = ee.Image(iter_output.get('r_ah'))
-    # r_s = ee.Image(iter_output.get('r_s'))
-    # r_x = ee.Image(iter_output.get('r_x'))
+
+    # # DEADBEEF
+    # print('\nAfter Stability Iteration')
+    # # T_ac = ee.Image(iter_output.get('T_ac'))
+    # # T_c = ee.Image(iter_output.get('T_c'))
+    # # T_s = ee.Image(iter_output.get('T_s'))
+    # # r_ah = ee.Image(iter_output.get('r_ah'))
+    # # r_s = ee.Image(iter_output.get('r_s'))
+    # # r_x = ee.Image(iter_output.get('r_x'))
+    # # debug(T_ac, 'T_ac')
+    # # debug(T_c, 'T_c')
+    # # debug(T_s, 'T_s')
+    # # debug(r_ah, 'r_ah')
+    # # debug(r_s, 'r_s')
+    # # debug(r_x, 'r_x')
+    # debug(a_pt, 'a_pt')
+    # debug(Rn_c, 'Rn_c')
+    # debug(Rn_s, 'Rn_s')
+    # debug(Rn_c.add(Rn_s), 'Rn')
+    # debug(G, 'G')
+    # debug(H_c, 'H_c')
+    # debug(H_s, 'H_s')
+    # debug(H_c.add(H_s), 'H')
+    # debug(LE_c, 'LE_c')
+    # debug(LE_s, 'LE_s')
+    # debug(LE_c.add(LE_s), 'LE')
 
     # ************************************************************************
     # Check Energy Balance Closure
@@ -427,21 +510,24 @@ def tseb_pt(t_air, t_rad, u, p, z, rs_1, rs24, vza,
 
     LE_s = Rn_s.subtract(G).subtract(H_s)
     LE_c = Rn_c.subtract(H_c)
-    # LE_s = albedo.expression(
-    #     'Rn_s - G - H_s', {'Rn_s': Rn_s, 'G': G, 'H_s': H_s})
-    # LE_c = albedo.expression('Rn_c - H_c', {'Rn_c': Rn_c, 'H_c': H_c})
 
     # The latent heat of vaporization is 2.45 MJ kg-1
     # Assume rs24 is still in W m-2 day-1 and convert to MJ kg-1
-    # Convert units from MJ m-2 day-1 to mm day-1
     # CGM - Leaving out scaling value for now
     ET = albedo \
         .expression(
             '((LE_c + LE_s) / rs_1) * (rs24 / 2.45) * scaling',
             {'LE_c': LE_c, 'LE_s': LE_s, 'rs_1': rs_1,
-             'rs24': rs24.multiply(0.0864 / 24.0),
-             'scaling': 1}) \
-        .divide(0.408) \
+             'rs24': rs24.multiply(0.0864 / 24.0), 'scaling': 1}) \
         .max(0.01) \
+
+    # # DEADBEEF
+    # print('\nAfter Checking EBC')
+    # debug(G, 'G')
+    # debug(H_c, 'H_c')
+    # debug(H_s, 'H_s')
+    # debug(LE_c, 'LE_c')
+    # debug(LE_s, 'LE_s')
+    # debug(ET, 'ET')
 
     return ET.rename(['et'])

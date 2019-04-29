@@ -49,6 +49,8 @@ class Image(object):
             # etr_source=None,
             # etr_band=None,
             # etr_factor=None,
+            lat=None,
+            lon=None,
         ):
         """Initialize an image for computing DisALEXI
 
@@ -165,6 +167,26 @@ class Image(object):
         self.ta_interp_flag = utils.boolean(ta_interp_flag)
         self.ta_smooth_flag = utils.boolean(ta_smooth_flag)
         self.rs_interp_flag = utils.boolean(rs_interp_flag)
+
+        if lat is None:
+            self.lat = self.lst.multiply(0).add(
+                ee.Image.pixelLonLat().select(['latitude']))
+        elif utils.is_number(lat):
+            self.lat = ee.Image.constant(lat)
+        elif isinstance(lat, ee.computedobject.ComputedObject):
+            self.lat = lat
+        else:
+            raise ValueError('invalid lat parameter')
+
+        if lon is None:
+            self.lon = self.lst.multiply(0).add(
+                ee.Image.pixelLonLat().select(['longitude']))
+        elif utils.is_number(lon):
+            self.lon = ee.Image.constant(lon)
+        elif isinstance(lon, ee.computedobject.ComputedObject):
+            self.lon = lon
+        else:
+            raise ValueError('invalid lon parameter')
 
         # Set default land cover image and type
         # For now default to CONUS and use default if image and type were not set
@@ -357,8 +379,8 @@ class Image(object):
             albedo=self.albedo, ndvi=self.ndvi, lai=self.lai,
             clump=self.clump, leaf_width=self.leaf_width,
             hc_min=self.hc_min, hc_max=self.hc_max,
-            datetime=self.date, stabil_iter=self.stabil_iter,
-            albedo_iter=self.albedo_iter,
+            datetime=self.date, lat=self.lat, lon=self.lon,
+            stabil_iter=self.stabil_iter,albedo_iter=self.albedo_iter,
         )
         return et.rename(['et']).double().set(self.properties)
         #     .set({'ta_step_size': self.ta.get('ta_step_size')})
@@ -560,12 +582,14 @@ class Image(object):
 
         if self.ta_smooth_flag:
             # CGM suggested using a radius of 4, trying 2 for now
+            #
             ta_img = ta_img.focal_mean(2, 'circle', 'pixels')\
-                .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)
+                .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)\
+                .resample('bilinear')\
+                .reproject(crs=self.crs, crsTransform=self.transform)
             # CGM - This approach doesn't mask nodata correctly
             # ta_img = ta_img.convolve(
             #     ee.Kernel.square(radius=4, units='pixels', normalize=True))
-            # ta_img = ta_img.resample('bilinear')
 
         return ta_img.rename(['ta']).set(self.properties)
 
@@ -681,9 +705,6 @@ class Image(object):
             ALEXI scale air temperature image
 
         """
-        # lat = self.lst.multiply(0).add(ee.Image.pixelLonLat().select(['latitude']))
-        # lon = self.lst.multiply(0).add(ee.Image.pixelLonLat().select(['longitude']))
-
         et_fine = tseb.tseb_pt(
             t_air=ta_img, t_rad=self.lst,
             # t_air=ta_img.reproject(crs=self.crs, crsTransform=self.transform),
@@ -854,9 +875,6 @@ class Image(object):
         # ta_fine = self.lst.multiply(0).add(ta).rename(['ta'])
         # ta_coarse = self.alexi_et.multiply(0).add(ta).rename(['ta'])
 
-        # lat = self.lst.multiply(0).add(ee.Image.pixelLonLat().select(['latitude']))
-        # lon = self.lst.multiply(0).add(ee.Image.pixelLonLat().select(['longitude']))
-
         # Aggregate the Landsat scale ET up to the ALEXI scale
         et_fine = tseb.tseb_pt(
             t_air=ta_img, t_rad=self.lst,
@@ -871,8 +889,8 @@ class Image(object):
             albedo=self.albedo, ndvi=self.ndvi, lai=self.lai,
             clump=self.clump, leaf_width=self.leaf_width,
             hc_min=self.hc_min, hc_max=self.hc_max,
-            datetime=self.date, stabil_iter=self.stabil_iter,
-            albedo_iter=self.albedo_iter,
+            datetime=self.date, lat=self.lat, lon=self.lon,
+            stabil_iter=self.stabil_iter, albedo_iter=self.albedo_iter,
         )
         et_coarse = et_fine\
             .reproject(crs=self.crs, crsTransform=self.transform)\
@@ -900,13 +918,9 @@ class Image(object):
             DisALEXI ET image
 
         """
-        # lat = self.lst.multiply(0).add(ee.Image.pixelLonLat().select(['latitude']))
-        # lon = self.lst.multiply(0).add(ee.Image.pixelLonLat().select(['longitude']))
-
         et = tseb.tseb_pt(
             t_air=ta_img, t_rad=self.lst,
             # t_air=ta_img.reproject(crs=self.crs, crsTransform=self.transform),
-            # lat=lat, lon=lon,
             u=self.windspeed, p=self.pressure, z=self.elevation,
             rs_1=self.rs1, rs24=self.rs24, vza=0,
             # CGM - Need to add GEE gaussian_filter call to rs24
@@ -916,8 +930,8 @@ class Image(object):
             albedo=self.albedo, ndvi=self.ndvi, lai=self.lai,
             clump=self.clump, leaf_width=self.leaf_width,
             hc_min=self.hc_min, hc_max=self.hc_max,
-            datetime=self.date, stabil_iter=self.stabil_iter,
-            albedo_iter=self.albedo_iter,
+            datetime=self.date, lat=self.lat, lon=self.lon,
+            stabil_iter=self.stabil_iter, albedo_iter=self.albedo_iter,
         )
         return et.rename(['et']).double().set(self.properties)
         #     .reproject(crs=self.crs, crsTransform=self.transform)

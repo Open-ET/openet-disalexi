@@ -8,6 +8,14 @@ deg2rad = math.pi / 180.0
 rad2deg = 180.0 / math.pi
 
 
+# # DEADBEEF
+# # test_xy = [-121.5265, 38.7399] # High NDVI
+# test_xy = [-121.50822, 38.71776] # Low NDVI
+# def debug(x_var, x_str, xy=test_xy, scale=1):
+#     print('{:12s} {:>20.14}'.format(x_str+':', float(utils.point_image_value(
+#         x_var.rename(['test']), xy=xy, scale=scale)['test'])))
+
+
 def solar_noon(datetime, lon):
     """Computes sunrise/sunset times
 
@@ -30,6 +38,14 @@ def solar_noon(datetime, lon):
     t_noon = lon.expression(
         '(720.0 - 4 * lon - eq_t) / 1440 * 24.0',
         {'lon': lon.multiply(rad2deg), 'eq_t': eq_t})
+
+    # # DEADBEEF
+    # print('\nsolar_noon')
+    # print('{:12s} {:>20.14}'.format('d:', d.getInfo()))
+    # print('{:12s} {:>20.14}'.format('eq_t:', eq_t.getInfo()))
+    # debug(lon, 'lon')
+    # debug(t_noon, 't_noon')
+
     return t_noon.rename(['t_noon'])
 
 
@@ -58,7 +74,7 @@ def solar_zenith(datetime, lon, lat):
     d, eq_t = _solar_time(datetime)
 
     ts_time = lon.expression(
-        '(time_t / 24.0 * 1440 + eq_t + 4.0 * lon) % 1440.',
+        '((time_t / 24.0) * 1440.0 + eq_t + 4.0 * lon) % 1440.0',
         {'lon': lon.multiply(rad2deg), 'time_t': time_t, 'eq_t': eq_t})
     ts_time = ts_time.where(ts_time.gt(1440), ts_time.subtract(1440))
     # ts_time[ts_time > 1440.] = ts_time[ts_time > 1440.] - 1440.
@@ -70,6 +86,17 @@ def solar_zenith(datetime, lon, lat):
     zs = lat.expression(
         'acos( (sin(lat) * sin(d)) + (cos(lat) * cos(d) * cos(w)) )',
         {'lat': lat, 'd': d, 'w': w.multiply(deg2rad)})
+
+    # # DEADBEEF
+    # print('\nsolar_zenith')
+    # print('{:12s} {:>20.14}'.format('time_t:', time_t.getInfo()))
+    # print('{:12s} {:>20.14}'.format('d:', d.getInfo()))
+    # print('{:12s} {:>20.14}'.format('eq_t:', eq_t.getInfo()))
+    # debug(lat, 'lat')
+    # debug(lon, 'lon')
+    # debug(ts_time, 'ts_time')
+    # debug(w, 'w')
+    # debug(zs, 'zs')
 
     return zs.rename(['zs'])
 
@@ -105,7 +132,7 @@ def _solar_time(datetime):
     j_cen = julian_.add(0.5 - 2451545.0).divide(36525.0)
     # CGM - Does the mod happen before or after the multiply
     lon_sun = j_cen.multiply(0.0003032).add(36000.76983) \
-        .multiply(j_cen).mod(360.0).add(280.46646).subtract(360)
+        .multiply(j_cen).mod(360.0).add(280.46646).subtract(360.0)
     an_sun =  j_cen.multiply(-0.0001537).add(35999.05029) \
         .multiply(j_cen).add(357.52911)
     ecc = j_cen.multiply(0.0000001267).add(0.000042037) \
@@ -144,6 +171,24 @@ def _solar_time(datetime):
     d = ob_corr.multiply(deg2rad).sin() \
         .multiply(sun_app.multiply(deg2rad).sin()) \
         .asin()
+
+    # # DEADBEEF
+    # print('\n_solar_time')
+    # print('{:12s} {:>20.14}'.format('time_t:', time_t.getInfo()))
+    # print('{:12s} {:>20.14}'.format('julian:', julian.getInfo()))
+    # print('{:12s} {:>20.14}'.format('julian_:', julian_.getInfo()))
+    # print('{:12s} {:>20.14}'.format('j_cen:', j_cen.getInfo()))
+    # print('{:12s} {:>20.14}'.format('lon_sun:', lon_sun.getInfo()))
+    # print('{:12s} {:>20.14}'.format('an_sun:', an_sun.getInfo()))
+    # print('{:12s} {:>20.14}'.format('ecc:', ecc.getInfo()))
+    # print('{:12s} {:>20.14}'.format('ob_ecl:', ob_ecl.getInfo()))
+    # print('{:12s} {:>20.14}'.format('ob_corr:', ob_corr.getInfo()))
+    # print('{:12s} {:>20.14}'.format('var_y:', var_y.getInfo()))
+    # print('{:12s} {:>20.14}'.format('eq_t:', eq_t.getInfo()))
+    # print('{:12s} {:>20.14}'.format('sun_eq:', sun_eq.getInfo()))
+    # print('{:12s} {:>20.14}'.format('sun_true:', sun_true.getInfo()))
+    # print('{:12s} {:>20.14}'.format('sun_app:', sun_app.getInfo()))
+    # print('{:12s} {:>20.14}'.format('d:', d.getInfo()))
 
     return d, eq_t
 
@@ -336,7 +381,6 @@ def albedo_separation(albedo, Rs_1, F, fc, aleafv, aleafn, aleafl, adeadv,
     difvis = difvis.where(ind, 0.0)
     difnir = difnir.where(ind, 0.0)
 
-
     # CGM - Not used anymore in function since e_atm is not computed
     # Rs0 = zs \
     #     .expression('potvis + potnir', {'potnir': potnir, 'potvis': potvis}) \
@@ -351,6 +395,26 @@ def albedo_separation(albedo, Rs_1, F, fc, aleafv, aleafn, aleafl, adeadv,
     fg = albedo.multiply(0).add(1)
     # rsoilv = ee.Image.constant(0.12)
     # fg = ee.Image.constant(1.0)
+
+    # # DEADBEEF
+    # print('\nalbedo_separation')
+    # debug(airmas, 'airmas')
+    # debug(potbm1, 'potbm1')
+    # debug(potvis, 'potvis')
+    # debug(uu, 'uu')
+    # debug(a, 'a')
+    # debug(watabs, 'watabs')
+    # debug(potbm2, 'potbm2')
+    # debug(evaL, 'evaL')
+    # debug(potnir, 'potnir')
+    # debug(fclear, 'fclear')
+    # debug(fvis, 'fvis')
+    # debug(fnir, 'fnir')
+    # debug(fb1, 'fb1')
+    # debug(dirvis, 'dirvis')
+    # debug(dirnir, 'dirnir')
+    # debug(rsoilv, 'rsoilv')
+    # debug(fg, 'fg')
 
     # CGM - Switched to an iterate call
     def iter_func(n, prev):
@@ -596,6 +660,13 @@ def albedo_separation(albedo, Rs_1, F, fc, aleafv, aleafn, aleafl, adeadv,
     taudn = ee.Image(iter_output.get('taudn'))
     taudv = ee.Image(iter_output.get('taudv'))
 
+    # # DEADBEEF
+    # debug(akb, 'akb')
+    # debug(ameanv, 'ameanv')
+    # debug(ameann, 'ameann')
+    # debug(rsoilv, 'rsoilv')
+    # debug(rsoiln, 'rsoiln')
+
     # if a solution is not reached, alb_c=alb_s=alb
     albedo_c = albedo_c.where(diff.abs().gt(0.05), albedo)
     albedo_s = albedo_s.where(diff.abs().gt(0.05), albedo)
@@ -614,6 +685,12 @@ def albedo_separation(albedo, Rs_1, F, fc, aleafv, aleafn, aleafl, adeadv,
     # Eq 15.11
     taubtv = F.expression('xnum / xden', {'xnum': xnum, 'xden': xden})
 
+    # # DEADBEEF
+    # debug(expfac, 'expfac')
+    # debug(xnum, 'xnum')
+    # debug(xden, 'xden')
+    # debug(taubtv, 'taubtv')
+
     # Direct beam+scattered canopy transmission coefficient (NIR)
     expfac = F.expression(
         'sqrt(ameann) * akb * F',
@@ -627,6 +704,12 @@ def albedo_separation(albedo, Rs_1, F, fc, aleafv, aleafn, aleafl, adeadv,
         {'rbcpyn': rbcpyn, 'rsoiln': rsoiln, 'expfac': expfac})
     # Eq 15.11
     taubtn = F.expression('xnum / xden', {'xnum': xnum, 'xden': xden})
+
+    # # DEADBEEF
+    # debug(expfac, 'expfac')
+    # debug(xnum, 'xnum')
+    # debug(xden, 'xden')
+    # debug(taubtn, 'taubtn')
 
     # Shortwave radiation components
     tausolar = F.expression(
@@ -642,6 +725,10 @@ def albedo_separation(albedo, Rs_1, F, fc, aleafv, aleafn, aleafl, adeadv,
         'Rs_1 * (1.0 - tausolar)', {'Rs_1': Rs_1, 'tausolar': tausolar})
     Rs_s = Rs_1.expression(
         'Rs_1 * tausolar', {'Rs_1': Rs_1, 'tausolar': tausolar})
+
+    # # # DEADBEEF
+    # debug(tausolar, 'tausolar')
+    # print('end\n')
 
     return Rs_c, Rs_s, albedo_c, albedo_s
 
@@ -749,7 +836,7 @@ def compute_resistance(u, T_s, T_c, hc, F, d0, z0m, z0h, z_u, z_t, xl,
 
     # Computation of the resistance of the air between soil and canopy space
     u_c = u.expression(
-        'u_attr / 0.41 * ((log((hc - d0) / z0m)) - fm_h)',
+        '(u_attr / 0.41) * ((log((hc - d0) / z0m)) - fm_h)',
         {'d0': d0, 'fm_h': fm_h, 'hc': hc, 'u_attr': u_attr, 'z0m': z0m})
     u_c = u_c.where(u_c.lte(0), 0.1)
     u_s = u.expression(
@@ -871,7 +958,7 @@ def compute_r_s(u_attr, T_s, T_c, hc, F, d0, z0m, leaf, leaf_s, fm_h):
 
     # Computation of the resistance of the air between soil and canopy space
     u_c = u_attr.expression(
-        'u_attr / 0.41 * ((log((hc - d0) / z0m)) - fm_h)',
+        '(u_attr / 0.41) * ((log((hc - d0) / z0m)) - fm_h)',
         {'d0': d0, 'fm_h': fm_h, 'hc': hc, 'u_attr': u_attr, 'z0m': z0m})
     u_c = u_c.where(u_c.lte(0), 0.1)
     u_s = u_attr.expression(
@@ -926,7 +1013,7 @@ def compute_r_x(u_attr, hc, F, d0, z0m, xl, leaf_c, fm_h):
 
     # Computation of the resistance of the air between soil and canopy space
     u_c = u_attr.expression(
-        'u_attr / 0.41 * ((log((hc - d0) / z0m)) - fm_h)',
+        '(u_attr / 0.41) * ((log((hc - d0) / z0m)) - fm_h)',
         {'d0': d0, 'fm_h': fm_h, 'hc': hc, 'u_attr': u_attr, 'z0m': z0m})
     u_c = u_c.where(u_c.lte(0), 0.1)
 
