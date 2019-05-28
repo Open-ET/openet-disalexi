@@ -27,21 +27,21 @@ def tseb_pt(t_air, t_rad, u, p, z, rs_1, rs24, vza,
     Parameters
     ----------
     t_air : ee.Image
-        Air temperature (Kelvin).
+        Air temperature [K].
     t_rad : ee.Image
-        Radiometric composite temperature (Kelvin).
+        Radiometric composite temperature [K].
     u : ee.Image
-        Wind speed above the canopy (m s-1).
+        Wind speed above the canopy [m s-1].
     p : ee.Image
-        Atmospheric pressure (kPa)
+        Atmospheric pressure [kPa].
     z : ee.Image
-        Elevation (m)
+        Elevation [m].
     rs_1 : ee.Image
-        Overpass insolation (w m-2)
+        Overpass insolation [w m-2].
     rs24 : ee.Image
-        Daily insolation (w m-2)
+        Daily insolation [w m-2].
     vza : float
-        View Zenith Angle (radians).
+        View zenith angle [radians].
     aleafv : ee.Image
 
     aleafn : ee.Image
@@ -59,15 +59,15 @@ def tseb_pt(t_air, t_rad, u, p, z, rs_1, rs24, vza,
     ndvi : ee.Image
         Normalized Difference Vegetation Index
     lai : ee.Image
-        Effective Leaf Area Index (m2 m-2).
+        Effective Leaf Area Index [m2 m-2].
     clump : ee.Image
 
     leaf_width : ee.Image
-        Average/effective leaf width (m).
+        Average/effective leaf width [m].
     hc_min : ee.Image
-        Canopy height (m).
+        Canopy height [m].
     hc_max : ee.Image
-        Canopy height (m).
+        Canopy height [m].
     datetime : ee.Date
         Image datetime.
     lat : ee.Image
@@ -78,11 +78,10 @@ def tseb_pt(t_air, t_rad, u, p, z, rs_1, rs24, vza,
         Priestley Taylor coefficient for canopy potential transpiration
         (the default is 1.32).
     stabil_iter: int, optional
-        Number of iterations of stability calculation
-        (the default is 35)
+        Number of iterations of stability calculation (the default is 36).
     albedo_iter: int, optional
         Number of iterations of albedo separation calculation
-        (the default is 10)
+        (the default is 10).
 
     Returns
     -------
@@ -102,6 +101,7 @@ def tseb_pt(t_air, t_rad, u, p, z, rs_1, rs24, vza,
         model with radiometric temperatures for partial canopy cover,
         Agricultural and Forest Meteorology, Volume 94, Issue 1, Pages 13-29,
         http://dx.doi.org/10.1016/S0168-1923(99)00005-2.
+
     """
 
     # # DEADBEEF
