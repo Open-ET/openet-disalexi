@@ -162,7 +162,10 @@ def tseb_pt(t_air, t_rad, u, p, z, rs_1, rs24, vza,
     # hc = lai.expression(
     #     'hc_min + ((hc_max - hc_min) * fc)',
     #     {'hc_min': hc_min, 'hc_max': hc_max, 'fc': fc})
-
+    #make rs_1 and rs24 having fine scale met data information
+    rs_1 = lai.multiply(0).add(rs_1).rename(['rs'])
+    rs24 = lai.multiply(0).add(rs24).rename(['rs'])
+    
     # LAI relative to canopy projection only
     lai_c = lai.divide(fc)
     # lai_c = lai.expression('lai / fc', {'lai': lai, 'fc': fc})
