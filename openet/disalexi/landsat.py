@@ -28,12 +28,6 @@ class Landsat(object):
     def _albedo(self):
         """Compute total shortwave broadband albedo following [Liang2001]
 
-        The Python code had the following line and comment:
-            "bands = [1, 3, 4, 5, 7]  # dont use blue"
-        IDL code and [Liang2001] indicate that the green band is not used.
-        Coefficients were derived for Landsat 7 ETM+, but were found to be
-            "suitable" to Landsat 4/5 TM also.
-
         Parameters
         ----------
         self.input_image : ee.Image
@@ -43,6 +37,14 @@ class Landsat(object):
         -------
         albedo : ee.Image
 
+        Notes
+        -----
+        The Python DisALEXI code had the following line and comment:
+            "bands = [1, 3, 4, 5, 7]  # dont use blue"
+        IDL code and [Liang2001] indicate that the green band is not used.
+        Coefficients were derived for Landsat 7 ETM+, but were found to be
+            "suitable" to Landsat 4/5 TM also.
+
         References
         ----------
         .. [Liang2001] Shunlin Liang (2001),
@@ -50,13 +52,24 @@ class Landsat(object):
             I Algorithms, Remote Sensing of Environment,
             Volume 76, Issue2, Pages 213-238,
             http://doi.org/10.1016/S0034-4257(00)00205-4
+
         """
-        return ee.Image(self.input_image) \
-            .select(['blue', 'red', 'nir', 'swir1', 'swir2']) \
-            .multiply([0.356, 0.130, 0.373, 0.085, 0.072]) \
-            .reduce(ee.Reducer.sum()) \
-            .subtract(0.0018) \
+        albedo = self.input_image\
+            .select(['blue', 'red', 'nir', 'swir1', 'swir2'])\
+            .multiply([0.356, 0.130, 0.373, 0.085, 0.072])
+        return albedo.select([0])\
+            .add(albedo.select([1])).add(albedo.select([2]))\
+            .add(albedo.select([3])).add(albedo.select([4]))\
+            .subtract(0.0018)\
             .rename(['albedo'])
+
+        # # Using a sum reducer was returning an unbounded image
+        # return ee.Image(self.input_image)\
+        #     .select(['blue', 'red', 'nir', 'swir1', 'swir2'])\
+        #     .multiply([0.356, 0.130, 0.373, 0.085, 0.072])\
+        #     .reduce(ee.Reducer.sum())\
+        #     .subtract(0.0018)\
+        #     .rename(['albedo'])
 
     @lazy_property
     def _lai(self):
