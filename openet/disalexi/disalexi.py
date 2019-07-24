@@ -41,8 +41,8 @@ class Image(object):
             rs_daily_source='MERRA2',
             rs_hourly_source='MERRA2',
             windspeed_source='CFSV2',
-            stabil_iterations=10,
-            albedo_iterations=3,
+            stabil_iterations=36,
+            albedo_iterations=10,
             rs_interp_flag=True,
             ta_interp_flag=False,
             ta_smooth_flag=True,
@@ -75,7 +75,7 @@ class Image(object):
         windspeed_source : {'CFSV2}
             Windspeed source keyword (the default is 'CFSV2').
         stabil_iterations : int
-            Number of istability calculation iterations (the default is 10).
+            Number of istability calculation iterations (the default is 36).
         albedo_iterations : int
             Number albedo separation iterations (the default is 10).
         rs_interp_flag : bool, optional
