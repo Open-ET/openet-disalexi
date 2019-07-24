@@ -46,9 +46,9 @@ class Image(object):
             ta_interp_flag=True,
             ta_smooth_flag=True,
             rs_interp_flag=True,
-            # etr_source=None,
-            # etr_band=None,
-            # etr_factor=None,
+            etr_source=None,
+            etr_band=None,
+            etr_factor=1.0,
             lat=None,
             lon=None,
         ):
@@ -79,8 +79,21 @@ class Image(object):
         albedo_iterations : int
             Number albedo separation iterations (the default is 10).
         ta_interp_flag : bool
+            If True, .
         ta_smooth_flag : bool
+            If True, .
         rs_interp_flag : bool
+            If True, .
+        etr_source : str, float, optional
+            Reference ET source (the default is 'IDAHO_EPSCOR/GRIDMET').
+        etr_band : str, optional
+            Reference ET band name (the default is 'etr').
+        etr_factor : float, optional
+            Reference ET scaling factor (the default is 1.0).
+        lat : ee.Image
+            Latitude [deg].
+        lon : ee.Image,
+            Longitude [deg].
 
         Notes
         -----
@@ -138,14 +151,14 @@ class Image(object):
         # CGM - Buffering clouds a small amount
         # Buffer distances are currently hardcoded at -30 and +90
         #   but these could be changed to input parameters
-        self.mask = image.select('cfmask').gte(1)\
+        self.cloud_mask = image.select('cfmask').gte(1)\
             .reduceNeighborhood(ee.Reducer.min(), ee.Kernel.circle(30, 'meters'))\
             .reduceNeighborhood(ee.Reducer.max(), ee.Kernel.circle(90, 'meters'))\
             .eq(0)\
-            .rename(['mask'])
+            .rename(['cloud_mask'])
         # self.cfmask = image.select('cfmask')
-        # self.mask = self.cfmask.eq(0)
-        input_image = image.updateMask(self.mask)
+        # self.cloud_mask = self.cfmask.eq(0)
+        input_image = image.updateMask(self.cloud_mask)
 
         # Get input bands from the image
         self.albedo = input_image.select('albedo')
@@ -167,6 +180,11 @@ class Image(object):
         self.ta_interp_flag = utils.boolean(ta_interp_flag)
         self.ta_smooth_flag = utils.boolean(ta_smooth_flag)
         self.rs_interp_flag = utils.boolean(rs_interp_flag)
+
+        # Reference ET parameters
+        self.etr_source = etr_source
+        self.etr_band = etr_band
+        self.etr_factor = etr_factor
 
         if lat is None:
             self.lat = self.lst.multiply(0).add(
@@ -315,8 +333,7 @@ class Image(object):
     #     """
     #     return cls(landsat.LandsatTOA(toa_image).prep(), **kwargs)
 
-    # def calculate(self, variables=['et', 'etr', 'etf']):
-    def calculate(self, variables=['et']):
+    def calculate(self, variables=['et', 'etr', 'etf']):
         """Return a multiband image of calculated variables
 
         Parameters
@@ -332,10 +349,10 @@ class Image(object):
         for v in variables:
             if v.lower() == 'et':
                 output_images.append(self.et)
-            # elif v.lower() == 'etf':
-            #     output_images.append(self.etf)
-            # elif v.lower() == 'etr':
-            #     output_images.append(self.etr)
+            elif v.lower() == 'etf':
+                output_images.append(self.etf)
+            elif v.lower() == 'etr':
+                output_images.append(self.etr)
             elif v.lower() == 'lst':
                 output_images.append(self.lst)
             elif v.lower() == 'mask':
@@ -385,16 +402,38 @@ class Image(object):
         return et.rename(['et']).double().set(self.properties)
         #     .set({'ta_step_size': self.ta.get('ta_step_size')})
 
-    # @lazy_property
-    # def etr(self):
-    #     """Compute reference ET for the image date"""
-    #     return True
+    @lazy_property
+    def etr(self):
+        """Compute reference ET for the image date"""
+        if utils.is_number(self.etr_source):
+            # Interpret numbers as constant images
+            # CGM - Should we use the ee_types here instead?
+            #   i.e. ee.ee_types.isNumber(self.etr_source)
+            etr_img = ee.Image.constant(self.etr_source)
+        elif type(self.etr_source) is str:
+            # Assume a string source is an image collection ID (not an image ID)
+            etr_img = ee.Image(
+                ee.ImageCollection(self.etr_source)\
+                    .filterDate(self._start_date, self._end_date)\
+                    .select([self.etr_band])\
+                    .first())
+        else:
+            raise ValueError('unsupported etr_source: {}'.format(
+                self.etr_source))
 
-    # @lazy_property
-    # def etf(self):
-    #     """Compute ET fraction as actual ET divided by the reference ET"""
-    #     return self.et.divide(self.etr)\
-    #         .rename(['etf']).set(self.properties).double()
+        # Map ETr values directly to the input (i.e. Landsat) image pixels
+        # The benefit of this is the ETr image is now in the same crs as the
+        #   input image.  Not all models may want this though.
+        # CGM - Should the output band name match the input ETr band name?
+        return self.ndvi.multiply(0).add(etr_img)\
+            .multiply(self.etr_factor)\
+            .rename(['etr']).set(self.properties)
+
+    @lazy_property
+    def etf(self):
+        """Compute ET fraction as actual ET divided by the reference ET"""
+        return self.et.divide(self.etr)\
+            .rename(['etf']).set(self.properties).double()
 
     @lazy_property
     def et_alexi(self):
@@ -445,12 +484,11 @@ class Image(object):
     #     """Return land surface temperature (LST) image"""
     #     return self.image.select(['lst']).set(self.properties).double()
 
-    # CGM - Using CFMask for now
-    # @lazy_property
-    # def mask(self):
-    #     """Mask of all active pixels (based on the final et)"""
-    #     return self.et.multiply(0).add(1).updateMask(1)\
-    #         .rename(['mask']).set(self.properties).uint8()
+    @lazy_property
+    def mask(self):
+        """Mask of all active pixels (based on the final et)"""
+        return self.et.multiply(0).add(1).updateMask(1)\
+            .rename(['mask']).set(self.properties).uint8()
 
     # @lazy_property
     # def ndvi(self):

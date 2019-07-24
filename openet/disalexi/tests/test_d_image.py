@@ -61,14 +61,20 @@ def default_image(albedo=0.125, cfmask=0, lai=4.7, lst=306, ndvi=0.875):
             # 'system:time_start': ee.Date(SCENE_DATE).millis(),
             'system:id': COLL_ID + SCENE_ID,
         })
-def default_image_args(albedo=0.125, cfmask=0, lai=4.7, lst=306, ndvi=0.875):
+
+def default_image_args(albedo=0.125, cfmask=0, lai=4.7, lst=306, ndvi=0.875,
+                       etr_source=10):
     return {
         'image': default_image(albedo=albedo, cfmask=cfmask, lai=lai, lst=lst,
                                ndvi=ndvi),
+        'etr_source': etr_source
     }
-def default_image_obj(albedo=0.125, cfmask=0, lai=4.7, lst=306, ndvi=0.875):
+
+def default_image_obj(albedo=0.125, cfmask=0, lai=4.7, lst=306, ndvi=0.875,
+                      etr_source=10):
     return model.Image(**default_image_args(
         albedo=albedo, cfmask=cfmask, lai=lai, lst=lst, ndvi=ndvi,
+        etr_source=etr_source
     ))
 
 
@@ -85,9 +91,9 @@ def test_Image_init_default_parameters():
     assert m.albedo_iter == 3
     assert m.ta_interp_flag == True
     assert m.rs_interp_flag == True
-    # assert m.etr_source == None
-    # assert m.etr_band == None
-    # assert m.etr_factor == 1.0
+    assert m.etr_source == None
+    assert m.etr_band == None
+    assert m.etr_factor == 1.0
 
 
 # Todo: Break these up into separate functions?
@@ -373,7 +379,7 @@ def test_Image_et_values(albedo, cfmask, lai, lst, ndvi, ta, alexi, elevation,
                          albedo_iter, lat, lon, expected, tol=0.0001):
     output_img = model.Image(
         default_image(albedo=albedo, cfmask=cfmask, lai=lai, lst=lst, ndvi=ndvi),
-        ta_source=ta, alexi_source=alexi,elevation_source=elevation,
+        ta_source=ta, alexi_source=alexi, elevation_source=elevation,
         landcover_source=landcover, rs_daily_source=rs_daily,
         rs_hourly_source=rs_hourly, windspeed_source=windspeed, lat=lat, lon=lon,
         stabil_iterations=stabil_iter, albedo_iterations=albedo_iter).et
@@ -391,91 +397,101 @@ def test_Image_et_properties():
     # assert output['properties']['ta_iteration'] > 0
 
 
-# @pytest.mark.parametrize(
-#     # Note: These are made up values
-#     'lst, ndvi, elev, expected',
-#     [
-#         # Basic ETf test
-#         [308, 0.50, 10, 50, 0.98, 310, 0.58],
-#     ]
-# )
-# def test_Image_etf_values(lst, ndvi, elev, expected,
-#                           tol=0.0001):
-#     output_img = model.Image(
-#             default_image(lst=lst, ndvi=ndvi), elev_source=elev).etf
-#     output = utils.point_image_value(ee.Image(output_img))
-#     assert abs(output['etf'] - expected) <= tol
-#
-#
-# def test_Image_etf_properties():
-#     """Test if properties are set on the ETf image"""
-#     output = utils.getinfo(model.Image(default_image()).etf)
-#     assert output['bands'][0]['id'] == 'etf'
-#     assert output['properties']['system:index'] == SCENE_ID
-#     assert output['properties']['system:time_start'] == SCENE_TIME
-#
-#
-# def test_Image_etr_properties():
-#     """Test if properties are set on the ETr image"""
-#     output =  utils.getinfo(default_image_obj().etr)
-#     assert output['bands'][0]['id'] == 'etr'
-#     assert output['properties']['system:index'] == SCENE_ID
-#     assert output['properties']['system:time_start'] == SCENE_TIME
-#     assert output['properties']['image_id'] == COLL_ID + SCENE_ID
-#
-#
-# def test_Image_etr_constant_values(etr=10.0, expected=8.5, tol=0.0001):
-#     output = utils.point_image_value(default_image_obj(etr_source=etr).etr)
-#     assert abs(output['etr'] - expected) <= tol
+def test_Image_etr_properties():
+    """Test if properties are set on the ETr image"""
+    output =  utils.getinfo(default_image_obj().etr)
+    assert output['bands'][0]['id'] == 'etr'
+    assert output['properties']['system:index'] == SCENE_ID
+    assert output['properties']['system:time_start'] == SCENE_TIME
+    assert output['properties']['image_id'] == COLL_ID + SCENE_ID
+
+
+def test_Image_etr_constant_values(etr=10.0, expected=10.0, tol=0.0001):
+    output = utils.point_image_value(
+        default_image_obj(etr_source=etr).etr, TEST_POINT)
+    assert abs(output['etr'] - expected) <= tol
+
+
+@pytest.mark.parametrize(
+    'albedo, cfmask, lai, lst, ndvi, ta, '
+    'alexi, elevation, landcover, rs_daily, rs_hourly, windspeed, '
+    'stabil_iter, albedo_iter, etr_source, lat, lon, expected',
+    [
+        # Rounded values based on high NDVI site (below)
+        [0.125, 0, 4.7, 306, 0.875, 300,
+         3.25, 10.0, 82, 8600, 950, 3.25,
+         36, 10, 10.0, 38.7399, -121.5265, 0.694218],
+        # # Same as above but with fewer iterations
+        # [0.125, 0, 4.7, 306, 0.875, 300,
+        #  3.25, 10.0, 82, 8600, 950, 3.25,
+        #  6, 3, 38.7399, -121.5265, 6.94414],
+        # # High NDVI site in LC08_044033_20170716
+        # [0.1259961, 0, 4.6797005913579, 305.92253850611, 0.87439300744578, 300,
+        #  3.35975885, 3.0, 82, 8603.212890625, 946.69066527778, 3.2665367230039,
+        #  36, 10, 38.7399, -121.5265, 6.9511],
+        # # Low NDVI site in LC08_044033_20170716
+        # [0.17163020, 0, 0.029734416071998, 323.59893135545, 0.16195230171936, 300,
+        #  3.35975885, 4.0, 82, 8603.212890625, 946.69066527778, 3.2665367230039,
+        #  36, 10, 38.71776, -121.50822, 4.1705],
+    ]
+)
+def test_Image_etf_values(albedo, cfmask, lai, lst, ndvi, ta, alexi, elevation,
+                          landcover, rs_daily, rs_hourly, windspeed, stabil_iter,
+                          albedo_iter, etr_source, lat, lon,
+                          expected, tol=0.0001):
+    output_img = model.Image(
+        default_image(albedo=albedo, cfmask=cfmask, lai=lai, lst=lst, ndvi=ndvi),
+        ta_source=ta, alexi_source=alexi, elevation_source=elevation,
+        landcover_source=landcover, rs_daily_source=rs_daily,
+        rs_hourly_source=rs_hourly, windspeed_source=windspeed,
+        etr_source=etr_source, lat=lat, lon=lon,
+        stabil_iterations=stabil_iter, albedo_iterations=albedo_iter).etf
+    output = utils.point_image_value(output_img, TEST_POINT)
+    assert abs(output['etf'] - expected) <= tol
+
+
+def test_Image_etf_properties():
+    """Test if properties are set on the ETf image"""
+    output = utils.getinfo(default_image_obj().etf)
+    assert output['bands'][0]['id'] == 'etf'
+    assert output['properties']['system:index'] == SCENE_ID
+    assert output['properties']['system:time_start'] == SCENE_TIME
 
 
 def test_Image_mask_values():
-    output_img = model.Image(
-        default_image(albedo=0.125, cfmask=0, lai=4.7, lst=306, ndvi=0.875)).mask
+    output_img = default_image_obj(cfmask=0).mask
     output = utils.point_image_value(output_img, TEST_POINT)
     assert output['mask'] == 1
 
 
-def test_Image_mask_band_name():
+def test_Image_mask_properties():
+    """Test if properties are set on the time image"""
     output = utils.getinfo(default_image_obj().mask)
     assert output['bands'][0]['id'] == 'mask'
+    assert output['properties']['system:index'] == SCENE_ID
+    assert output['properties']['system:time_start'] == SCENE_TIME
+    assert output['properties']['image_id'] == COLL_ID + SCENE_ID
 
 
-# CGM - Mask doesn't have properties since it isn't a lazy property
-# def test_Image_mask_properties():
-#     """Test if properties are set on the time image"""
-#     output = utils.getinfo(default_image_obj().mask)['properties']
-#     assert output['system:index'] == SCENE_ID
-#     assert output['system:time_start'] == SCENE_TIME
-#     assert output['image_id'] == COLL_ID + SCENE_ID
+def test_Image_time_values():
+    # The time image is currently being built from the etf image, so all the
+    #   ancillary values must be set for the constant_image_value to work.
+    output = utils.constant_image_value(default_image_obj().time)
+    assert output['time'] == SCENE_TIME
 
 
-# def test_Image_time_values():
-#     # The time image is currently being built from the etf image, so all the
-#     #   ancillary values must be set for the constant_image_value to work.
-#     output = utils.constant_image_value(model.Image(
-#         default_image(ndvi=0.5, lst=308), dt_source=10, elev_source=50,
-#         tcorr_source=0.98, tmax_source=310).time)
-#     assert output['time'] == SCENE_TIME
-#
-#
-# def test_Image_time_band_name():
-#     output = utils.getinfo(default_image_obj().time)
-#     assert output['bands'][0]['id'] == 'time'
-#
-#
-# def test_Image_time_properties():
-#     """Test if properties are set on the time image"""
-#     output = utils.getinfo(default_image_obj().time)['properties']
-#     assert output['system:index'] == SCENE_ID
-#     assert output['system:time_start'] == SCENE_TIME
-#     assert output['image_id'] == COLL_ID + SCENE_ID
+def test_Image_time_properties():
+    """Test if properties are set on the time image"""
+    output = utils.getinfo(default_image_obj().time)
+    assert output['bands'][0]['id'] == 'time'
+    assert output['properties']['system:index'] == SCENE_ID
+    assert output['properties']['system:time_start'] == SCENE_TIME
+    assert output['properties']['image_id'] == COLL_ID + SCENE_ID
 
 
 def test_Image_calculate_variables_default():
     output = utils.getinfo(default_image_obj().calculate())
-    assert set([x['id'] for x in output['bands']]) == set(['et'])
-    # assert set([x['id'] for x in output['bands']]) == set(['et', 'etr', 'etf'])
+    assert set([x['id'] for x in output['bands']]) == set(['et', 'etr', 'etf'])
 
 
 def test_Image_calculate_variables_custom():

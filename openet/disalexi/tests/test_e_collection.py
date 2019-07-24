@@ -305,160 +305,161 @@ def test_Collection_overpass_no_variables_valueerror():
     with pytest.raises(ValueError):
         model.Collection(**args).overpass().getInfo()
 
+
 # DEADBEEF - Interpolation is disabled in DisALEXI for now
-# def test_Collection_interpolate_default():
-#     """Default t_interval should be custom"""
-#     output = utils.getinfo(model.Collection(**default_coll_args())
-#         .interpolate())
-#     assert output['type'] == 'ImageCollection'
-#     assert parse_scene_id(output) == ['20170701']
-#     assert VARIABLES == sorted(list(set([
-#         y['id'] for x in output['features'] for y in x['bands']])))
-#
-#
-# def test_Collection_interpolate_variables_custom():
-#     output = utils.getinfo(model.Collection(**default_coll_args())
-#         .interpolate(variables=['et']))
-#     assert ['et'] == sorted(list(set([
-#         y['id'] for x in output['features'] for y in x['bands']])))
-#
-#
-# def test_Collection_interpolate_t_interval_daily():
-#     """Test if the daily time interval parameter works"""
-#     output = utils.getinfo(model.Collection(**default_coll_args())
-#         .interpolate(t_interval='daily'))
-#     assert output['type'] == 'ImageCollection'
-#     assert parse_scene_id(output)[0] == '20170701'
-#     assert parse_scene_id(output)[-1] == '20170731'
-#     assert VARIABLES == sorted(list(set([
-#         y['id'] for x in output['features'] for y in x['bands']])))
-#
-#
-# def test_Collection_interpolate_t_interval_monthly():
-#     """Test if the monthly time interval parameter works"""
-#     output = utils.getinfo(model.Collection(**default_coll_args())
-#         .interpolate(t_interval='monthly'))
-#     assert output['type'] == 'ImageCollection'
-#     assert parse_scene_id(output) == ['201707']
-#     assert VARIABLES == sorted(list(set([
-#         y['id'] for x in output['features'] for y in x['bands']])))
-#
-#
-# # CGM - Commenting out since it takes a really long time to run
-# #   This function could probably be be tested for a shorter time period
-# # def test_Collection_interpolate_t_interval_annual():
-# #     """Test if the annual time interval parameter works"""
-# #     args = default_coll_args()
-# #     args['start_date'] = '2017-01-01'
-# #     args['end_date'] = '2018-01-01'
-# #     output = utils.getinfo(model.Collection(**args)
-# #         .interpolate(t_interval='annual'))
-# #     assert output['type'] == 'ImageCollection'
-# #     assert parse_scene_id(output) == ['2017']
-# #     assert VARIABLES == sorted(list(set([
-# #         y['id'] for x in output['features'] for y in x['bands']])))
-#
-#
-# def test_Collection_interpolate_t_interval_custom():
-#     """Test if the custom time interval parameter works"""
-#     output = utils.getinfo(model.Collection(**default_coll_args())
-#         .interpolate(t_interval='custom'))
-#     assert output['type'] == 'ImageCollection'
-#     assert parse_scene_id(output) == ['20170701']
-#     assert VARIABLES == sorted(list(set([
-#         y['id'] for x in output['features'] for y in x['bands']])))
-#
-#
-# # TODO: Write test for annual interpolation with a date range that is too short
-#
-#
-# # def test_Collection_interpolate_interp_days():
-# #     """Test if the interpolate interp_days parameter works"""
-# #     # Is there any way to test this without pulling values at a point?
-#
-#
-# # This is already being tested by test_Collection_interpolate_default() above
-# # def test_Collection_interpolate_etr_source_init():
-# #     """Test setting etr_source in the class init"""
-# #     args = default_coll_args()
-# #     args.update({'etr_source': 'IDAHO_EPSCOR/GRIDMET', 'etr_band': 'etr'})
-# #     output = utils.getinfo(model.Collection(**args).interpolate())
-# #     assert VARIABLES == sorted(list(set([
-# #         y['id'] for x in output['features'] for y in x['bands']])))
-#
-#
-# def test_Collection_interpolate_etr_source_model_args():
-#     """Test setting etr_source in the model_args"""
+def test_Collection_interpolate_default():
+    """Default t_interval should be custom"""
+    output = utils.getinfo(model.Collection(**default_coll_args())
+        .interpolate())
+    assert output['type'] == 'ImageCollection'
+    assert parse_scene_id(output) == ['20170701']
+    assert VARIABLES == sorted(list(set([
+        y['id'] for x in output['features'] for y in x['bands']])))
+
+
+def test_Collection_interpolate_variables_custom():
+    output = utils.getinfo(model.Collection(**default_coll_args())
+        .interpolate(variables=['et']))
+    assert ['et'] == sorted(list(set([
+        y['id'] for x in output['features'] for y in x['bands']])))
+
+
+def test_Collection_interpolate_t_interval_daily():
+    """Test if the daily time interval parameter works"""
+    output = utils.getinfo(model.Collection(**default_coll_args())
+        .interpolate(t_interval='daily'))
+    assert output['type'] == 'ImageCollection'
+    assert parse_scene_id(output)[0] == '20170701'
+    assert parse_scene_id(output)[-1] == '20170731'
+    assert VARIABLES == sorted(list(set([
+        y['id'] for x in output['features'] for y in x['bands']])))
+
+
+def test_Collection_interpolate_t_interval_monthly():
+    """Test if the monthly time interval parameter works"""
+    output = utils.getinfo(model.Collection(**default_coll_args())
+        .interpolate(t_interval='monthly'))
+    assert output['type'] == 'ImageCollection'
+    assert parse_scene_id(output) == ['201707']
+    assert VARIABLES == sorted(list(set([
+        y['id'] for x in output['features'] for y in x['bands']])))
+
+
+# CGM - Commenting out since it takes a really long time to run
+#   This function could probably be be tested for a shorter time period
+# def test_Collection_interpolate_t_interval_annual():
+#     """Test if the annual time interval parameter works"""
 #     args = default_coll_args()
-#     del args['etr_source']
-#     del args['etr_band']
-#     args['model_args'] = {'etr_source': 'IDAHO_EPSCOR/GRIDMET', 'etr_band': 'etr'}
+#     args['start_date'] = '2017-01-01'
+#     args['end_date'] = '2018-01-01'
+#     output = utils.getinfo(model.Collection(**args)
+#         .interpolate(t_interval='annual'))
+#     assert output['type'] == 'ImageCollection'
+#     assert parse_scene_id(output) == ['2017']
+#     assert VARIABLES == sorted(list(set([
+#         y['id'] for x in output['features'] for y in x['bands']])))
+
+
+def test_Collection_interpolate_t_interval_custom():
+    """Test if the custom time interval parameter works"""
+    output = utils.getinfo(model.Collection(**default_coll_args())
+        .interpolate(t_interval='custom'))
+    assert output['type'] == 'ImageCollection'
+    assert parse_scene_id(output) == ['20170701']
+    assert VARIABLES == sorted(list(set([
+        y['id'] for x in output['features'] for y in x['bands']])))
+
+
+# TODO: Write test for annual interpolation with a date range that is too short
+
+
+# def test_Collection_interpolate_interp_days():
+#     """Test if the interpolate interp_days parameter works"""
+#     # Is there any way to test this without pulling values at a point?
+
+
+# This is already being tested by test_Collection_interpolate_default() above
+# def test_Collection_interpolate_etr_source_init():
+#     """Test setting etr_source in the class init"""
+#     args = default_coll_args()
+#     args.update({'etr_source': 'IDAHO_EPSCOR/GRIDMET', 'etr_band': 'etr'})
 #     output = utils.getinfo(model.Collection(**args).interpolate())
 #     assert VARIABLES == sorted(list(set([
 #         y['id'] for x in output['features'] for y in x['bands']])))
-#
-#
-# def test_Collection_interpolate_etr_source_method():
-#     """Test setting etr_source in the interpolate call"""
+
+
+def test_Collection_interpolate_etr_source_model_args():
+    """Test setting etr_source in the model_args"""
+    args = default_coll_args()
+    del args['etr_source']
+    del args['etr_band']
+    args['model_args'] = {'etr_source': 'IDAHO_EPSCOR/GRIDMET', 'etr_band': 'etr'}
+    output = utils.getinfo(model.Collection(**args).interpolate())
+    assert VARIABLES == sorted(list(set([
+        y['id'] for x in output['features'] for y in x['bands']])))
+
+
+def test_Collection_interpolate_etr_source_method():
+    """Test setting etr_source in the interpolate call"""
+    args = default_coll_args()
+    del args['etr_source']
+    del args['etr_band']
+    etr_kwargs = {'etr_source': 'IDAHO_EPSCOR/GRIDMET', 'etr_band': 'etr'}
+    output = utils.getinfo(model.Collection(**args).interpolate(**etr_kwargs))
+    assert VARIABLES == sorted(list(set([
+        y['id'] for x in output['features'] for y in x['bands']])))
+
+
+def test_Collection_interpolate_etr_source_not_set():
+    """Test if Exception is raised if etr_source is not set"""
+    args = default_coll_args()
+    del args['etr_source']
+    del args['etr_band']
+    with pytest.raises(ValueError):
+        utils.getinfo(model.Collection(**args).interpolate())
+
+
+# def test_Collection_interpolate_etr_source_exception():
+#     """Test if Exception is raised if etr_source is invalid"""
 #     args = default_coll_args()
-#     del args['etr_source']
-#     del args['etr_band']
-#     etr_kwargs = {'etr_source': 'IDAHO_EPSCOR/GRIDMET', 'etr_band': 'etr'}
-#     output = utils.getinfo(model.Collection(**args).interpolate(**etr_kwargs))
-#     assert VARIABLES == sorted(list(set([
-#         y['id'] for x in output['features'] for y in x['bands']])))
-#
-#
-# def test_Collection_interpolate_etr_source_not_set():
-#     """Test if Exception is raised if etr_source is not set"""
-#     args = default_coll_args()
-#     del args['etr_source']
-#     del args['etr_band']
+#     args['model_args'] = {'etr_source': 'DEADBEEF', 'etr_band': 'etr'}
 #     with pytest.raises(ValueError):
 #         utils.getinfo(model.Collection(**args).interpolate())
-#
-#
-# # def test_Collection_interpolate_etr_source_exception():
-# #     """Test if Exception is raised if etr_source is invalid"""
-# #     args = default_coll_args()
-# #     args['model_args'] = {'etr_source': 'DEADBEEF', 'etr_band': 'etr'}
-# #     with pytest.raises(ValueError):
-# #         utils.getinfo(model.Collection(**args).interpolate())
-#
-#
-# # def test_Collection_interpolate_etr_band_exception():
-# #     """Test if Exception is raised if etr_band is invalid"""
-# #     args = default_coll_args()
-# #     args['model_args'] = {'etr_source': 'IDAHO_EPSCOR/GRIDMET',
-# #                           'etr_band': 'DEADBEEF'}
-# #     with pytest.raises(ValueError):
-# #         utils.getinfo(model.Collection(**args).interpolate())
-#
-#
-# def test_Collection_interpolate_t_interval_exception():
-#     """Test if Exception is raised for an invalid t_interval parameter"""
-#     with pytest.raises(ValueError):
-#         utils.getinfo(model.Collection(**default_coll_args()) \
-#             .interpolate(t_interval='DEADBEEF'))
-#
-#
-# def test_Collection_interpolate_interp_method_exception():
-#     """Test if Exception is raised for an invalid interp_method parameter"""
-#     with pytest.raises(ValueError):
-#         utils.getinfo(model.Collection(**default_coll_args()) \
-#             .interpolate(interp_method='DEADBEEF'))
-#
-#
-# def test_Collection_interpolate_interp_days_exception():
-#     """Test if Exception is raised for an invalid interp_days parameter"""
-#     with pytest.raises(ValueError):
-#         utils.getinfo(model.Collection(**default_coll_args()) \
-#             .interpolate(interp_days=0))
-#
-#
-# def test_Collection_interpolate_no_variables_exception():
-#     """Test if Exception is raised if variables is not set in init or method"""
+
+
+# def test_Collection_interpolate_etr_band_exception():
+#     """Test if Exception is raised if etr_band is invalid"""
 #     args = default_coll_args()
-#     del args['variables']
+#     args['model_args'] = {'etr_source': 'IDAHO_EPSCOR/GRIDMET',
+#                           'etr_band': 'DEADBEEF'}
 #     with pytest.raises(ValueError):
 #         utils.getinfo(model.Collection(**args).interpolate())
+
+
+def test_Collection_interpolate_t_interval_exception():
+    """Test if Exception is raised for an invalid t_interval parameter"""
+    with pytest.raises(ValueError):
+        utils.getinfo(model.Collection(**default_coll_args()) \
+            .interpolate(t_interval='DEADBEEF'))
+
+
+def test_Collection_interpolate_interp_method_exception():
+    """Test if Exception is raised for an invalid interp_method parameter"""
+    with pytest.raises(ValueError):
+        utils.getinfo(model.Collection(**default_coll_args()) \
+            .interpolate(interp_method='DEADBEEF'))
+
+
+def test_Collection_interpolate_interp_days_exception():
+    """Test if Exception is raised for an invalid interp_days parameter"""
+    with pytest.raises(ValueError):
+        utils.getinfo(model.Collection(**default_coll_args()) \
+            .interpolate(interp_days=0))
+
+
+def test_Collection_interpolate_no_variables_exception():
+    """Test if Exception is raised if variables is not set in init or method"""
+    args = default_coll_args()
+    del args['variables']
+    with pytest.raises(ValueError):
+        utils.getinfo(model.Collection(**args).interpolate())
