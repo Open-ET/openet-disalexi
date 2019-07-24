@@ -103,21 +103,20 @@ class Collection():
             self.filter_args = {}
 
         # Pass the ETr parameters through as model keyword arguments
-        # #   if they were set (to non-default values)
-        # self.etr_source = etr_source
-        # self.etr_band = etr_band
-        # self.etr_factor = etr_factor
-        # if etr_source is not None:
-        #     self.model_args['etr_source'] = etr_source
-        # if etr_band is not None:
-        #     self.model_args['etr_band'] = etr_band
-        # if etr_factor != 1.0:
-        #     self.model_args['etr_factor'] = etr_factor
+        #   if they were set (to non-default values)
+        self.etr_source = etr_source
+        self.etr_band = etr_band
+        self.etr_factor = etr_factor
+        if etr_source is not None:
+            self.model_args['etr_source'] = etr_source
+        if etr_band is not None:
+            self.model_args['etr_band'] = etr_band
+        if etr_factor != 1.0:
+            self.model_args['etr_factor'] = etr_factor
 
         # Model specific variables that can be interpolated to a daily timestep
         # Should this be specified in the interpolation method instead?
-        self._interp_vars = ['ndvi']
-        # self._interp_vars = ['ndvi', 'etf']
+        self._interp_vars = ['ndvi', 'etf']
         # self._interp_vars = ['ndvi', 'etf', 'qa']
 
         self._landsat_c1_sr_collections = [
@@ -279,6 +278,7 @@ class Collection():
                 variable_coll = variable_coll.merge(
                     ee.ImageCollection(input_coll.map(compute_lsr)))
 
+            # DEADBEEF - Not supporting Landsat TOA
             # elif coll_id in self._landsat_c1_toa_collections:
             #     input_coll = ee.ImageCollection(coll_id) \
             #         .filterDate(start_date, end_date) \

@@ -15,7 +15,6 @@ SCENE_TIME = 1500230731090
 # SCENE_ID = 'LC08_042035_20150713'
 # SCENE_TIME = 1436812419150
 SCENE_DT = datetime.datetime.utcfromtimestamp(SCENE_TIME / 1000.0)
-print(SCENE_DT)
 # SCENE_DT = datetime.datetime.strptime(SCENE_ID[-8:], '%Y%m%d')
 SCENE_DATE = SCENE_DT.strftime('%Y-%m-%d')
 SCENE_DOY = int(SCENE_DT.strftime('%j'))
@@ -23,6 +22,7 @@ SCENE_HOUR = (SCENE_DT.hour + SCENE_DT.minute / 60.0 +
               (SCENE_DT.second + SCENE_DT.microsecond / 1000000.0) / 3600.0)
 # SCENE_HOUR = 18 + 33.0/60 + 39.15/3600
 # SCENE_TIME = utils.millis(SCENE_DT)
+SCENE_0UTC_DT = datetime.datetime.strptime(SCENE_DATE, '%Y-%m-%d')
 SCENE_POINT = (-119.5, 36.0)
 TEST_POINT = (-121.5265, 38.7399)
 # TEST_POINT = (-19.44252382373145, 36.04047742246546)
@@ -63,18 +63,18 @@ def default_image(albedo=0.125, cfmask=0, lai=4.7, lst=306, ndvi=0.875):
         })
 
 def default_image_args(albedo=0.125, cfmask=0, lai=4.7, lst=306, ndvi=0.875,
-                       etr_source=10):
+                       etr_source=10, etr_band=None):
     return {
         'image': default_image(albedo=albedo, cfmask=cfmask, lai=lai, lst=lst,
                                ndvi=ndvi),
-        'etr_source': etr_source
+        'etr_source': etr_source, 'etr_band': etr_band
     }
 
 def default_image_obj(albedo=0.125, cfmask=0, lai=4.7, lst=306, ndvi=0.875,
-                      etr_source=10):
+                      etr_source=10, etr_band=None):
     return model.Image(**default_image_args(
         albedo=albedo, cfmask=cfmask, lai=lai, lst=lst, ndvi=ndvi,
-        etr_source=etr_source
+        etr_source=etr_source, etr_band=etr_band,
     ))
 
 
@@ -89,8 +89,9 @@ def test_Image_init_default_parameters():
     assert m.windspeed_source == 'CFSV2'
     assert m.stabil_iter == 10
     assert m.albedo_iter == 3
-    assert m.ta_interp_flag == True
     assert m.rs_interp_flag == True
+    # assert m.ta_interp_flag == True
+    assert m.ta_smooth_flag == True
     assert m.etr_source == None
     assert m.etr_band == None
     assert m.etr_factor == 1.0
@@ -110,9 +111,9 @@ def test_Image_init_date_properties():
     assert utils.getinfo(d.date)['value'] == SCENE_TIME
     # assert utils.getinfo(d.year) == int(SCENE_DATE.split('-')[0])
     # assert utils.getinfo(d.month) == int(SCENE_DATE.split('-')[1])
-    # assert utils.getinfo(d.start_date)['value'] == SCENE_TIME
-    # assert utils.getinfo(d.end_date)['value'] == utils.millis(
-    #     SCENE_DT + datetime.timedelta(days=1))
+    assert utils.getinfo(d.start_date)['value'] == utils.millis(SCENE_0UTC_DT)
+    assert utils.getinfo(d.end_date)['value'] == utils.millis(
+        SCENE_0UTC_DT + datetime.timedelta(days=1))
     # assert utils.getinfo(d.doy) == SCENE_DOY
     # assert utils.getinfo(d.cycle_day) == int(
     #     (SCENE_DT - datetime.datetime(1970, 1, 3)).days % 8 + 1)
@@ -160,6 +161,9 @@ def test_Image_ta_sources(source, xy, expected, tol=0.01):
     m = model.Image(default_image(), ta_source=source)
     output = utils.point_image_value(ee.Image(m.ta), xy)
     assert abs(output['ta'] - expected) <= tol
+
+
+# TODO: Add test to see if ta_smooth_flag works
 
 
 def test_Image_ta_sources_exception():
@@ -351,6 +355,12 @@ def test_Image_windspeed_band_name():
     assert output == 'windspeed'
 
 
+def test_Image_et_default_values(expected=2.778, tol=0.0001):
+    output = utils.point_image_value(
+        default_image_obj().et, TEST_POINT)
+    assert abs(output['et'] - expected) <= tol
+
+
 @pytest.mark.parametrize(
     'albedo, cfmask, lai, lst, ndvi, ta, '
     'alexi, elevation, landcover, rs_daily, rs_hourly, windspeed, '
@@ -406,46 +416,30 @@ def test_Image_etr_properties():
     assert output['properties']['image_id'] == COLL_ID + SCENE_ID
 
 
-def test_Image_etr_constant_values(etr=10.0, expected=10.0, tol=0.0001):
+def test_Image_etr_default_values(expected=10.0, tol=0.0001):
     output = utils.point_image_value(
-        default_image_obj(etr_source=etr).etr, TEST_POINT)
+        default_image_obj(etr_source=expected).etr, TEST_POINT)
     assert abs(output['etr'] - expected) <= tol
 
 
 @pytest.mark.parametrize(
-    'albedo, cfmask, lai, lst, ndvi, ta, '
-    'alexi, elevation, landcover, rs_daily, rs_hourly, windspeed, '
-    'stabil_iter, albedo_iter, etr_source, lat, lon, expected',
+    'source, band, xy, expected',
     [
-        # Rounded values based on high NDVI site (below)
-        [0.125, 0, 4.7, 306, 0.875, 300,
-         3.25, 10.0, 82, 8600, 950, 3.25,
-         36, 10, 10.0, 38.7399, -121.5265, 0.694218],
-        # # Same as above but with fewer iterations
-        # [0.125, 0, 4.7, 306, 0.875, 300,
-        #  3.25, 10.0, 82, 8600, 950, 3.25,
-        #  6, 3, 38.7399, -121.5265, 6.94414],
-        # # High NDVI site in LC08_044033_20170716
-        # [0.1259961, 0, 4.6797005913579, 305.92253850611, 0.87439300744578, 300,
-        #  3.35975885, 3.0, 82, 8603.212890625, 946.69066527778, 3.2665367230039,
-        #  36, 10, 38.7399, -121.5265, 6.9511],
-        # # Low NDVI site in LC08_044033_20170716
-        # [0.17163020, 0, 0.029734416071998, 323.59893135545, 0.16195230171936, 300,
-        #  3.35975885, 4.0, 82, 8603.212890625, 946.69066527778, 3.2665367230039,
-        #  36, 10, 38.71776, -121.50822, 4.1705],
+        ['IDAHO_EPSCOR/GRIDMET', 'etr', TEST_POINT, 10.8985],
+        ['projects/climate-engine/cimis/daily', 'ETr_ASCE', TEST_POINT, 10.124],
+        ['10.8985', None, TEST_POINT, 10.8985],
+        [10.8985, None, TEST_POINT, 10.8985],
     ]
 )
-def test_Image_etf_values(albedo, cfmask, lai, lst, ndvi, ta, alexi, elevation,
-                          landcover, rs_daily, rs_hourly, windspeed, stabil_iter,
-                          albedo_iter, etr_source, lat, lon,
-                          expected, tol=0.0001):
-    output_img = model.Image(
-        default_image(albedo=albedo, cfmask=cfmask, lai=lai, lst=lst, ndvi=ndvi),
-        ta_source=ta, alexi_source=alexi, elevation_source=elevation,
-        landcover_source=landcover, rs_daily_source=rs_daily,
-        rs_hourly_source=rs_hourly, windspeed_source=windspeed,
-        etr_source=etr_source, lat=lat, lon=lon,
-        stabil_iterations=stabil_iter, albedo_iterations=albedo_iter).etf
+def test_Image_etr_sources(source, band, xy, expected, tol=0.001):
+    output = utils.point_image_value(
+        default_image_obj(etr_source=source, etr_band=band).etr, xy)
+    assert abs(output['etr'] - expected) <= tol
+
+
+def test_Image_etf_default_values(etr_source=10, expected=2.778/10, tol=0.0001):
+    # Check that ETf = ET / ETr
+    output_img = default_image_obj(etr_source=etr_source).etf
     output = utils.point_image_value(output_img, TEST_POINT)
     assert abs(output['etf'] - expected) <= tol
 
@@ -459,13 +453,17 @@ def test_Image_etf_properties():
 
 
 def test_Image_mask_values():
-    output_img = default_image_obj(cfmask=0).mask
-    output = utils.point_image_value(output_img, TEST_POINT)
+    # Mask is 1 for active pixels and nodata for cloudy pixels (cfmask >= 1)
+    output = utils.point_image_value(
+        default_image_obj(cfmask=1).mask, TEST_POINT)
+    assert output['mask'] == None
+    output = utils.point_image_value(
+        default_image_obj(cfmask=0).mask, TEST_POINT)
     assert output['mask'] == 1
 
 
 def test_Image_mask_properties():
-    """Test if properties are set on the time image"""
+    """Test if properties are set on the mask image"""
     output = utils.getinfo(default_image_obj().mask)
     assert output['bands'][0]['id'] == 'mask'
     assert output['properties']['system:index'] == SCENE_ID
@@ -473,11 +471,9 @@ def test_Image_mask_properties():
     assert output['properties']['image_id'] == COLL_ID + SCENE_ID
 
 
-def test_Image_time_values():
-    # The time image is currently being built from the etf image, so all the
-    #   ancillary values must be set for the constant_image_value to work.
-    output = utils.constant_image_value(default_image_obj().time)
-    assert output['time'] == SCENE_TIME
+def test_Image_time_point_values():
+    output = utils.point_image_value(default_image_obj().time, TEST_POINT)
+    assert output['time'] == utils.millis(SCENE_0UTC_DT)
 
 
 def test_Image_time_properties():

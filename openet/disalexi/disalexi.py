@@ -43,9 +43,9 @@ class Image(object):
             windspeed_source='CFSV2',
             stabil_iterations=10,
             albedo_iterations=3,
-            ta_interp_flag=True,
-            ta_smooth_flag=True,
             rs_interp_flag=True,
+            ta_interp_flag=False,
+            ta_smooth_flag=True,
             etr_source=None,
             etr_band=None,
             etr_factor=1.0,
@@ -78,22 +78,23 @@ class Image(object):
             Number of istability calculation iterations (the default is 10).
         albedo_iterations : int
             Number albedo separation iterations (the default is 10).
-        ta_interp_flag : bool
-            If True, .
-        ta_smooth_flag : bool
-            If True, .
-        rs_interp_flag : bool
-            If True, .
+        rs_interp_flag : bool, optional
+            If True, interpolate incoming solar radiation.
+            If False, select image with same date and hour.
+        ta_interp_flag : bool, optional
+            Ta interpolation is not implemented.
+        ta_smooth_flag : bool, optional
+            If True, smooth and resample Ta image.
         etr_source : str, float, optional
             Reference ET source (the default is 'IDAHO_EPSCOR/GRIDMET').
         etr_band : str, optional
             Reference ET band name (the default is 'etr').
         etr_factor : float, optional
             Reference ET scaling factor (the default is 1.0).
-        lat : ee.Image
-            Latitude [deg].
-        lon : ee.Image,
-            Longitude [deg].
+        lat : ee.Image, optional
+            Latitude [deg].  If not set will default to ee.Image.pixelLonLat().
+        lon : ee.Image, optional
+            Longitude [deg].  If not set will default to ee.Image.pixelLonLat().
 
         Notes
         -----
@@ -130,8 +131,8 @@ class Image(object):
         self.date = ee.Date(self.time_start)
         # self.year = ee.Number(self.date.get('year'))
         # self.month = ee.Number(self.date.get('month'))
-        # self.start_date = ee.Date(utils.date_to_time_0utc(self.date))
-        # self.end_date = self.start_date.advance(1, 'day')
+        self.start_date = ee.Date(utils.date_to_time_0utc(self.date))
+        self.end_date = self.start_date.advance(1, 'day')
         # self.doy = ee.Number(self.date.getRelative('day', 'year')).add(1).int()
         # self.cycle_day = self.start_date.difference(
         #     ee.Date.fromYMD(1970, 1, 3), 'day').mod(8).add(1).int()
@@ -177,9 +178,9 @@ class Image(object):
         self.windspeed_source = windspeed_source
         self.stabil_iter = int(stabil_iterations + 0.5)
         self.albedo_iter = int(albedo_iterations + 0.5)
-        self.ta_interp_flag = utils.boolean(ta_interp_flag)
-        self.ta_smooth_flag = utils.boolean(ta_smooth_flag)
         self.rs_interp_flag = utils.boolean(rs_interp_flag)
+        # self.ta_interp_flag = utils.boolean(ta_interp_flag)
+        self.ta_smooth_flag = utils.boolean(ta_smooth_flag)
 
         # Reference ET parameters
         self.etr_source = etr_source
@@ -409,12 +410,12 @@ class Image(object):
             # Interpret numbers as constant images
             # CGM - Should we use the ee_types here instead?
             #   i.e. ee.ee_types.isNumber(self.etr_source)
-            etr_img = ee.Image.constant(self.etr_source)
+            etr_img = ee.Image.constant(float(self.etr_source))
         elif type(self.etr_source) is str:
             # Assume a string source is an image collection ID (not an image ID)
             etr_img = ee.Image(
                 ee.ImageCollection(self.etr_source)\
-                    .filterDate(self._start_date, self._end_date)\
+                    .filterDate(self.start_date, self.end_date)\
                     .select([self.etr_band])\
                     .first())
         else:

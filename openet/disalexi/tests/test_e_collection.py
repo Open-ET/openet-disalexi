@@ -32,9 +32,12 @@ def default_coll_args():
         'end_date': END_DATE,
         'geometry': ee.Geometry.Point(SCENE_POINT),
         'variables': VARIABLES,
-        # 'etr_source': 'IDAHO_EPSCOR/GRIDMET',
-        # 'etr_band': 'etr',
-        # 'etr_factor': 0.85,
+        'etr_source': 'IDAHO_EPSCOR/GRIDMET',
+        'etr_band': 'etr',
+        'etr_factor': 0.85,
+        # 'etr_source': 'projects/climate-engine/cimis/daily',
+        # 'etr_band': 'ETr_ASCE',
+        # 'etr_factor': 1.0,
     }
 
 
@@ -50,22 +53,21 @@ def test_Collection_init_default_parameters():
     args = default_coll_args()
 
     # These values are being set above but have defaults that need to be checked
-    # del args['etr_source']
-    # del args['etr_band']
-    # del args['etr_factor']
+    del args['etr_source']
+    del args['etr_band']
+    del args['etr_factor']
     del args['variables']
 
     m = model.Collection(**args)
 
     assert m.variables == None
-    # assert m.etr_source == None
-    # assert m.etr_band == None
-    # assert m.etr_factor == 1.0
+    assert m.etr_source == None
+    assert m.etr_band == None
+    assert m.etr_factor == 1.0
     assert m.cloud_cover_max == 70
     assert m.model_args == {}
     assert m.filter_args == {}
-    assert m._interp_vars == ['ndvi']
-    # assert m._interp_vars == ['ndvi', 'etf']
+    assert m._interp_vars == ['ndvi', 'etf']
     assert m.model_name == 'DISALEXI'
 
 
