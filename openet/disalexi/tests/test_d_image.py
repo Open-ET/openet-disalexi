@@ -71,11 +71,6 @@ def default_image_obj(albedo=0.125, cfmask=0, lai=4.7, lst=306, ndvi=0.875):
     ))
 
 
-def test_ee_init():
-    """Check that Earth Engine was initialized"""
-    assert ee.Number(1).getInfo() == 1
-
-
 def test_Image_init_default_parameters():
     m = model.Image(default_image())
     assert m.ta_source == 'CONUS_V001'
