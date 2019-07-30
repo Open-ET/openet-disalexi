@@ -128,6 +128,14 @@ def tseb_pt(t_air, t_rad, u, p, z, rs_1, rs24, vza,
     # debug(hc_max, 'hc_max')
 
     # ************************************************************************
+    # Apply met bands directly to Landsat image
+    # CGM - This can probably be removed if Rs is resampled/smoothed in disalexi.py
+    rs_1 = lai.multiply(0).add(rs_1).rename(['rs'])
+    rs24 = lai.multiply(0).add(rs24).rename(['rs'])
+    # t_air = lai.multiply(0).add(t_air).rename(['ta'])
+    # u = lai.multiply(0).add(u).rename(['windspeed'])
+
+    # ************************************************************************
     # CGM - Moved from disalexi.py to here since these are not parameters
     #   you would typically vary and could be functions of the input images.
     # CGM - time and t_noon could probably be moved into compute_G0 since that

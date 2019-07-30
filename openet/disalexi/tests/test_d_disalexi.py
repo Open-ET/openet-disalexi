@@ -42,7 +42,7 @@ test_img = ee.Image(test_img \
 
 def test_Image_init_dates():
     d_obj = disalexi.Image(test_img)
-    assert d_obj.date.format('yyyy-MM-dd').getInfo() == img_date_str
+    assert d_obj.datetime.format('yyyy-MM-dd').getInfo() == img_date_str
     # assert d_obj.doy.getInfo() == img_doy
     assert int(d_obj.hour.getInfo()) == img_hour
     # assert float(d_obj.time.getInfo()) == img_time

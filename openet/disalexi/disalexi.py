@@ -44,7 +44,7 @@ class Image(object):
             stabil_iterations=36,
             albedo_iterations=10,
             rs_interp_flag=True,
-            ta_interp_flag=False,
+            ta_interp_flag=True,
             ta_smooth_flag=True,
             etr_source=None,
             etr_band=None,
@@ -128,12 +128,12 @@ class Image(object):
         #     .cat('r').cat(self.scene_id.slice(8, 11))
 
         # Set server side date/time properties using the 'system:time_start'
-        self.date = ee.Date(self.time_start)
-        # self.year = ee.Number(self.date.get('year'))
-        # self.month = ee.Number(self.date.get('month'))
-        self.start_date = ee.Date(utils.date_to_time_0utc(self.date))
+        self.datetime = ee.Date(self.time_start)
+        # self.year = ee.Number(self.datetime.get('year'))
+        # self.month = ee.Number(self.datetime.get('month'))
+        self.start_date = ee.Date(utils.date_to_time_0utc(self.datetime))
         self.end_date = self.start_date.advance(1, 'day')
-        # self.doy = ee.Number(self.date.getRelative('day', 'year')).add(1).int()
+        # self.doy = ee.Number(self.datetime.getRelative('day', 'year')).add(1).int()
         # self.cycle_day = self.start_date.difference(
         #     ee.Date.fromYMD(1970, 1, 3), 'day').mod(8).add(1).int()
 
@@ -141,7 +141,7 @@ class Image(object):
         # self.datetime = ee.Date(image.get('system:time_start'))
         # self.date = ee.Date(self.datetime.format('yyyy-MM-dd'))
         # self.doy = ee.Number(self.datetime.getRelative('day', 'year')).add(1).double()
-        self.hour = ee.Number(self.date.getFraction('day')).multiply(24)
+        self.hour = ee.Number(self.datetime.getFraction('day')).multiply(24)
         self.hour_int = self.hour.floor()
         # Time used in IDL is hours and fractional minutes (no seconds)
         # self.time = ee.Date(self.datetime).get('hour').add(
@@ -397,7 +397,7 @@ class Image(object):
             albedo=self.albedo, ndvi=self.ndvi, lai=self.lai,
             clump=self.clump, leaf_width=self.leaf_width,
             hc_min=self.hc_min, hc_max=self.hc_max,
-            datetime=self.date, lat=self.lat, lon=self.lon,
+            datetime=self.datetime, lat=self.lat, lon=self.lon,
             stabil_iter=self.stabil_iter,albedo_iter=self.albedo_iter,
         )
         return et.rename(['et']).double().set(self.properties)
@@ -451,7 +451,7 @@ class Image(object):
         elif self.alexi_source.upper() == 'CONUS_V001':
             alexi_coll_id = 'projects/disalexi/alexi/CONUS_V001'
             alexi_coll = ee.ImageCollection(alexi_coll_id) \
-                .filterDate(self.date, self.date.advance(1, 'day'))
+                .filterDate(self.start_date, self.end_date)
             alexi_img = ee.Image(alexi_coll.first())\
                 .multiply(0.408)
             # self.alexi_geo = [0.04, 0, -125.04, 0, -0.04, 49.8]
@@ -527,7 +527,7 @@ class Image(object):
                 .select(['SWGDNCLR'])
 
             if self.rs_interp_flag:
-                interp_dt = self.date.advance(-0.5, 'hour')
+                interp_dt = self.datetime.advance(-0.5, 'hour')
                 rs_a_img = ee.Image(rs_coll \
                     .filterDate(interp_dt.advance(-1, 'hour'), interp_dt).first())
                 rs_b_img = ee.Image(rs_coll \
@@ -541,7 +541,7 @@ class Image(object):
             else:
                 rs1_img = ee.Image(
                     ee.ImageCollection(rs_coll) \
-                        .filterDate(self.date, self.date.advance(1, 'day'))\
+                        .filterDate(self.start_date, self.end_date)\
                         .filter(ee.Filter.calendarRange(
                             self.hour_int, self.hour_int, 'hour'))
                         .first()) \
@@ -561,7 +561,7 @@ class Image(object):
         elif self.rs_daily_source.upper() == 'MERRA2':
             rs_coll = ee.ImageCollection('projects/climate-engine/merra2/daily')\
                 .select(['SWGDNCLR'])\
-                .filterDate(self.date, self.date.advance(1, 'day'))
+                .filterDate(self.start_date, self.end_date)
             rs24_img = ee.Image(rs_coll.first())
         else:
             raise ValueError('Unsupported rs_daily_source: {}\n'.format(
@@ -636,9 +636,9 @@ class Image(object):
     def time(self):
         """Return an image of the 0 UTC time (in milliseconds)"""
         return self.mask\
-            .double().multiply(0).add(utils.date_to_time_0utc(self.date))\
+            .double().multiply(0).add(utils.date_to_time_0utc(self.datetime))\
             .rename(['time']).set(self.properties)
-        # return ee.Image.constant(utils.date_to_time_0utc(self.date)) \
+        # return ee.Image.constant(utils.date_to_time_0utc(self.datetime)) \
         #     .double().rename(['time']).set(self.properties)
 
     @lazy_property
@@ -656,7 +656,7 @@ class Image(object):
                 .select([
                     'u-component_of_wind_height_above_ground',
                     'v-component_of_wind_height_above_ground']) \
-                .filterDate(self.date, self.date.advance(1, 'day'))
+                .filterDate(self.start_date, self.end_date)
             windspeed_img = windspeed_coll.mean() \
                 .expression('sqrt(b(0) ** 2 + b(1) ** 2)')
         else:
@@ -755,7 +755,7 @@ class Image(object):
             albedo=self.albedo, ndvi=self.ndvi, lai=self.lai,
             clump=self.clump, leaf_width=self.leaf_width,
             hc_min=self.hc_min, hc_max=self.hc_max,
-            datetime=self.date, a_pt_in=1.32,
+            datetime=self.datetime, a_pt_in=1.32,
             stabil_iter=self.stabil_iter, albedo_iter=self.albedo_iter,
         )
 
@@ -805,7 +805,7 @@ class Image(object):
                 albedo=self.albedo, ndvi=self.ndvi, lai=self.lai,
                 clump=self.clump, leaf_width=self.leaf_width,
                 hc_min=self.hc_min, hc_max=self.hc_max,
-                datetime=self.date, a_pt_in=1.32,
+                datetime=self.datetime, a_pt_in=1.32,
                 stabil_iter=self.stabil_iter, albedo_iter=self.albedo_iter,
             )
 
@@ -869,7 +869,7 @@ class Image(object):
                 albedo=self.albedo, ndvi=self.ndvi, lai=self.lai,
                 clump=self.clump, leaf_width=self.leaf_width,
                 hc_min=self.hc_min, hc_max=self.hc_max,
-                datetime=self.date, a_pt_in=1.32,
+                datetime=self.datetime, a_pt_in=1.32,
                 stabil_iter=self.stabil_iter, albedo_iter=self.albedo_iter,
             )
             # Aggregate the Landsat scale ET up to the ALEXI scale
@@ -928,7 +928,7 @@ class Image(object):
             albedo=self.albedo, ndvi=self.ndvi, lai=self.lai,
             clump=self.clump, leaf_width=self.leaf_width,
             hc_min=self.hc_min, hc_max=self.hc_max,
-            datetime=self.date, lat=self.lat, lon=self.lon,
+            datetime=self.datetime, lat=self.lat, lon=self.lon,
             stabil_iter=self.stabil_iter, albedo_iter=self.albedo_iter,
         )
         et_coarse = et_fine\
@@ -969,7 +969,7 @@ class Image(object):
             albedo=self.albedo, ndvi=self.ndvi, lai=self.lai,
             clump=self.clump, leaf_width=self.leaf_width,
             hc_min=self.hc_min, hc_max=self.hc_max,
-            datetime=self.date, lat=self.lat, lon=self.lon,
+            datetime=self.datetime, lat=self.lat, lon=self.lon,
             stabil_iter=self.stabil_iter, albedo_iter=self.albedo_iter,
         )
         return et.rename(['et']).double().set(self.properties)
