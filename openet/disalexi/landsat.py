@@ -26,7 +26,7 @@ class Landsat(object):
 
     @lazy_property
     def _albedo(self):
-        """Compute total shortwave broadband albedo following [Liang2001]
+        """Total shortwave broadband albedo following [Liang2001]
 
         Parameters
         ----------
@@ -73,7 +73,7 @@ class Landsat(object):
 
     @lazy_property
     def _lai(self):
-        """Compute LAI using METRIC NDVI / LAI empirical equation
+        """Leaf Area Index (LAI) computed from METRIC NDVI / LAI equation
 
         Parameters
         ----------
@@ -99,7 +99,7 @@ class Landsat(object):
 
     @lazy_property
     def _ndvi(self):
-        """Compute NDVI
+        """Normalized difference vegetation index
 
         Parameters
         ----------
@@ -181,21 +181,21 @@ class LandsatTOA(Landsat):
             self._cfmask,
             self._lai,
             self._lst,
-            self._ndvi])
+            self._ndvi,
+        ])
+
         self.prep_image = self.prep_image.set({
             'system:time_start': self._time_start,
             'system:index': self._index,
             'system:id': self._id,
         })
+
         return self.prep_image
 
     @lazy_property
     def _lst(self):
-        """Compute emissivity corrected land surface temperature (LST)
-        from brightness temperature.
-
-        Note, the coefficients were derived from a small number of scenes in
-        southern Idaho [Allen2007] and may not be appropriate for other areas.
+        """Emissivity corrected land surface temperature (LST) from brightness
+        temperature
 
         Parameters
         ----------
@@ -204,6 +204,12 @@ class LandsatTOA(Landsat):
         Returns
         -------
         lst : ee.Image
+
+        Notes
+        -----
+        The corrected radiation coefficients were derived from a small number
+        of scenes in southern Idaho [Allen2007] and may not be appropriate for
+        other areas.
 
         References
         ----------
@@ -244,8 +250,18 @@ class LandsatTOA(Landsat):
 
     @lazy_property
     def _cfmask(self):
-        """Extract CFmask from Landsat Collection 1 BQA band
+        """Extract CFmask like image from Landsat Collection 1 TOA bqa band
 
+        Parameters
+        ----------
+        self.input_image : ee.Image
+
+        Returns
+        -------
+        cfmask : ee.Image
+
+        Notes
+        -----
         https://landsat.usgs.gov/collectionqualityband
 
         Confidence values
@@ -256,15 +272,6 @@ class LandsatTOA(Landsat):
             (34-66 percent confidence)
         11 = "Yes" = Algorithm has high confidence that this condition exists
             (67-100 percent confidence
-
-
-        Parameters
-        ----------
-        self.input_image : ee.Image
-
-        Returns
-        -------
-        cfmask : ee.Image
 
         """
         bqa_image = ee.Image(self.input_image).select(['bqa'])
@@ -366,13 +373,15 @@ class LandsatSR(Landsat):
             self._cfmask,
             self._lai,
             self._lst,
-            self._ndvi])
+            self._ndvi,
+        ])
 
-        self.prep_image = ee.Image(self.prep_image.set({
+        self.prep_image = self.prep_image.set({
             'system:time_start': self._time_start,
             'system:index': self._index,
             'system:id': self._id,
-        }))
+        })
+
         return self.prep_image
 
         # The cloud mask could be applied here
@@ -381,8 +390,18 @@ class LandsatSR(Landsat):
 
     @lazy_property
     def _cfmask(self):
-        """Extract CFmask from Landsat Collection 1 pixel_qa band
+        """Extract CFmask like image from Landsat Collection 1 SR pixel_qa band
 
+        Parameters
+        ----------
+        self.input_image : ee.Image
+
+        Returns
+        -------
+        cfmask : ee.Image
+
+        Notes
+        -----
         https://landsat.usgs.gov/collectionqualityband
 
         Confidence values
@@ -393,15 +412,6 @@ class LandsatSR(Landsat):
             (34-66 percent confidence)
         11 = "Yes" = Algorithm has high confidence that this condition exists
             (67-100 percent confidence
-
-
-        Parameters
-        ----------
-        self.input_image : ee.Image
-
-        Returns
-        -------
-        cfmask : ee.Image
 
         """
         bqa_image = ee.Image(self.input_image).select(['pixel_qa'])
@@ -439,11 +449,8 @@ class LandsatSR(Landsat):
 
     @lazy_property
     def _lst(self):
-        """Compute emissivity corrected land surface temperature (LST)
-        from brightness temperature.
-
-        Note, the coefficients were derived from a small number of scenes in
-        southern Idaho [Allen2007] and may not be appropriate for other areas.
+        """Emissivity corrected land surface temperature (LST) from brightness
+        temperature
 
         Parameters
         ----------
@@ -452,6 +459,12 @@ class LandsatSR(Landsat):
         Returns
         -------
         lst : ee.Image
+
+        Notes
+        -----
+        The corrected radiation coefficients were derived from a small number
+        of scenes in southern Idaho [Allen2007] and may not be appropriate for
+        other areas.
 
         References
         ----------
@@ -492,7 +505,7 @@ class LandsatSR(Landsat):
 
     # @lazy_property
     # def _lst(self):
-    #     """just return the Brightness Temperature (BT) as land surface temperature (LST) for now
+    #     """Return the Brightness Temperature (BT) as land surface temperature (LST)
     #
     #     Parameters
     #     ----------
