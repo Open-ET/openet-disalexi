@@ -587,34 +587,49 @@ class Image(object):
             ta_img = ee.Image(self.ta_source)
             #     .set({'ta_iteration': 'image'})
         elif self.ta_source.upper() == 'CONUS_V001':
-            ta_coll_id = 'projects/disalexi/ta/CONUS_V001_wrs2'
+            ta_coll_id = 'projects/disalexi/ta/CONUS_V001_0p1K'
             ta_coll = ee.ImageCollection(ta_coll_id)\
                 .filterMetadata('id', 'equals', self.id)\
                 .limit(1, 'step_size', False)
             input_img = ee.Image(ta_coll.first())
 
-            # Compute new Ta as mean of bracketing values from mosaics
+            # Select the Ta image with the minimum bias
             ta_array = input_img.select('step_\\d+_ta').toArray()
             bias_array = input_img.select('step_\\d+_bias').toArray()
-            diff_array = bias_array.arraySlice(0, 1)\
-                .subtract(bias_array.arraySlice(0, 0, -1))
-            index = diff_array.gt(0).And(bias_array.arraySlice(0, 1).gt(0))
-            ta_a = ta_array.arraySlice(0, 0, -1).arrayMask(index)\
+            index = bias_array.abs().multiply(-1).arrayArgmax()\
                 .arraySlice(0, 0, 1).arrayFlatten([['array']])
-            ta_b = ta_array.arraySlice(0, 1).arrayMask(index)\
-                .arraySlice(0, 0, 1).arrayFlatten([['array']])
-            bias_a = bias_array.arraySlice(0, 0, -1).arrayMask(index)\
-                .arraySlice(0, 0, 1).arrayFlatten([['array']])
-            bias_b = bias_array.arraySlice(0, 1).arrayMask(index)\
-                .arraySlice(0, 0, 1).arrayFlatten([['array']])
+            ta_img = ta_array.arrayGet(index)
+            # ta_img = ee.Image(ta_array.arrayGet(index))
 
-            # This calculation only works correctly if a/b bracket the 0 bias
-            ta_img = ta_a.multiply(bias_b).subtract(ta_b.multiply(bias_a))\
-                .divide(bias_b.subtract(bias_a))
-            # Uncomment to remove any pixels that don't bracket 0
-            #     .updateMask(bias_a.lt(0))
-            ta_img = ee.Image(ta_img.copyProperties(input_img))
-            #     .set({'ta_step_size': input_img.get('step_size')})
+            # # DEADBEEF - This code doesn't work well since Ta doesn't bracket 0 bias
+            # ta_coll_id = 'projects/disalexi/ta/CONUS_V001_wrs2'
+            # ta_coll = ee.ImageCollection(ta_coll_id)\
+            #     .filterMetadata('id', 'equals', self.id)\
+            #     .limit(1, 'step_size', False)
+            # input_img = ee.Image(ta_coll.first())
+            #
+            # # Compute new Ta as mean of bracketing values from mosaics
+            # ta_array = input_img.select('step_\\d+_ta').toArray()
+            # bias_array = input_img.select('step_\\d+_bias').toArray()
+            # diff_array = bias_array.arraySlice(0, 1)\
+            #     .subtract(bias_array.arraySlice(0, 0, -1))
+            # index = diff_array.gt(0).And(bias_array.arraySlice(0, 1).gt(0))
+            # ta_a = ta_array.arraySlice(0, 0, -1).arrayMask(index)\
+            #     .arraySlice(0, 0, 1).arrayFlatten([['array']])
+            # ta_b = ta_array.arraySlice(0, 1).arrayMask(index)\
+            #     .arraySlice(0, 0, 1).arrayFlatten([['array']])
+            # bias_a = bias_array.arraySlice(0, 0, -1).arrayMask(index)\
+            #     .arraySlice(0, 0, 1).arrayFlatten([['array']])
+            # bias_b = bias_array.arraySlice(0, 1).arrayMask(index)\
+            #     .arraySlice(0, 0, 1).arrayFlatten([['array']])
+            #
+            # # This calculation only works correctly if a/b bracket the 0 bias
+            # ta_img = ta_a.multiply(bias_b).subtract(ta_b.multiply(bias_a))\
+            #     .divide(bias_b.subtract(bias_a))
+            # # Uncomment to remove any pixels that don't bracket 0
+            # #     .updateMask(bias_a.lt(0))
+            # ta_img = ee.Image(ta_img.copyProperties(input_img))
+            # #     .set({'ta_step_size': input_img.get('step_size')})
         else:
             raise ValueError('Unsupported ta_source: {}\n'.format(
                 self.ta_source))
