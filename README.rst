@@ -42,7 +42,7 @@ LANDSAT_8          B2, B3, B4, B5, B6, B7, B10, pixel_qa
 =================  =============================================
 Property           Description
 =================  =============================================
-system:id          - Earth Engine Asset ID (e.g. LANDSAT/LC08/C01/T1_SR/LC08_044033_20170716)
+system:id          Earth Engine Asset ID (e.g. LANDSAT/LC08/C01/T1_SR/LC08_044033_20170716)
 system:index       - Landsat Scene ID
                    - Must be in the Earth Engine format (e.g. LC08_044033_20170716)
 system:time_start  Image datetime in milliseconds since 1970
@@ -87,7 +87,7 @@ Modules needed to run the model:
 OpenET Namespace Package
 ========================
 
-Each OpenET model should be stored in the "openet" folder (namespace).  The benefit of the namespace package is that each ET model can be tracked in separate repositories but called as a "dot" submodule of the main openet module,
+Each OpenET model should be stored in the "openet" folder (namespace).  The benefit of the namespace package is that each ET model can be tracked in separate repositories but called as a "dot" submodule of the main openet module.
 
 .. code-block:: console
 
