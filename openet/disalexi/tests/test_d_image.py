@@ -15,7 +15,6 @@ SCENE_TIME = 1500230731090
 # SCENE_ID = 'LC08_042035_20150713'
 # SCENE_TIME = 1436812419150
 SCENE_DT = datetime.datetime.utcfromtimestamp(SCENE_TIME / 1000.0)
-print(SCENE_DT)
 # SCENE_DT = datetime.datetime.strptime(SCENE_ID[-8:], '%Y%m%d')
 SCENE_DATE = SCENE_DT.strftime('%Y-%m-%d')
 SCENE_DOY = int(SCENE_DT.strftime('%j'))
@@ -81,8 +80,8 @@ def test_Image_init_default_parameters():
     assert m.rs_daily_source == 'MERRA2'
     assert m.rs_hourly_source == 'MERRA2'
     assert m.windspeed_source == 'CFSV2'
-    assert m.stabil_iter == 10
-    assert m.albedo_iter == 3
+    assert m.stabil_iter == 36
+    assert m.albedo_iter == 10
     assert m.ta_interp_flag == True
     assert m.rs_interp_flag == True
     # assert m.etr_source == None
@@ -101,12 +100,14 @@ def test_Image_init_calculated_properties():
 
 def test_Image_init_date_properties():
     d = default_image_obj()
-    assert utils.getinfo(d.date)['value'] == SCENE_TIME
+    assert utils.getinfo(d.datetime)['value'] == SCENE_TIME
     # assert utils.getinfo(d.year) == int(SCENE_DATE.split('-')[0])
     # assert utils.getinfo(d.month) == int(SCENE_DATE.split('-')[1])
-    # assert utils.getinfo(d.start_date)['value'] == SCENE_TIME
-    # assert utils.getinfo(d.end_date)['value'] == utils.millis(
-    #     SCENE_DT + datetime.timedelta(days=1))
+    assert utils.getinfo(d.start_date)['value'] == utils.millis(
+        datetime.datetime.strptime(SCENE_DATE, '%Y-%m-%d'))
+    assert utils.getinfo(d.end_date)['value'] == utils.millis(
+        datetime.datetime.strptime(SCENE_DATE, '%Y-%m-%d') +
+        datetime.timedelta(days=1))
     # assert utils.getinfo(d.doy) == SCENE_DOY
     # assert utils.getinfo(d.cycle_day) == int(
     #     (SCENE_DT - datetime.datetime(1970, 1, 3)).days % 8 + 1)
@@ -174,14 +175,14 @@ def test_Image_ta_properties():
 @pytest.mark.parametrize(
     'source, xy, expected',
     [
-        ['CONUS_V001', TEST_POINT, 10.3344 * 0.408],
-        # ['CONUS_V001', TEST_POINT, 10.3344],  # This is the MJ m-2 d-1 value
+        # ALEXI ET is currently in MJ m-2 d-1
+        ['CONUS_V001', TEST_POINT, 10.382039 * 0.408],
         [ee.Image('USGS/SRTMGL1_003').multiply(0).add(10), TEST_POINT, 10],
-        ['10.3344', TEST_POINT, 10.3344],
-        [10.3344, TEST_POINT, 10.3344],
+        ['10.382039', TEST_POINT, 10.382039],
+        [10.382039, TEST_POINT, 10.382039],
     ]
 )
-def test_Image_alexi_sources(source, xy, expected, tol=0.001):
+def test_Image_alexi_sources(source, xy, expected, tol=0.0001):
     output = utils.point_image_value(model.Image(
         default_image(), alexi_source=source).et_alexi, xy)
     assert abs(output['et_alexi'] - expected) <= tol
@@ -257,10 +258,10 @@ def test_Image_landcover_band_name():
 @pytest.mark.parametrize(
     'source, xy, expected',
     [
-        ['MERRA2', TEST_POINT, 8603.2129],
+        ['MERRA2', TEST_POINT, 8587.4091796875],
         [ee.Image('USGS/SRTMGL1_003').multiply(0).add(10), TEST_POINT, 10],
-        ['8603.212890625', TEST_POINT, 8603.2129],
-        [8603.2129, TEST_POINT, 8603.2129],
+        ['8587.4091796875', TEST_POINT, 8587.4091796875],
+        [8587.4091796875, TEST_POINT, 8587.4091796875],
     ]
 )
 def test_Image_rs_daily_sources(source, xy, expected, tol=0.0001):
@@ -289,7 +290,7 @@ def test_Image_rs_daily_band_name():
         [946.6906, TEST_POINT, 946.6906],
     ]
 )
-def test_Image_rs_hourly_sources(source, xy, expected, tol=0.001):
+def test_Image_rs_hourly_sources(source, xy, expected, tol=0.0001):
     output = utils.point_image_value(model.Image(
         default_image(), rs_hourly_source=source).rs1, xy)
     assert abs(output['rs'] - expected) <= tol
@@ -306,7 +307,7 @@ def test_Image_rs_hourly_no_interp(tol=0.001):
     output = utils.point_image_value(model.Image(
         default_image(), rs_hourly_source='MERRA2',
         rs_interp_flag=False).rs1, TEST_POINT)
-    assert abs(output['rs'] - 930.25) <= tol
+    assert abs(output['rs'] - 929.75) <= tol
 
 
 def test_Image_rs_hourly_sources_exception():
@@ -322,13 +323,13 @@ def test_Image_rs_hourly_band_name():
 @pytest.mark.parametrize(
     'source, xy, expected',
     [
-        ['CFSV2', TEST_POINT, 3.2665],
+        ['CFSV2', TEST_POINT, 2.001476],
         [ee.Image('USGS/SRTMGL1_003').multiply(0).add(10), TEST_POINT, 10],
-        ['3.2665', TEST_POINT, 3.2665],
-        [3.2665, TEST_POINT, 3.2665],
+        ['2.001476', TEST_POINT, 2.001476],
+        [2.001476, TEST_POINT, 2.001476],
     ]
 )
-def test_Image_windspeed_sources(source, xy, expected, tol=0.001):
+def test_Image_windspeed_sources(source, xy, expected, tol=0.0001):
     output = utils.point_image_value(model.Image(
         default_image(), windspeed_source=source).windspeed, xy)
     assert abs(output['windspeed'] - expected) <= tol
