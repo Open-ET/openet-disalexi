@@ -3,3 +3,5 @@ from .collection import Collection
 from .landsat import LandsatTOA, LandsatSR
 
 __version__ = "0.0.13"
+
+MODEL_NAME = 'DISALEXI'

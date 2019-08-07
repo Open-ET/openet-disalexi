@@ -3,7 +3,7 @@ import pprint
 import ee
 import pytest
 
-import openet.disalexi as model
+import openet.disalexi as disalexi
 import openet.disalexi.utils as utils
 # TODO: import utils from openet.core
 # import openet.core.utils as utils
@@ -18,27 +18,38 @@ SCENE_ID_LIST = sorted(['LC08_044033_20170716'])
 START_DATE = '2017-07-01'
 END_DATE = '2017-08-01'
 SCENE_POINT = (-121.9, 39)
-VARIABLES = sorted(['et'])
-# VARIABLES = sorted(['et', 'etf', 'etr'])
+VARIABLES = sorted(['et', 'etf', 'etr'])
 TEST_POINT = (-121.5265, 38.7399)
 
 
-def default_coll_args():
+def default_coll_args(collections=COLLECTIONS, start_date=START_DATE,
+                      end_date=END_DATE, variables=VARIABLES,
+                      cloud_cover_max=70, etr_source='IDAHO_EPSCOR/GRIDMET',
+                      etr_band='etr', etr_factor=0.85):
     # Defining inside a function since this uses an ee.Geometry(),
     # but ee.Initialize() isn't called until after all tests are collected.
     return {
-        'collections': COLLECTIONS,
-        'start_date': START_DATE,
-        'end_date': END_DATE,
+        'collections': collections,
+        'start_date': start_date,
+        'end_date': end_date,
         'geometry': ee.Geometry.Point(SCENE_POINT),
-        'variables': VARIABLES,
-        'etr_source': 'IDAHO_EPSCOR/GRIDMET',
-        'etr_band': 'etr',
-        'etr_factor': 0.85,
-        # 'etr_source': 'projects/climate-engine/cimis/daily',
-        # 'etr_band': 'ETr_ASCE',
-        # 'etr_factor': 1.0,
+        'variables': variables,
+        'cloud_cover_max': cloud_cover_max,
+        'etr_source': etr_source,
+        'etr_band': etr_band,
+        'etr_factor': etr_factor,
     }
+
+
+def default_coll_obj(collections=COLLECTIONS, start_date=START_DATE,
+                     end_date=END_DATE, variables=VARIABLES,
+                     cloud_cover_max=70, etr_source='IDAHO_EPSCOR/GRIDMET',
+                     etr_band='etr', etr_factor=0.85):
+    return disalexi.Collection(**default_coll_args(
+        collections=collections, start_date=start_date, end_date=end_date,
+        variables=variables, cloud_cover_max=cloud_cover_max,
+        etr_source=etr_source, etr_band=etr_band, etr_factor=etr_factor,
+    ))
 
 
 # CGM - Should this be a fixture?
@@ -58,7 +69,7 @@ def test_Collection_init_default_parameters():
     del args['etr_factor']
     del args['variables']
 
-    m = model.Collection(**args)
+    m = disalexi.Collection(**args)
 
     assert m.variables == None
     assert m.etr_source == None
@@ -68,21 +79,16 @@ def test_Collection_init_default_parameters():
     assert m.model_args == {}
     assert m.filter_args == {}
     assert m._interp_vars == ['ndvi', 'etf']
-    assert m.model_name == 'DISALEXI'
 
 
 def test_Collection_init_collection_str(coll_id='LANDSAT/LC08/C01/T1_SR'):
     """Test if a single coll_id str is converted to a single item list"""
-    args = default_coll_args()
-    args['collections'] = coll_id
-    assert model.Collection(**args).collections == [coll_id]
+    assert default_coll_obj(collections=coll_id).collections == [coll_id]
 
 
-def test_Image_init_cloud_cover_max_str():
+def test_Collection_init_cloud_cover_max_str():
     """Test if cloud_cover_max strings are converted to float"""
-    args = default_coll_args()
-    args['cloud_cover_max'] = '70'
-    assert model.Collection(**args).cloud_cover_max == 70
+    assert default_coll_obj(cloud_cover_max='70').cloud_cover_max == 70
 
 
 @pytest.mark.parametrize(
@@ -99,46 +105,32 @@ def test_Image_init_cloud_cover_max_str():
 def test_Collection_init_collection_filter(coll_id, start_date, end_date):
     """Test that collection IDs are filtered based on start/end dates"""
     # The target collection ID should be removed from the collections lists
-    args = default_coll_args()
-    args['collections'] = [coll_id]
-    args['start_date'] = start_date
-    args['end_date'] = end_date
-    assert model.Collection(**args).collections == []
+    assert default_coll_obj(collections=coll_id, start_date=start_date,
+                            end_date=end_date).collections == []
 
 
 def test_Collection_init_startdate_exception():
     """Test if Exception is raised for invalid start date formats"""
-    args = default_coll_args()
-    args['start_date'] = '1/1/2000'
-    args['end_date'] = '2000-01-02'
     with pytest.raises(ValueError):
-        model.Collection(**args)
+        default_coll_obj(start_date='1/1/2000', end_date='2000-01-02')
 
 
 def test_Collection_init_enddate_exception():
     """Test if Exception is raised for invalid end date formats"""
-    args = default_coll_args()
-    args['start_date'] = '2000-01-01'
-    args['end_date'] = '1/2/2000'
     with pytest.raises(ValueError):
-        model.Collection(**args)
+        default_coll_obj(start_date='2000-01-01', end_date='1/2/2000')
 
 
 def test_Collection_init_swapped_date_exception():
     """Test if Exception is raised when start_date == end_date"""
-    args = default_coll_args()
-    args['start_date'] = '2017-01-01'
-    args['end_date'] = '2017-01-01'
     with pytest.raises(ValueError):
-        model.Collection(**args)
+        default_coll_obj(start_date='2017-01-01', end_date='2017-01-01')
 
 
 def test_Collection_init_invalid_collections_exception():
     """Test if Exception is raised for an invalid collection ID"""
-    args = default_coll_args()
-    args['collections'] = ['FOO']
     with pytest.raises(ValueError):
-        model.Collection(**args)
+        default_coll_obj(collections='FOO')
 
 
 # def test_Collection_init_duplicate_collections_exception():
@@ -147,24 +139,20 @@ def test_Collection_init_invalid_collections_exception():
 #     args['collections'] = ['LANDSAT/LC08/C01/T1_RT_TOA',
 #                            'LANDSAT/LC08/C01/T1_TOA']
 #     with pytest.raises(ValueError):
-#         model.Collection(**args)
+#         disalexi.Collection(**args)
 #     args['collections'] = ['LANDSAT/LC08/C01/T1_SR', 'LANDSAT/LC08/C01/T1_TOA']
 #     with pytest.raises(ValueError):
-#         model.Collection(**args)
+#         disalexi.Collection(**args)
 
 
 def test_Collection_init_cloud_cover_exception():
     """Test if Exception is raised for an invalid cloud_cover_max"""
-    args = default_coll_args()
-    args['cloud_cover_max'] = 'A'
     with pytest.raises(TypeError):
-        model.Collection(**args)
-    args['cloud_cover_max'] = -1
+        default_coll_obj(cloud_cover_max='A')
     with pytest.raises(ValueError):
-        model.Collection(**args)
-    args['cloud_cover_max'] = 101
+        default_coll_obj(cloud_cover_max=-1)
     with pytest.raises(ValueError):
-        model.Collection(**args)
+        default_coll_obj(cloud_cover_max=101)
 
 
 # # TODO: Test for Error if geometry is not ee.Geometry
@@ -172,46 +160,43 @@ def test_Collection_init_cloud_cover_exception():
 #     """Test if Exception is raised for an invalid geometry"""
 #     args = default_coll_args()
 #     args['geometry'] = 'DEADBEEF'
-#     m = model.Collection(**args)
+#     m = disalexi.Collection(**args)
 #     assert utils.getinfo(m.geometry) ==
 
 
 # TODO: Test if a geojson string can be passed for the geometry
 # def test_Collection_init_geometry_geojson():
-#     """Test that the system:index from a merged collection is parsed"""
-#     args = default_coll_args()
-#     m = model.Collection(**args)
-#     assert utils.getinfo(m._scene_id) == SCENE_ID
+#     assert False
 
 
 def test_Collection_build_default():
-    output = utils.getinfo(model.Collection(**default_coll_args())._build())
+    output = utils.getinfo(default_coll_obj()._build())
     assert output['type'] == 'ImageCollection'
     assert parse_scene_id(output) == SCENE_ID_LIST
+    # For the default build, check that the target variables are returned also
     assert VARIABLES == sorted(list(set([
         y['id'] for x in output['features'] for y in x['bands']])))
 
 
 def test_Collection_build_variables():
-    output = utils.getinfo(
-        model.Collection(**default_coll_args())._build(variables=['ndvi']))
+    output = utils.getinfo(default_coll_obj()._build(variables=['ndvi']))
     assert ['ndvi'] == sorted(list(set([
         y['id'] for x in output['features'] for y in x['bands']])))
 
 
 def test_Collection_build_dates():
-    args = default_coll_args()
-    args['start_date'] = '2017-07-24'
-    output = utils.getinfo(model.Collection(**args)._build(
+    """Check that dates passed to build function override Class dates"""
+    coll_obj = default_coll_obj(start_date='2017-08-01', end_date='2017-09-01')
+    output = utils.getinfo(coll_obj._build(
         start_date='2017-07-16', end_date='2017-07-17'))
     assert parse_scene_id(output) == ['LC08_044033_20170716']
 
 
 # def test_Collection_build_landsat_toa():
 #     """Test if the Landsat TOA (non RT) collections can be built"""
-#     args = default_coll_args()
-#     args['collections'] = ['LANDSAT/LC08/C01/T1_TOA', 'LANDSAT/LE07/C01/T1_TOA']
-#     output = utils.getinfo(model.Collection(**args)._build())
+#     coll_obj = default_coll_obj(
+#         collections=['LANDSAT/LC08/C01/T1_TOA', 'LANDSAT/LE07/C01/T1_TOA'])
+#     output = utils.getinfo(coll_obj._build())
 #     assert parse_scene_id(output) == SCENE_ID_LIST
 #     assert VARIABLES == sorted(list(set([
 #         y['id'] for x in output['features'] for y in x['bands']])))
@@ -219,11 +204,9 @@ def test_Collection_build_dates():
 
 def test_Collection_build_landsat_sr():
     """Test if the Landsat SR collections can be built"""
-    args = default_coll_args()
-    args['collections'] = ['LANDSAT/LC08/C01/T1_SR']
-    # CGM - Need to build air temperature assets for the Landsat 7 images
-    # args['collections'] = ['LANDSAT/LC08/C01/T1_SR', 'LANDSAT/LE07/C01/T1_SR']
-    output = utils.getinfo(model.Collection(**args)._build())
+    coll_obj = default_coll_obj(
+        collections=['LANDSAT/LC08/C01/T1_SR', 'LANDSAT/LE07/C01/T1_SR'])
+    output = utils.getinfo(coll_obj._build())
     assert parse_scene_id(output) == SCENE_ID_LIST
     assert VARIABLES == sorted(list(set([
         y['id'] for x in output['features'] for y in x['bands']])))
@@ -231,18 +214,15 @@ def test_Collection_build_landsat_sr():
 
 def test_Collection_build_exclusive_enddate():
     """Test if the end_date is exclusive"""
-    args = default_coll_args()
-    args['end_date'] = '2017-07-24'
-    output = utils.getinfo(model.Collection(**args)._build())
+    output = utils.getinfo(default_coll_obj(end_date='2017-07-24')._build())
     assert [x for x in parse_scene_id(output) if int(x[-8:]) >= 20170724] == []
 
 
 def test_Collection_build_cloud_cover():
     """Test if the cloud cover max parameter is being applied"""
     # CGM - The filtered images should probably be looked up programmatically
-    args = default_coll_args()
-    args['cloud_cover_max'] = 0.5
-    output = utils.getinfo(model.Collection(**args)._build(variables=['et']))
+    output = utils.getinfo(default_coll_obj(cloud_cover_max=0.5)._build(
+        variables=['et']))
     assert 'LE07_044033_20170724' not in parse_scene_id(output)
 
 
@@ -250,9 +230,8 @@ def test_Collection_build_cloud_cover():
 #   It appears to be identical to the exclusive_enddate test above
 # def test_Collection_build_model_args():
 #     """Test if the end_date is exclusive"""
-#     args = default_coll_args()
-#     args['end_date'] = '2017-07-24'
-#     output = utils.getinfo(model.Collection(**args)._build(variables=['et']))
+#     output = utils.getinfo(default_coll_obj(end_date='2017-07-24')._build(
+#         variables=['et']))
 #     assert [x for x in parse_scene_id(output) if int(x[-8:]) >= 20170724] == []
 
 
@@ -264,20 +243,19 @@ def test_Collection_build_filter_args():
     args['filter_args'] = {coll_id: [
         {'type': 'equals', 'leftField': 'WRS_PATH', 'rightValue': 44},
         {'type': 'equals', 'leftField': 'WRS_ROW', 'rightValue': 33}]}
-    output = utils.getinfo(model.Collection(**args)._build(variables=['et']))
+    output = utils.getinfo(disalexi.Collection(**args)._build(variables=['et']))
     assert set([x[5:11] for x in parse_scene_id(output)]) == set(['044033'])
 
 
-def test_Collection_build_variable_valueerror():
+def test_Collection_build_variable_exception():
     """Test if Exception is raised for an invalid variable"""
-    args = default_coll_args()
     with pytest.raises(ValueError):
-        utils.getinfo(model.Collection(**args)._build(variables=['FOO']))
+        utils.getinfo(default_coll_obj()._build(variables=['FOO']))
 
 
 def test_Collection_overpass_default():
     """Test overpass method with default values (variables from Class init)"""
-    output = utils.getinfo(model.Collection(**default_coll_args()).overpass())
+    output = utils.getinfo(default_coll_obj().overpass())
     assert VARIABLES == sorted(list(set([
         y['id'] for x in output['features'] for y in x['bands']])))
     assert parse_scene_id(output) == SCENE_ID_LIST
@@ -285,34 +263,29 @@ def test_Collection_overpass_default():
 
 def test_Collection_overpass_class_variables():
     """Test that custom class variables are passed through to build function"""
-    args = default_coll_args()
-    args['variables'] = ['et']
-    output = utils.getinfo(model.Collection(**args).overpass())
-    assert args['variables'] == sorted(list(set([
-        y['id'] for x in output['features'] for y in x['bands']])))
+    output = utils.getinfo(default_coll_obj(variables=['et']).overpass())
+    output = set([y['id'] for x in output['features'] for y in x['bands']])
+    assert output == set(['et'])
 
 
 def test_Collection_overpass_method_variables():
     """Test that custom method variables are passed through to build function"""
-    output = utils.getinfo(model.Collection(**default_coll_args())
-        .overpass(variables=['et']))
-    assert ['et'] == sorted(list(set([
-        y['id'] for x in output['features'] for y in x['bands']])))
+    output = utils.getinfo(default_coll_obj().overpass(variables=['et']))
+    output = set([y['id'] for x in output['features'] for y in x['bands']])
+    assert output == set(['et'])
 
 
-def test_Collection_overpass_no_variables_valueerror():
+def test_Collection_overpass_no_variables_exception():
     """Test if Exception is raised if variables is not set in init or method"""
     args = default_coll_args()
     del args['variables']
     with pytest.raises(ValueError):
-        model.Collection(**args).overpass().getInfo()
+        disalexi.Collection(**args).overpass().getInfo()
 
 
-# DEADBEEF - Interpolation is disabled in DisALEXI for now
 def test_Collection_interpolate_default():
     """Default t_interval should be custom"""
-    output = utils.getinfo(model.Collection(**default_coll_args())
-        .interpolate())
+    output = utils.getinfo(default_coll_obj().interpolate())
     assert output['type'] == 'ImageCollection'
     assert parse_scene_id(output) == ['20170701']
     assert VARIABLES == sorted(list(set([
@@ -320,26 +293,27 @@ def test_Collection_interpolate_default():
 
 
 def test_Collection_interpolate_variables_custom():
-    output = utils.getinfo(model.Collection(**default_coll_args())
-        .interpolate(variables=['et']))
-    assert ['et'] == sorted(list(set([
-        y['id'] for x in output['features'] for y in x['bands']])))
+    output = utils.getinfo(default_coll_obj().interpolate(variables=['et']))
+    assert [y['id'] for x in output['features'] for y in x['bands']] == ['et']
 
 
 def test_Collection_interpolate_t_interval_daily():
-    """Test if the daily time interval parameter works"""
-    output = utils.getinfo(model.Collection(**default_coll_args())
-        .interpolate(t_interval='daily'))
+    """Test if the daily time interval parameter works
+
+    Since end_date is exclusive last image date will be one day earlier
+    """
+    coll_obj = default_coll_obj(start_date='2017-07-01', end_date='2017-07-05')
+    output = utils.getinfo(coll_obj.interpolate(t_interval='daily'))
     assert output['type'] == 'ImageCollection'
     assert parse_scene_id(output)[0] == '20170701'
-    assert parse_scene_id(output)[-1] == '20170731'
+    assert parse_scene_id(output)[-1] == '20170704'
     assert VARIABLES == sorted(list(set([
         y['id'] for x in output['features'] for y in x['bands']])))
 
 
 def test_Collection_interpolate_t_interval_monthly():
     """Test if the monthly time interval parameter works"""
-    output = utils.getinfo(model.Collection(**default_coll_args())
+    output = utils.getinfo(disalexi.Collection(**default_coll_args())
         .interpolate(t_interval='monthly'))
     assert output['type'] == 'ImageCollection'
     assert parse_scene_id(output) == ['201707']
@@ -351,10 +325,8 @@ def test_Collection_interpolate_t_interval_monthly():
 #   This function could probably be be tested for a shorter time period
 # def test_Collection_interpolate_t_interval_annual():
 #     """Test if the annual time interval parameter works"""
-#     args = default_coll_args()
-#     args['start_date'] = '2017-01-01'
-#     args['end_date'] = '2018-01-01'
-#     output = utils.getinfo(model.Collection(**args)
+#     args = default_coll_args(start_date='2017-01-01', end_date='2018-01-01')
+#     output = utils.getinfo(disalexi.Collection(**args)
 #         .interpolate(t_interval='annual'))
 #     assert output['type'] == 'ImageCollection'
 #     assert parse_scene_id(output) == ['2017']
@@ -364,8 +336,7 @@ def test_Collection_interpolate_t_interval_monthly():
 
 def test_Collection_interpolate_t_interval_custom():
     """Test if the custom time interval parameter works"""
-    output = utils.getinfo(model.Collection(**default_coll_args())
-        .interpolate(t_interval='custom'))
+    output = utils.getinfo(default_coll_obj().interpolate(t_interval='custom'))
     assert output['type'] == 'ImageCollection'
     assert parse_scene_id(output) == ['20170701']
     assert VARIABLES == sorted(list(set([
@@ -385,7 +356,7 @@ def test_Collection_interpolate_t_interval_custom():
 #     """Test setting etr_source in the class init"""
 #     args = default_coll_args()
 #     args.update({'etr_source': 'IDAHO_EPSCOR/GRIDMET', 'etr_band': 'etr'})
-#     output = utils.getinfo(model.Collection(**args).interpolate())
+#     output = utils.getinfo(disalexi.Collection(**args).interpolate())
 #     assert VARIABLES == sorted(list(set([
 #         y['id'] for x in output['features'] for y in x['bands']])))
 
@@ -396,7 +367,7 @@ def test_Collection_interpolate_etr_source_model_args():
     del args['etr_source']
     del args['etr_band']
     args['model_args'] = {'etr_source': 'IDAHO_EPSCOR/GRIDMET', 'etr_band': 'etr'}
-    output = utils.getinfo(model.Collection(**args).interpolate())
+    output = utils.getinfo(disalexi.Collection(**args).interpolate())
     assert VARIABLES == sorted(list(set([
         y['id'] for x in output['features'] for y in x['bands']])))
 
@@ -407,7 +378,7 @@ def test_Collection_interpolate_etr_source_method():
     del args['etr_source']
     del args['etr_band']
     etr_kwargs = {'etr_source': 'IDAHO_EPSCOR/GRIDMET', 'etr_band': 'etr'}
-    output = utils.getinfo(model.Collection(**args).interpolate(**etr_kwargs))
+    output = utils.getinfo(disalexi.Collection(**args).interpolate(**etr_kwargs))
     assert VARIABLES == sorted(list(set([
         y['id'] for x in output['features'] for y in x['bands']])))
 
@@ -418,7 +389,7 @@ def test_Collection_interpolate_etr_source_not_set():
     del args['etr_source']
     del args['etr_band']
     with pytest.raises(ValueError):
-        utils.getinfo(model.Collection(**args).interpolate())
+        utils.getinfo(disalexi.Collection(**args).interpolate())
 
 
 # def test_Collection_interpolate_etr_source_exception():
@@ -426,7 +397,7 @@ def test_Collection_interpolate_etr_source_not_set():
 #     args = default_coll_args()
 #     args['model_args'] = {'etr_source': 'DEADBEEF', 'etr_band': 'etr'}
 #     with pytest.raises(ValueError):
-#         utils.getinfo(model.Collection(**args).interpolate())
+#         utils.getinfo(disalexi.Collection(**args).interpolate())
 
 
 # def test_Collection_interpolate_etr_band_exception():
@@ -435,28 +406,25 @@ def test_Collection_interpolate_etr_source_not_set():
 #     args['model_args'] = {'etr_source': 'IDAHO_EPSCOR/GRIDMET',
 #                           'etr_band': 'DEADBEEF'}
 #     with pytest.raises(ValueError):
-#         utils.getinfo(model.Collection(**args).interpolate())
+#         utils.getinfo(disalexi.Collection(**args).interpolate())
 
 
 def test_Collection_interpolate_t_interval_exception():
     """Test if Exception is raised for an invalid t_interval parameter"""
     with pytest.raises(ValueError):
-        utils.getinfo(model.Collection(**default_coll_args()) \
-            .interpolate(t_interval='DEADBEEF'))
+        utils.getinfo(default_coll_obj().interpolate(t_interval='DEADBEEF'))
 
 
 def test_Collection_interpolate_interp_method_exception():
     """Test if Exception is raised for an invalid interp_method parameter"""
     with pytest.raises(ValueError):
-        utils.getinfo(model.Collection(**default_coll_args()) \
-            .interpolate(interp_method='DEADBEEF'))
+        utils.getinfo(default_coll_obj().interpolate(interp_method='DEADBEEF'))
 
 
 def test_Collection_interpolate_interp_days_exception():
     """Test if Exception is raised for an invalid interp_days parameter"""
     with pytest.raises(ValueError):
-        utils.getinfo(model.Collection(**default_coll_args()) \
-            .interpolate(interp_days=0))
+        utils.getinfo(default_coll_obj().interpolate(interp_days=0))
 
 
 def test_Collection_interpolate_no_variables_exception():
@@ -464,4 +432,44 @@ def test_Collection_interpolate_no_variables_exception():
     args = default_coll_args()
     del args['variables']
     with pytest.raises(ValueError):
-        utils.getinfo(model.Collection(**args).interpolate())
+        utils.getinfo(disalexi.Collection(**args).interpolate())
+
+
+def test_Collection_interpolate_output_type_default():
+    """Test if output_type parameter is defaulting to float"""
+    output = utils.getinfo(default_coll_obj(
+        variables=['et', 'etr', 'etf', 'ndvi', 'count']).interpolate())
+    output = output['features'][0]['bands']
+    bands = {info['id']: i for i, info in enumerate(output)}
+    assert(output[bands['et']]['data_type']['precision'] == 'float')
+    assert(output[bands['etr']]['data_type']['precision'] == 'float')
+    assert(output[bands['etf']]['data_type']['precision'] == 'float')
+    assert(output[bands['ndvi']]['data_type']['precision'] == 'float')
+    assert(output[bands['count']]['data_type']['precision'] == 'int')
+
+
+@pytest.mark.parametrize(
+    'output_type, precision, max_value',
+    [
+        ['int8', 'int', 127],
+        ['uint8', 'int', 255],
+        ['int16', 'int', 32767],
+        ['uint16', 'int', 65535],
+        ['float', 'float', None],
+        ['double', 'double', None],
+    ]
+)
+def test_Collection_interpolate_output_type_parameter(output_type, precision,
+                                                      max_value):
+    """Test if changing the output_type parameter works"""
+    output = utils.getinfo(default_coll_obj().interpolate(output_type=output_type))
+    output = output['features'][0]['bands']
+    bands = {info['id']: i for i, info in enumerate(output)}
+
+    assert(output[bands['et']]['data_type']['precision'] == precision)
+    assert(output[bands['etr']]['data_type']['precision'] == precision)
+
+    if max_value is not None:
+        assert(output[bands['et']]['data_type']['max'] == max_value)
+        assert(output[bands['etr']]['data_type']['max'] == max_value)
+        

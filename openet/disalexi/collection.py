@@ -341,7 +341,8 @@ class Collection():
 
     def interpolate(self, variables=None, t_interval='custom',
                     interp_method='linear', interp_days=32,
-                    etr_source=None, etr_band=None, etr_factor=1.0):
+                    etr_source=None, etr_band=None, etr_factor=1.0,
+                    output_type='float'):
         """
 
         Parameters
@@ -366,6 +367,10 @@ class Collection():
             set here, in class init, or in model_args (searched in that order).
         etr_factor : float, optional
             Reference ET scaling factor (the default is 1.0).
+        output_type : {'int8', 'uint8', 'int16', 'float', 'double'}, optional
+            Output data type for the ET and ETr bands (the default is 'float').
+            NDVI and ETf bands will always be written as float type.
+            Count band will always be written as uint8 type.
 
         Returns
         -------
@@ -373,7 +378,9 @@ class Collection():
 
         Raises
         ------
-        ValueError
+        ValueError for unsupported input parameters
+        ValueError for negative interp_days values
+        TypeError for non-integer interp_days
 
         Notes
         -----
@@ -382,7 +389,6 @@ class Collection():
         interpolated/aggregated values.
 
         """
-
         # Check that the input parameters are valid
         if t_interval.lower() not in ['daily', 'monthly', 'annual', 'custom']:
             raise ValueError('unsupported t_interval: {}'.format(t_interval))
@@ -403,6 +409,10 @@ class Collection():
                 variables = self.variables
             else:
                 raise ValueError('variables parameter must be set')
+
+        output_types = ['int8', 'uint8', 'int16', 'uint16', 'float', 'double']
+        if output_type.lower() not in output_types:
+            raise ValueError('unsupported output_type: {}'.format(output_type))
 
         # Adjust start/end dates based on t_interval
         # Increase the date range to fully include the time interval
@@ -578,43 +588,107 @@ class Collection():
             'collections': ', '.join(self.collections),
             'interp_days': interp_days,
             'interp_method': interp_method,
-            'model_name': self.model_name,
+            'model_name': openet.disalexi.MODEL_NAME,
             'model_version': openet.disalexi.__version__,
         }
         interp_properties.update(self.model_args)
 
+        def aggregate_image(agg_start_date, agg_end_date, date_format):
+            """Aggregate the daily images within the target date range
+
+            Parameters
+            ----------
+            agg_start_date: str
+                Start date (inclusive).
+            agg_end_date : str
+                End date (exclusive).
+            date_format : str
+                Date format for system:index (uses EE JODA format).
+
+            Returns
+            -------
+            ee.Image
+
+            Notes
+            -----
+            Since this function takes multiple inputs it is being called
+            for each time interval by separate mappable functions
+
+            """
+            # if 'et' in variables or 'etf' in variables:
+            et_img = daily_coll.filterDate(agg_start_date, agg_end_date)\
+                .select(['et']).sum().multiply(etr_factor)
+            # if 'etr' in variables or 'etf' in variables:
+            etr_img = daily_coll.filterDate(agg_start_date, agg_end_date)\
+                .select(['etr']).sum().multiply(etr_factor)
+
+            # Round and save ET and ETr as integer values to save space
+            # Ensure that ETr > 0 after rounding to avoid divide by zero
+            # Compute ETf from the rounded values
+            if output_type.lower() == 'int16':
+                etf_img = et_img.round().divide(etr_img.round().max(1)).float()
+                et_img = et_img.round().int16()
+                etr_img = etr_img.round().int16()
+            elif output_type.lower() == 'uint16':
+                etf_img = et_img.round().divide(etr_img.round().max(1)).float()
+                et_img = et_img.round().uint16()
+                etr_img = etr_img.round().uint16()
+            elif output_type.lower() == 'int8':
+                etf_img = et_img.round().divide(etr_img.round().max(1)).float()
+                et_img = et_img.round().int8()
+                etr_img = etr_img.round().int8()
+            elif output_type.lower() == 'uint8':
+                etf_img = et_img.round().divide(etr_img.round().max(1)).float()
+                et_img = et_img.round().uint8()
+                etr_img = etr_img.round().uint8()
+            elif output_type.lower() == 'float':
+                etf_img = et_img.divide(etr_img).float()
+                et_img = et_img.float()
+                etr_img = etr_img.float()
+            elif output_type.lower() == 'double':
+                # Casting to double may be redundant since these values should
+                #   all be doubles be default
+                etf_img = et_img.divide(etr_img).double()
+                et_img = et_img.double()
+                etr_img = etr_img.double()
+
+            image_list = []
+            if 'et' in variables:
+                image_list.append(et_img)
+            if 'etr' in variables:
+                image_list.append(etr_img)
+            if 'etf' in variables:
+                image_list.append(etf_img.rename(['etf']))
+            if 'ndvi' in variables:
+                ndvi_img = daily_coll\
+                    .filterDate(agg_start_date, agg_end_date)\
+                    .mean().select(['ndvi']).float()
+                image_list.append(ndvi_img)
+            if 'count' in variables:
+                count_img = aggregate_coll\
+                    .filterDate(agg_start_date, agg_end_date)\
+                    .select(['mask']).count().rename('count').uint8()
+                image_list.append(count_img)
+
+            return ee.Image(image_list)\
+                .set(interp_properties)\
+                .set({
+                    'system:index': ee.Date(agg_start_date).format(date_format),
+                    'system:time_start': ee.Date(agg_start_date).millis(),
+                })
+
         # Combine input, interpolated, and derived values
         if t_interval.lower() == 'daily':
             def aggregate_daily(daily_img):
+                # CGM - Double check that this time_start is a 0 UTC time.
+                # It should be since it is coming from the interpolate source
+                #   collection, but what if source is GRIDMET (+6 UTC)?
                 agg_start_date = ee.Date(daily_img.get('system:time_start'))
-                agg_end_date = ee.Date(agg_start_date).advance(1, 'day')
-
-                # if 'et' in variables or 'etf' in variables:
-                et_img = daily_img.select(['et']).multiply(etr_factor)
-                # if 'etr' in variables or 'etf' in variables:
-                etr_img = daily_img.select(['etr']).multiply(etr_factor)
-
-                image_list = []
-                if 'et' in variables:
-                    image_list.append(et_img.float())
-                if 'etr' in variables:
-                    image_list.append(etr_img.float())
-                if 'etf' in variables:
-                    etf_img = et_img.divide(etr_img).rename('etf')
-                    image_list.append(etf_img.float())
-                if 'ndvi' in variables:
-                    ndvi_img = daily_img.select(['ndvi']).float()
-                    image_list.append(ndvi_img)
-                if 'count' in variables:
-                    count_img = aggregate_coll \
-                        .filterDate(agg_start_date, agg_end_date) \
-                        .select(['mask']).count().rename('count').uint8()
-                    image_list.append(count_img)
-
-                return ee.Image(image_list).set(interp_properties).set({
-                    'system:index': agg_start_date.format('YYYYMMdd'),
-                    'system:time_start': ee.Date(agg_start_date).millis(),
-                })
+                # CGM - This calls .sum() on collections with only one image
+                return aggregate_image(
+                    agg_start_date=agg_start_date,
+                    agg_end_date=ee.Date(agg_start_date).advance(1, 'day'),
+                    date_format='YYYYMMdd')
 
             return ee.ImageCollection(daily_coll.map(aggregate_daily))
 
@@ -625,122 +699,197 @@ class Collection():
                 while iter_dt < iter_end_dt:
                     yield iter_dt.strftime('%Y-%m-%d')
                     iter_dt += relativedelta(months=+1)
-
-            month_list = list(month_gen(start_dt, end_dt))
+            month_list = ee.List(list(month_gen(start_dt, end_dt)))
 
             def aggregate_monthly(agg_start_date):
-                agg_end_date = ee.Date(agg_start_date).advance(1, 'month')
-                # if 'et' in variables or 'etf' in variables:
-                et_img = daily_coll.filterDate(agg_start_date, agg_end_date)\
-                    .select(['et']).sum().multiply(etr_factor)
-                # if 'etr' in variables or 'etf' in variables:
-                etr_img = daily_coll.filterDate(agg_start_date, agg_end_date)\
-                    .select(['etr']).sum().multiply(etr_factor)
+                return aggregate_image(
+                    agg_start_date=agg_start_date,
+                    agg_end_date=ee.Date(agg_start_date).advance(1, 'month'),
+                    date_format='YYYYMM')
 
-                image_list = []
-                if 'et' in variables:
-                    image_list.append(et_img.float())
-                if 'etr' in variables:
-                    image_list.append(etr_img.float())
-                if 'etf' in variables:
-                    etf_img = et_img.divide(etr_img).rename('etf').float()
-                    image_list.append(etf_img)
-                if 'ndvi' in variables:
-                    ndvi_img = daily_coll\
-                        .filterDate(agg_start_date, agg_end_date)\
-                        .select(['ndvi']).mean().float()
-                    image_list.append(ndvi_img)
-                if 'count' in variables:
-                    count_img = aggregate_coll \
-                        .filterDate(agg_start_date, agg_end_date) \
-                        .select(['mask']).count().rename('count').uint8()
-                    image_list.append(count_img)
-
-                return ee.Image(image_list).set(interp_properties).set({
-                    'system:index': ee.Date(agg_start_date).format('YYYYMM'),
-                    'system:time_start': ee.Date(agg_start_date).millis(),
-                })
-
-            return ee.ImageCollection(ee.List(month_list).map(aggregate_monthly))
+            return ee.ImageCollection(month_list.map(aggregate_monthly))
 
         elif t_interval.lower() == 'annual':
-            # CGM - All of this code is almost identical to the monthly function above
             def year_gen(iter_start_dt, iter_end_dt):
                 iter_dt = iter_start_dt
                 while iter_dt < iter_end_dt:
                     yield iter_dt.strftime('%Y-%m-%d')
                     iter_dt += relativedelta(years=+1)
-            year_list = list(year_gen(start_dt, end_dt))
+            year_list = ee.List(list(year_gen(start_dt, end_dt)))
 
             def aggregate_annual(agg_start_date):
-                agg_end_date = ee.Date(agg_start_date).advance(1, 'year')
-                # if 'et' in variables or 'etf' in variables:
-                et_img = daily_coll.filterDate(agg_start_date, agg_end_date) \
-                    .select(['et']).sum().multiply(etr_factor)
-                # if 'etr' in variables or 'etf' in variables:
-                etr_img = daily_coll.filterDate(agg_start_date, agg_end_date) \
-                    .select(['etr']).sum().multiply(etr_factor)
+                return aggregate_image(
+                    agg_start_date=agg_start_date,
+                    agg_end_date=ee.Date(agg_start_date).advance(1, 'year'),
+                    date_format='YYYY')
 
-                image_list = []
-                if 'et' in variables:
-                    image_list.append(et_img.float())
-                if 'etr' in variables:
-                    image_list.append(etr_img.float())
-                if 'etf' in variables:
-                    etf_img = et_img.divide(etr_img).rename('etf')
-                    image_list.append(etf_img.float())
-                if 'ndvi' in variables:
-                    ndvi_img = daily_coll\
-                        .filterDate(agg_start_date, agg_end_date)\
-                        .select(['ndvi']).mean().float()
-                    image_list.append(ndvi_img)
-                if 'count' in variables:
-                    count_img = aggregate_coll \
-                        .filterDate(agg_start_date, agg_end_date) \
-                        .select(['mask']).count().rename('count').uint8()
-                    image_list.append(count_img)
-
-                return ee.Image(image_list).set(interp_properties).set({
-                    'system:index': ee.Date(agg_start_date).format('YYYY'),
-                    'system:time_start': ee.Date(agg_start_date).millis(),
-                })
-
-            return ee.ImageCollection(ee.List(year_list).map(aggregate_annual))
+            return ee.ImageCollection(year_list.map(aggregate_annual))
 
         elif t_interval.lower() == 'custom':
-            # if 'et' in variables or 'etf' in variables:
-            et_img = daily_coll.filterDate(start_date, end_date) \
-                .select(['et']).sum().multiply(etr_factor)
-            # if 'etr' in variables or 'etf' in variables:
-            etr_img = daily_coll.filterDate(start_date, end_date) \
-                .select(['etr']).sum().multiply(etr_factor)
-
-            image_list = []
-            if 'et' in variables:
-                image_list.append(et_img.float())
-            if 'etr' in variables:
-                image_list.append(etr_img.float())
-            if 'etf' in variables:
-                etf_img = et_img.divide(etr_img).rename('etf').float()
-                image_list.append(etf_img)
-            if 'ndvi' in variables:
-                ndvi_img = daily_coll\
-                    .filterDate(start_date, end_date)\
-                    .select(['ndvi']).mean().rename('ndvi').float()
-                image_list.append(ndvi_img)
-            if 'count' in variables:
-                count_img = aggregate_coll\
-                    .filterDate(start_date, end_date)\
-                    .select(['mask']).count().rename('count').uint8()
-                image_list.append(count_img)
-
             # Returning an ImageCollection to be consistent
-            return ee.ImageCollection(ee.Image(image_list)\
-                .set(interp_properties)\
-                .set({
-                    'system:index': ee.Date(start_date).format('YYYYMMdd'),
-                    'system:time_start': ee.Date(start_date).millis(),
-                }))
+            return ee.ImageCollection(aggregate_image(
+                agg_start_date=start_date, agg_end_date=end_date,
+                date_format='YYYYMMdd'))
+
+        # # Combine input, interpolated, and derived values
+        # if t_interval.lower() == 'daily':
+        #     def aggregate_daily(daily_img):
+        #         agg_start_date = ee.Date(daily_img.get('system:time_start'))
+        #         agg_end_date = ee.Date(agg_start_date).advance(1, 'day')
+        #
+        #         # if 'et' in variables or 'etf' in variables:
+        #         et_img = daily_img.select(['et']).multiply(etr_factor)
+        #         # if 'etr' in variables or 'etf' in variables:
+        #         etr_img = daily_img.select(['etr']).multiply(etr_factor)
+        #
+        #         image_list = []
+        #         if 'et' in variables:
+        #             image_list.append(et_img.float())
+        #         if 'etr' in variables:
+        #             image_list.append(etr_img.float())
+        #         if 'etf' in variables:
+        #             etf_img = et_img.divide(etr_img).rename('etf')
+        #             image_list.append(etf_img.float())
+        #         if 'ndvi' in variables:
+        #             ndvi_img = daily_img.select(['ndvi']).float()
+        #             image_list.append(ndvi_img)
+        #         if 'count' in variables:
+        #             count_img = aggregate_coll \
+        #                 .filterDate(agg_start_date, agg_end_date) \
+        #                 .select(['mask']).count().rename('count').uint8()
+        #             image_list.append(count_img)
+        #
+        #         return ee.Image(image_list).set(interp_properties).set({
+        #             'system:index': agg_start_date.format('YYYYMMdd'),
+        #             'system:time_start': ee.Date(agg_start_date).millis(),
+        #         })
+        #
+        #     return ee.ImageCollection(daily_coll.map(aggregate_daily))
+        #
+        # elif t_interval.lower() == 'monthly':
+        #     def month_gen(iter_start_dt, iter_end_dt):
+        #         iter_dt = iter_start_dt
+        #         # Conditional is "less than" because end date is exclusive
+        #         while iter_dt < iter_end_dt:
+        #             yield iter_dt.strftime('%Y-%m-%d')
+        #             iter_dt += relativedelta(months=+1)
+        #
+        #     month_list = list(month_gen(start_dt, end_dt))
+        #
+        #     def aggregate_monthly(agg_start_date):
+        #         agg_end_date = ee.Date(agg_start_date).advance(1, 'month')
+        #         # if 'et' in variables or 'etf' in variables:
+        #         et_img = daily_coll.filterDate(agg_start_date, agg_end_date)\
+        #             .select(['et']).sum().multiply(etr_factor)
+        #         # if 'etr' in variables or 'etf' in variables:
+        #         etr_img = daily_coll.filterDate(agg_start_date, agg_end_date)\
+        #             .select(['etr']).sum().multiply(etr_factor)
+        #
+        #         image_list = []
+        #         if 'et' in variables:
+        #             image_list.append(et_img.float())
+        #         if 'etr' in variables:
+        #             image_list.append(etr_img.float())
+        #         if 'etf' in variables:
+        #             etf_img = et_img.divide(etr_img).rename('etf').float()
+        #             image_list.append(etf_img)
+        #         if 'ndvi' in variables:
+        #             ndvi_img = daily_coll\
+        #                 .filterDate(agg_start_date, agg_end_date)\
+        #                 .select(['ndvi']).mean().float()
+        #             image_list.append(ndvi_img)
+        #         if 'count' in variables:
+        #             count_img = aggregate_coll \
+        #                 .filterDate(agg_start_date, agg_end_date) \
+        #                 .select(['mask']).count().rename('count').uint8()
+        #             image_list.append(count_img)
+        #
+        #         return ee.Image(image_list).set(interp_properties).set({
+        #             'system:index': ee.Date(agg_start_date).format('YYYYMM'),
+        #             'system:time_start': ee.Date(agg_start_date).millis(),
+        #         })
+        #
+        #     return ee.ImageCollection(ee.List(month_list).map(aggregate_monthly))
+        #
+        # elif t_interval.lower() == 'annual':
+        #     # CGM - All of this code is almost identical to the monthly function above
+        #     def year_gen(iter_start_dt, iter_end_dt):
+        #         iter_dt = iter_start_dt
+        #         while iter_dt < iter_end_dt:
+        #             yield iter_dt.strftime('%Y-%m-%d')
+        #             iter_dt += relativedelta(years=+1)
+        #     year_list = list(year_gen(start_dt, end_dt))
+        #
+        #     def aggregate_annual(agg_start_date):
+        #         agg_end_date = ee.Date(agg_start_date).advance(1, 'year')
+        #         # if 'et' in variables or 'etf' in variables:
+        #         et_img = daily_coll.filterDate(agg_start_date, agg_end_date) \
+        #             .select(['et']).sum().multiply(etr_factor)
+        #         # if 'etr' in variables or 'etf' in variables:
+        #         etr_img = daily_coll.filterDate(agg_start_date, agg_end_date) \
+        #             .select(['etr']).sum().multiply(etr_factor)
+        #
+        #         image_list = []
+        #         if 'et' in variables:
+        #             image_list.append(et_img.float())
+        #         if 'etr' in variables:
+        #             image_list.append(etr_img.float())
+        #         if 'etf' in variables:
+        #             etf_img = et_img.divide(etr_img).rename('etf')
+        #             image_list.append(etf_img.float())
+        #         if 'ndvi' in variables:
+        #             ndvi_img = daily_coll\
+        #                 .filterDate(agg_start_date, agg_end_date)\
+        #                 .select(['ndvi']).mean().float()
+        #             image_list.append(ndvi_img)
+        #         if 'count' in variables:
+        #             count_img = aggregate_coll \
+        #                 .filterDate(agg_start_date, agg_end_date) \
+        #                 .select(['mask']).count().rename('count').uint8()
+        #             image_list.append(count_img)
+        #
+        #         return ee.Image(image_list).set(interp_properties).set({
+        #             'system:index': ee.Date(agg_start_date).format('YYYY'),
+        #             'system:time_start': ee.Date(agg_start_date).millis(),
+        #         })
+        #
+        #     return ee.ImageCollection(ee.List(year_list).map(aggregate_annual))
+        #
+        # elif t_interval.lower() == 'custom':
+        #     # if 'et' in variables or 'etf' in variables:
+        #     et_img = daily_coll.filterDate(start_date, end_date) \
+        #         .select(['et']).sum().multiply(etr_factor)
+        #     # if 'etr' in variables or 'etf' in variables:
+        #     etr_img = daily_coll.filterDate(start_date, end_date) \
+        #         .select(['etr']).sum().multiply(etr_factor)
+        #
+        #     image_list = []
+        #     if 'et' in variables:
+        #         image_list.append(et_img.float())
+        #     if 'etr' in variables:
+        #         image_list.append(etr_img.float())
+        #     if 'etf' in variables:
+        #         etf_img = et_img.divide(etr_img).rename('etf').float()
+        #         image_list.append(etf_img)
+        #     if 'ndvi' in variables:
+        #         ndvi_img = daily_coll\
+        #             .filterDate(start_date, end_date)\
+        #             .select(['ndvi']).mean().rename('ndvi').float()
+        #         image_list.append(ndvi_img)
+        #     if 'count' in variables:
+        #         count_img = aggregate_coll\
+        #             .filterDate(start_date, end_date)\
+        #             .select(['mask']).count().rename('count').uint8()
+        #         image_list.append(count_img)
+        #
+        #     # Returning an ImageCollection to be consistent
+        #     return ee.ImageCollection(ee.Image(image_list)\
+        #         .set(interp_properties)\
+        #         .set({
+        #             'system:index': ee.Date(start_date).format('YYYYMMdd'),
+        #             'system:time_start': ee.Date(start_date).millis(),
+        #         }))
+
 
     def get_image_ids(self):
         """Return image IDs of the input images
