@@ -603,6 +603,26 @@ class Image(object):
             ta_img = ta_array.arrayGet(index)
             # ta_img = ee.Image(ta_array.arrayGet(index))
 
+
+            # # Yun's code for finding the least bias's air temperature
+            # # This seems to return results identical to the code above
+            # # https://code.earthengine.google.com/e3fbaf3ca367d7730d0831ed6e2f2bad
+            # bias_all = ee.ImageCollection(input_img.select('step_\\d+_bias'))
+            # bias_all_1 = ee.Image(bias_all.first())
+            # all_bands = bias_all_1.select([
+            #     "step_0_bias", "step_1_bias", "step_2_bias", "step_3_bias",
+            #     "step_4_bias", "step_5_bias", "step_6_bias", "step_7_bias",
+            #     "step_8_bias", "step_9_bias", "step_10_bias", "step_11_bias",
+            #     "step_12_bias"])
+            # all_bands = all_bands.abs()
+            # bias_min = all_bands.reduce(ee.Reducer.min())
+            # bias_array = all_bands.toArray()
+            # index = bias_array.eq(bias_min)
+            # ta_final = ta_array.arraySlice(0, 0).arrayMask(index)\
+            #     .arraySlice(0, 0, 1).arrayFlatten([['array']])
+            # ta_img = ee.Image(ta_final.copyProperties(input_img))
+
+
             # # DEADBEEF - This code doesn't work well since Ta doesn't always
             # #   bracket 0 bias
             # ta_coll_id = 'projects/disalexi/ta/CONUS_V001_wrs2'
