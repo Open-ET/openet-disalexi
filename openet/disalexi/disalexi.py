@@ -86,9 +86,11 @@ class Image(object):
         ta_smooth_flag : bool, optional
             If True, smooth and resample Ta image.
         etr_source : str, float, optional
-            Reference ET source (the default is 'IDAHO_EPSCOR/GRIDMET').
+            Reference ET source (the default is None).
+            Parameter is required if computing 'etf' or 'etr'.
         etr_band : str, optional
-            Reference ET band name (the default is 'etr').
+            Reference ET band name (the default is None).
+            Parameter is required if computing 'etf' or 'etr'.
         etr_factor : float, optional
             Reference ET scaling factor (the default is 1.0).
         lat : ee.Image, optional
@@ -349,17 +351,17 @@ class Image(object):
         output_images = []
         for v in variables:
             if v.lower() == 'et':
-                output_images.append(self.et)
+                output_images.append(self.et.float())
             elif v.lower() == 'etf':
-                output_images.append(self.etf)
+                output_images.append(self.etf.float())
             elif v.lower() == 'etr':
-                output_images.append(self.etr)
+                output_images.append(self.etr.float())
             elif v.lower() == 'lst':
-                output_images.append(self.lst)
+                output_images.append(self.lst.float())
             elif v.lower() == 'mask':
                 output_images.append(self.mask)
             elif v.lower() == 'ndvi':
-                output_images.append(self.ndvi)
+                output_images.append(self.ndvi.float())
             # elif v.lower() == 'qa':
             #     output_images.append(self.qa)
             # elif v.lower() == 'quality':
@@ -374,7 +376,7 @@ class Image(object):
     # @lazy_property
     # def albedo(self):
     #     """Return albedo image"""
-    #     return self.image.select(['albedo']).set(self.properties).double()
+    #     return self.image.select(['albedo']).set(self.properties)
 
     @lazy_property
     def et(self):
@@ -400,7 +402,7 @@ class Image(object):
             datetime=self.datetime, lat=self.lat, lon=self.lon,
             stabil_iter=self.stabil_iter,albedo_iter=self.albedo_iter,
         )
-        return et.rename(['et']).double().set(self.properties)
+        return et.rename(['et']).set(self.properties)
         #     .set({'ta_step_size': self.ta.get('ta_step_size')})
 
     @lazy_property
@@ -434,7 +436,7 @@ class Image(object):
     def etf(self):
         """Compute ET fraction as actual ET divided by the reference ET"""
         return self.et.divide(self.etr)\
-            .rename(['etf']).set(self.properties).double()
+            .rename(['etf']).set(self.properties)
 
     @lazy_property
     def et_alexi(self):
@@ -478,12 +480,12 @@ class Image(object):
     # @lazy_property
     # def lai(self):
     #     """Return LAI image"""
-    #     return self.image.select(['lai']).set(self.properties).double()
+    #     return self.image.select(['lai']).set(self.properties)
 
     # @lazy_property
     # def lst(self):
     #     """Return land surface temperature (LST) image"""
-    #     return self.image.select(['lst']).set(self.properties).double()
+    #     return self.image.select(['lst']).set(self.properties)
 
     @lazy_property
     def mask(self):
@@ -494,7 +496,7 @@ class Image(object):
     # @lazy_property
     # def ndvi(self):
     #     """Return NDVI image"""
-    #     return self.image.select(['ndvi']).set(self.properties).double()
+    #     return self.image.select(['ndvi']).set(self.properties)
 
     # @lazy_property
     # def quality(self):
@@ -601,7 +603,8 @@ class Image(object):
             ta_img = ta_array.arrayGet(index)
             # ta_img = ee.Image(ta_array.arrayGet(index))
 
-            # # DEADBEEF - This code doesn't work well since Ta doesn't bracket 0 bias
+            # # DEADBEEF - This code doesn't work well since Ta doesn't always
+            # #   bracket 0 bias
             # ta_coll_id = 'projects/disalexi/ta/CONUS_V001_wrs2'
             # ta_coll = ee.ImageCollection(ta_coll_id)\
             #     .filterMetadata('id', 'equals', self.id)\
@@ -653,8 +656,6 @@ class Image(object):
         return self.mask\
             .double().multiply(0).add(utils.date_to_time_0utc(self.datetime))\
             .rename(['time']).set(self.properties)
-        # return ee.Image.constant(utils.date_to_time_0utc(self.datetime)) \
-        #     .double().rename(['time']).set(self.properties)
 
     @lazy_property
     def windspeed(self):
@@ -987,5 +988,5 @@ class Image(object):
             datetime=self.datetime, lat=self.lat, lon=self.lon,
             stabil_iter=self.stabil_iter, albedo_iter=self.albedo_iter,
         )
-        return et.rename(['et']).double().set(self.properties)
+        return et.rename(['et']).set(self.properties)
         #     .reproject(crs=self.crs, crsTransform=self.transform)
