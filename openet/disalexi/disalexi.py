@@ -43,12 +43,12 @@ class Image(object):
             windspeed_source='CFSV2',
             stabil_iterations=36,
             albedo_iterations=10,
+            rs_interp_flag=True,
             ta_interp_flag=True,
             ta_smooth_flag=True,
-            rs_interp_flag=True,
-            # etr_source=None,
-            # etr_band=None,
-            # etr_factor=None,
+            etr_source=None,
+            etr_band=None,
+            etr_factor=1.0,
             lat=None,
             lon=None,
         ):
@@ -75,12 +75,28 @@ class Image(object):
         windspeed_source : {'CFSV2}
             Windspeed source keyword (the default is 'CFSV2').
         stabil_iterations : int
-            Number of istability calculation iterations (the default is 10).
+            Number of istability calculation iterations (the default is 36).
         albedo_iterations : int
             Number albedo separation iterations (the default is 10).
-        ta_interp_flag : bool
-        ta_smooth_flag : bool
-        rs_interp_flag : bool
+        rs_interp_flag : bool, optional
+            If True, interpolate incoming solar radiation.
+            If False, select image with same date and hour.
+        ta_interp_flag : bool, optional
+            Ta interpolation is not implemented.
+        ta_smooth_flag : bool, optional
+            If True, smooth and resample Ta image.
+        etr_source : str, float, optional
+            Reference ET source (the default is None).
+            Parameter is required if computing 'etf' or 'etr'.
+        etr_band : str, optional
+            Reference ET band name (the default is None).
+            Parameter is required if computing 'etf' or 'etr'.
+        etr_factor : float, optional
+            Reference ET scaling factor (the default is 1.0).
+        lat : ee.Image, optional
+            Latitude [deg].  If not set will default to ee.Image.pixelLonLat().
+        lon : ee.Image, optional
+            Longitude [deg].  If not set will default to ee.Image.pixelLonLat().
 
         Notes
         -----
@@ -138,14 +154,14 @@ class Image(object):
         # CGM - Buffering clouds a small amount
         # Buffer distances are currently hardcoded at -30 and +90
         #   but these could be changed to input parameters
-        self.mask = image.select('cfmask').gte(1)\
+        self.cloud_mask = image.select('cfmask').gte(1)\
             .reduceNeighborhood(ee.Reducer.min(), ee.Kernel.circle(30, 'meters'))\
             .reduceNeighborhood(ee.Reducer.max(), ee.Kernel.circle(90, 'meters'))\
             .eq(0)\
-            .rename(['mask'])
+            .rename(['cloud_mask'])
         # self.cfmask = image.select('cfmask')
-        # self.mask = self.cfmask.eq(0)
-        input_image = image.updateMask(self.mask)
+        # self.cloud_mask = self.cfmask.eq(0)
+        input_image = image.updateMask(self.cloud_mask)
 
         # Get input bands from the image
         self.albedo = input_image.select('albedo')
@@ -164,9 +180,14 @@ class Image(object):
         self.windspeed_source = windspeed_source
         self.stabil_iter = int(stabil_iterations + 0.5)
         self.albedo_iter = int(albedo_iterations + 0.5)
-        self.ta_interp_flag = utils.boolean(ta_interp_flag)
-        self.ta_smooth_flag = utils.boolean(ta_smooth_flag)
         self.rs_interp_flag = utils.boolean(rs_interp_flag)
+        # self.ta_interp_flag = utils.boolean(ta_interp_flag)
+        self.ta_smooth_flag = utils.boolean(ta_smooth_flag)
+
+        # Reference ET parameters
+        self.etr_source = etr_source
+        self.etr_band = etr_band
+        self.etr_factor = etr_factor
 
         if lat is None:
             self.lat = self.lst.multiply(0).add(
@@ -315,8 +336,7 @@ class Image(object):
     #     """
     #     return cls(landsat.LandsatTOA(toa_image).prep(), **kwargs)
 
-    # def calculate(self, variables=['et', 'etr', 'etf']):
-    def calculate(self, variables=['et']):
+    def calculate(self, variables=['et', 'etr', 'etf']):
         """Return a multiband image of calculated variables
 
         Parameters
@@ -331,17 +351,17 @@ class Image(object):
         output_images = []
         for v in variables:
             if v.lower() == 'et':
-                output_images.append(self.et)
-            # elif v.lower() == 'etf':
-            #     output_images.append(self.etf)
-            # elif v.lower() == 'etr':
-            #     output_images.append(self.etr)
+                output_images.append(self.et.float())
+            elif v.lower() == 'etf':
+                output_images.append(self.etf.float())
+            elif v.lower() == 'etr':
+                output_images.append(self.etr.float())
             elif v.lower() == 'lst':
-                output_images.append(self.lst)
+                output_images.append(self.lst.float())
             elif v.lower() == 'mask':
                 output_images.append(self.mask)
             elif v.lower() == 'ndvi':
-                output_images.append(self.ndvi)
+                output_images.append(self.ndvi.float())
             # elif v.lower() == 'qa':
             #     output_images.append(self.qa)
             # elif v.lower() == 'quality':
@@ -356,7 +376,7 @@ class Image(object):
     # @lazy_property
     # def albedo(self):
     #     """Return albedo image"""
-    #     return self.image.select(['albedo']).set(self.properties).double()
+    #     return self.image.select(['albedo']).set(self.properties)
 
     @lazy_property
     def et(self):
@@ -382,19 +402,41 @@ class Image(object):
             datetime=self.datetime, lat=self.lat, lon=self.lon,
             stabil_iter=self.stabil_iter,albedo_iter=self.albedo_iter,
         )
-        return et.rename(['et']).double().set(self.properties)
+        return et.rename(['et']).set(self.properties)
         #     .set({'ta_step_size': self.ta.get('ta_step_size')})
 
-    # @lazy_property
-    # def etr(self):
-    #     """Compute reference ET for the image date"""
-    #     return True
+    @lazy_property
+    def etr(self):
+        """Compute reference ET for the image date"""
+        if utils.is_number(self.etr_source):
+            # Interpret numbers as constant images
+            # CGM - Should we use the ee_types here instead?
+            #   i.e. ee.ee_types.isNumber(self.etr_source)
+            etr_img = ee.Image.constant(float(self.etr_source))
+        elif type(self.etr_source) is str:
+            # Assume a string source is an image collection ID (not an image ID)
+            etr_img = ee.Image(
+                ee.ImageCollection(self.etr_source)\
+                    .filterDate(self.start_date, self.end_date)\
+                    .select([self.etr_band])\
+                    .first())
+        else:
+            raise ValueError('unsupported etr_source: {}'.format(
+                self.etr_source))
 
-    # @lazy_property
-    # def etf(self):
-    #     """Compute ET fraction as actual ET divided by the reference ET"""
-    #     return self.et.divide(self.etr)\
-    #         .rename(['etf']).set(self.properties).double()
+        # Map ETr values directly to the input (i.e. Landsat) image pixels
+        # The benefit of this is the ETr image is now in the same crs as the
+        #   input image.  Not all models may want this though.
+        # CGM - Should the output band name match the input ETr band name?
+        return self.ndvi.multiply(0).add(etr_img)\
+            .multiply(self.etr_factor)\
+            .rename(['etr']).set(self.properties)
+
+    @lazy_property
+    def etf(self):
+        """Compute ET fraction as actual ET divided by the reference ET"""
+        return self.et.divide(self.etr)\
+            .rename(['etf']).set(self.properties)
 
     @lazy_property
     def et_alexi(self):
@@ -438,24 +480,23 @@ class Image(object):
     # @lazy_property
     # def lai(self):
     #     """Return LAI image"""
-    #     return self.image.select(['lai']).set(self.properties).double()
+    #     return self.image.select(['lai']).set(self.properties)
 
     # @lazy_property
     # def lst(self):
     #     """Return land surface temperature (LST) image"""
-    #     return self.image.select(['lst']).set(self.properties).double()
+    #     return self.image.select(['lst']).set(self.properties)
 
-    # CGM - Using CFMask for now
-    # @lazy_property
-    # def mask(self):
-    #     """Mask of all active pixels (based on the final et)"""
-    #     return self.et.multiply(0).add(1).updateMask(1)\
-    #         .rename(['mask']).set(self.properties).uint8()
+    @lazy_property
+    def mask(self):
+        """Mask of all active pixels (based on the final et)"""
+        return self.et.multiply(0).add(1).updateMask(1)\
+            .rename(['mask']).set(self.properties).uint8()
 
     # @lazy_property
     # def ndvi(self):
     #     """Return NDVI image"""
-    #     return self.image.select(['ndvi']).set(self.properties).double()
+    #     return self.image.select(['ndvi']).set(self.properties)
 
     # @lazy_property
     # def quality(self):
@@ -548,34 +589,70 @@ class Image(object):
             ta_img = ee.Image(self.ta_source)
             #     .set({'ta_iteration': 'image'})
         elif self.ta_source.upper() == 'CONUS_V001':
-            ta_coll_id = 'projects/disalexi/ta/CONUS_V001_wrs2'
+            ta_coll_id = 'projects/disalexi/ta/CONUS_V001_0p1K'
             ta_coll = ee.ImageCollection(ta_coll_id)\
                 .filterMetadata('id', 'equals', self.id)\
                 .limit(1, 'step_size', False)
             input_img = ee.Image(ta_coll.first())
 
-            # Compute new Ta as mean of bracketing values from mosaics
+            # Select the Ta image with the minimum bias
             ta_array = input_img.select('step_\\d+_ta').toArray()
             bias_array = input_img.select('step_\\d+_bias').toArray()
-            diff_array = bias_array.arraySlice(0, 1)\
-                .subtract(bias_array.arraySlice(0, 0, -1))
-            index = diff_array.gt(0).And(bias_array.arraySlice(0, 1).gt(0))
-            ta_a = ta_array.arraySlice(0, 0, -1).arrayMask(index)\
+            index = bias_array.abs().multiply(-1).arrayArgmax()\
                 .arraySlice(0, 0, 1).arrayFlatten([['array']])
-            ta_b = ta_array.arraySlice(0, 1).arrayMask(index)\
-                .arraySlice(0, 0, 1).arrayFlatten([['array']])
-            bias_a = bias_array.arraySlice(0, 0, -1).arrayMask(index)\
-                .arraySlice(0, 0, 1).arrayFlatten([['array']])
-            bias_b = bias_array.arraySlice(0, 1).arrayMask(index)\
-                .arraySlice(0, 0, 1).arrayFlatten([['array']])
+            ta_img = ta_array.arrayGet(index)
+            # ta_img = ee.Image(ta_array.arrayGet(index))
 
-            # This calculation only works correctly if a/b bracket the 0 bias
-            ta_img = ta_a.multiply(bias_b).subtract(ta_b.multiply(bias_a))\
-                .divide(bias_b.subtract(bias_a))
-            # Uncomment to remove any pixels that don't bracket 0
-            #     .updateMask(bias_a.lt(0))
-            ta_img = ee.Image(ta_img.copyProperties(input_img))
-            #     .set({'ta_step_size': input_img.get('step_size')})
+
+            # # Yun's code for finding the least bias's air temperature
+            # # This seems to return results identical to the code above
+            # # https://code.earthengine.google.com/e3fbaf3ca367d7730d0831ed6e2f2bad
+            # bias_all = ee.ImageCollection(input_img.select('step_\\d+_bias'))
+            # bias_all_1 = ee.Image(bias_all.first())
+            # all_bands = bias_all_1.select([
+            #     "step_0_bias", "step_1_bias", "step_2_bias", "step_3_bias",
+            #     "step_4_bias", "step_5_bias", "step_6_bias", "step_7_bias",
+            #     "step_8_bias", "step_9_bias", "step_10_bias", "step_11_bias",
+            #     "step_12_bias"])
+            # all_bands = all_bands.abs()
+            # bias_min = all_bands.reduce(ee.Reducer.min())
+            # bias_array = all_bands.toArray()
+            # index = bias_array.eq(bias_min)
+            # ta_final = ta_array.arraySlice(0, 0).arrayMask(index)\
+            #     .arraySlice(0, 0, 1).arrayFlatten([['array']])
+            # ta_img = ee.Image(ta_final.copyProperties(input_img))
+
+
+            # # DEADBEEF - This code doesn't work well since Ta doesn't always
+            # #   bracket 0 bias
+            # ta_coll_id = 'projects/disalexi/ta/CONUS_V001_wrs2'
+            # ta_coll = ee.ImageCollection(ta_coll_id)\
+            #     .filterMetadata('id', 'equals', self.id)\
+            #     .limit(1, 'step_size', False)
+            # input_img = ee.Image(ta_coll.first())
+            #
+            # # Compute new Ta as mean of bracketing values from mosaics
+            # ta_array = input_img.select('step_\\d+_ta').toArray()
+            # bias_array = input_img.select('step_\\d+_bias').toArray()
+            # diff_array = bias_array.arraySlice(0, 1)\
+            #     .subtract(bias_array.arraySlice(0, 0, -1))
+            # index = diff_array.gt(0).And(bias_array.arraySlice(0, 1).gt(0))
+            # ta_a = ta_array.arraySlice(0, 0, -1).arrayMask(index)\
+            #     .arraySlice(0, 0, 1).arrayFlatten([['array']])
+            # ta_b = ta_array.arraySlice(0, 1).arrayMask(index)\
+            #     .arraySlice(0, 0, 1).arrayFlatten([['array']])
+            # bias_a = bias_array.arraySlice(0, 0, -1).arrayMask(index)\
+            #     .arraySlice(0, 0, 1).arrayFlatten([['array']])
+            # bias_b = bias_array.arraySlice(0, 1).arrayMask(index)\
+            #     .arraySlice(0, 0, 1).arrayFlatten([['array']])
+            #
+            # # This calculation only works correctly if a/b bracket the 0 bias
+            # ta_img = ta_a.multiply(bias_b).subtract(ta_b.multiply(bias_a))\
+            #     .divide(bias_b.subtract(bias_a))
+            # # Uncomment to remove any pixels that don't bracket 0
+            # #     .updateMask(bias_a.lt(0))
+            # ta_img = ee.Image(ta_img.copyProperties(input_img))
+            # #     .set({'ta_step_size': input_img.get('step_size')})
         else:
             raise ValueError('Unsupported ta_source: {}\n'.format(
                 self.ta_source))
@@ -599,8 +676,6 @@ class Image(object):
         return self.mask\
             .double().multiply(0).add(utils.date_to_time_0utc(self.datetime))\
             .rename(['time']).set(self.properties)
-        # return ee.Image.constant(utils.date_to_time_0utc(self.datetime)) \
-        #     .double().rename(['time']).set(self.properties)
 
     @lazy_property
     def windspeed(self):
@@ -933,5 +1008,5 @@ class Image(object):
             datetime=self.datetime, lat=self.lat, lon=self.lon,
             stabil_iter=self.stabil_iter, albedo_iter=self.albedo_iter,
         )
-        return et.rename(['et']).double().set(self.properties)
+        return et.rename(['et']).set(self.properties)
         #     .reproject(crs=self.crs, crsTransform=self.transform)
