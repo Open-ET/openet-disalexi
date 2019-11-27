@@ -380,28 +380,36 @@ def main(ini_path=None, overwrite_flag=False, delay=0, key=None,
             # Either Ta is being read from an existing collection
             #   or it will be computed f
             if tair_args['source_coll'] is not None:
-                ta_source_coll = ee.ImageCollection(tair_args['source_coll'])\
-                    .filterMetadata('id', 'equals', image_id)
-                if ta_source_coll.size().getInfo() == 0:
-                    logging.info('  No images in Ta source coll, skipping')
-                    continue
+                if tair_args['source_coll'] == 'NLDAS':
+                    ta_source_coll = ee.ImageCollection('NASA/NLDAS/FORA0125_H002')\
+                        .select(['temperature'])\
+                        .filterDate(export_dt)
+                    input_image = ee.Image(ta_source_coll.first()).add(273.15).subtract(35)
+                    ta_source_img = alexi_mask.add(input_image).rename(['ta'])
+                    print(export_dt)
+                else:
+                    ta_source_coll = ee.ImageCollection(tair_args['source_coll'])\
+                        .filterMetadata('id', 'equals', image_id)
+                    if ta_source_coll.size().getInfo() == 0:
+                        logging.info('  No images in Ta source coll, skipping')
+                        continue
 
-                # A lot code to figure out the starting Ta value
-                # This identifies the first Ta that has a positive bias and
-                #   a bias that is larger than the previous bias
-                # It then selects the Ta for the previous step
-                # This should bracket a bias of zero but it is not guaranteed
-                input_img = ee.Image(ta_source_coll.first())
-                ta_array = input_img.select('step_\\d+_ta').toArray()
-                bias_array = input_img.select('step_\\d+_bias').toArray()
-                diff = bias_array.arraySlice(0, 1)\
-                    .subtract(bias_array.arraySlice(0, 0, -1))
-                index = diff.gt(0).And(bias_array.arraySlice(0, 1).gt(0))
-                # Intentionally use 0,0,-1 slice here (instead of 0,1)
-                #   to get Ta before bias goes positive
-                ta_source_img = ta_array.arraySlice(0, 0, -1).arrayMask(index)\
-                    .arraySlice(0, 0, 1).arrayFlatten([['array']])\
-                    .rename(['ta'])
+                    # A lot code to figure out the starting Ta value
+                    # This identifies the first Ta that has a positive bias and
+                    #   a bias that is larger than the previous bias
+                    # It then selects the Ta for the previous step
+                    # This should bracket a bias of zero but it is not guaranteed
+                    input_img = ee.Image(ta_source_coll.first())
+                    ta_array = input_img.select('step_\\d+_ta').toArray()
+                    bias_array = input_img.select('step_\\d+_bias').toArray()
+                    diff = bias_array.arraySlice(0, 1)\
+                        .subtract(bias_array.arraySlice(0, 0, -1))
+                    index = diff.gt(0).And(bias_array.arraySlice(0, 1).gt(0))
+                    # Intentionally use 0,0,-1 slice here (instead of 0,1)
+                    #   to get Ta before bias goes positive
+                    ta_source_img = ta_array.arraySlice(0, 0, -1).arrayMask(index.add(1))\
+                        .arraySlice(0, 0, 1).arrayFlatten([['array']])\
+                        .rename(['ta'])
             else:
                 ta_source_img = alexi_mask.add(float(tair_args['ta_start']))\
                     .rename(['ta'])

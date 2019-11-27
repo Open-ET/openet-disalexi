@@ -38,9 +38,11 @@ class Image(object):
             alexi_source='CONUS_V001',
             elevation_source='USGS/SRTMGL1_003',
             landcover_source='NLCD2011',
-            rs_daily_source='MERRA2',
-            rs_hourly_source='MERRA2',
-            windspeed_source='CFSV2',
+            rs_daily_source='CFSR',
+            rs_hourly_source='CFSR',
+            windspeed_source='CFSR',
+            vpd_source='CFSR',
+            airpressure_source='CFSR',
             stabil_iterations=36,
             albedo_iterations=10,
             rs_interp_flag=True,
@@ -178,6 +180,8 @@ class Image(object):
         self.rs_daily_source = rs_daily_source
         self.rs_hourly_source = rs_hourly_source
         self.windspeed_source = windspeed_source
+        self.vpd_source = vpd_source
+        self.airpressure_source = airpressure_source
         self.stabil_iter = int(stabil_iterations + 0.5)
         self.albedo_iter = int(albedo_iterations + 0.5)
         self.rs_interp_flag = utils.boolean(rs_interp_flag)
@@ -389,7 +393,7 @@ class Image(object):
 
         """
         et = tseb.tseb_pt(
-            t_air=self.ta, t_rad=self.lst,
+            t_air=self.ta, t_rad=self.lst,e_air=self.vpd,
             u=self.windspeed, p=self.pressure, z=self.elevation,
             rs_1=self.rs1, rs24=self.rs24, vza=0,
             # CGM - Need to add GEE gaussian_filter call to rs24
@@ -507,12 +511,44 @@ class Image(object):
     @lazy_property
     def pressure(self):
         """Air pressure [kPa]"""
-        return self.elevation \
-            .expression(
-                '101.3 * (((293.0 - 0.0065 * z) / 293.0) ** 5.26)',
-                {'z': self.elevation}) \
-            .rename(['pressure'])
+        if self.airpressure_source.upper() == 'ESTIMATE':
+            ap_img = self.elevation \
+              .expression(
+                  '101.3 * (((293.0 - 0.0065 * z) / 293.0) ** 5.26)',
+                  {'z': self.elevation}) \
+              .rename(['pressure'])
+        elif self.airpressure_source.upper() == 'CFSR':
+            ap_img_temp1=ee.ImageCollection('projects/disalexi/meteo_data/airpressure/CONUS_V001')\
+                           .filterDate(self.start_date, self.end_date).first().select(['b8']).rename(['pressure'])
+            ap_img_temp2=ee.ImageCollection('projects/disalexi/meteo_data/airpressure/CONUS_V001')\
+                           .filterDate(self.start_date, self.end_date).first().select(['b1']).rename(['pressure']) 
+            ap_coll = ee.ImageCollection('projects/disalexi/meteo_data/airpressure/CONUS_V001')\
+                   .filterDate(self.start_date, self.end_date)  #check it yun 
+            temp1 = self.hour_int.divide(3).floor().add(1)
+            temp2 = self.hour_int.divide(3).floor().add(2)
+            aname = ee.String('b').cat(temp1.int().format())
+            bname = ee.String('b').cat(temp2.int().format())
+            ap_a_img = ap_coll.first().select([aname])
+            ap_b_img = ap_coll.first().select([bname])
+            t_a = self.hour_int.divide(3).floor().multiply(3)
+            t_b = t_a.add(3)
+            interp_dt=self.hour
+            ap_img = ee.Algorithms.If(self.hour_int.lt(24) and self.hour_int.gt(0),
+                                     ap_b_img.subtract(ap_a_img)\
+                                                  .multiply(interp_dt.subtract(t_a).divide(3))\
+                                                  .add(ap_a_img).rename(['pressure']),
+                                     ap_b_img)            
+            ap_img = ee.Algorithms.If(self.hour_int.gte(24),ap_img_temp1,ap_img)
+            ap_img = ee.Algorithms.If(self.hour_int.eq(0), ap_img_temp2,ap_img)
+            ap_img = self.elevation.expression(
+                        'ap_img * (((293.0 - 0.0065 * z) / 293.0) ** 5.26)',
+                        {'z': self.elevation,'ap_img':ap_img}).rename(['pressure'])
 
+        else:
+            raise ValueError('Invalid airpressure_source: {}\n'.format(
+                self.airpressure_source))
+
+        return ee.Image(ap_img)
     @lazy_property
     def rs1(self):
         """Extract MERRA2 solar images for the target image time"""
@@ -548,11 +584,38 @@ class Image(object):
                             self.hour_int, self.hour_int, 'hour'))
                         .first()) \
                     .rename(['rs'])
+        elif self.rs_hourly_source.upper() == 'CFSR':
+            rs1_img_temp1 = ee.ImageCollection('projects/disalexi/insol_data/GLOBAL_V001')\
+                            .filterDate(self.start_date,self.end_date).first().select(['b24']).rename(['rs'])
+            rs1_img_temp2 = ee.ImageCollection('projects/disalexi/insol_data/GLOBAL_V001')\
+                            .filterDate(self.start_date,self.end_date).first().select(['b1']).rename(['rs'])            
+            rs1_coll = ee.ImageCollection('projects/disalexi/insol_data/GLOBAL_V001')\
+                   .filterDate(self.start_date, self.end_date)  #check it yun 
+            temp1 = int(self.hour_int.floor().getInfo())
+            temp2 = int(self.hour_int.ceil().getInfo())
+
+            aname = ee.String('b').cat(self.hour.floor().int().format())
+            bname = ee.String('b').cat(self.hour.ceil().int().format())
+            rs1_a_img = rs1_coll.first().select([aname])
+            rs1_b_img = rs1_coll.first().select([bname])
+            t_a = self.hour.floor()
+            t_b = self.hour.ceil()
+            interp_dt=self.hour
+            rs1_img = ee.Algorithms.If(self.hour_int.gt(0) and self.hour_int.lt(24),
+                             rs1_b_img.subtract(rs1_a_img)\
+                                 .multiply(interp_dt.subtract(t_a).divide(t_b.subtract(t_a)))\
+                                 .add(rs1_a_img).rename(['rs']),
+                             rs1_a_img)            
+    
+            rs1_img = ee.Algorithms.If(self.hour_int.gte(24),rs1_img_temp1,rs1_img)
+                            
+            rs1_img = ee.Algorithms.If(self.hour_int.eq(0), rs1_img_temp2,rs1_img)
+
         else:
             raise ValueError('Unsupported rs_hourly_source: {}\n'.format(
                 self.rs_hourly_source))
 
-        return rs1_img.rename(['rs'])
+        return ee.Image(rs1_img)
 
     @lazy_property
     def rs24(self):
@@ -565,10 +628,48 @@ class Image(object):
                 .select(['SWGDNCLR'])\
                 .filterDate(self.start_date, self.end_date)
             rs24_img = ee.Image(rs_coll.first())
+        elif self.rs_daily_source.upper() == 'CFSR':
+            start_hour = self.hour_int.subtract(5)
+            end_hour = self.hour_int.add(10)  #hard coded for one day. should be fine, since no sun the rs is 0 in rs data
+          #when gte24
+            rs24_coll_1 = ee.ImageCollection('projects/disalexi/insol_data/GLOBAL_V001')\
+                   .filterDate(self.start_date, self.end_date)  #check it yun
+            rs24_coll_2 = ee.ImageCollection('projects/disalexi/insol_data/GLOBAL_V001')\
+                   .filterDate(self.start_date.advance(1,'day'), self.end_date.advance(1,'day'))  #check it yun                
+            rs24_coll_1_array=rs24_coll_1.first().toArray()
+            rs24_coll_2_array=rs24_coll_1.first().toArray()
+            day1_array=rs24_coll_1_array.arraySlice(0,int(start_hour.getInfo()),24)
+            day2_array=rs24_coll_2_array.arraySlice(0,0,int(end_hour.subtract(24).getInfo()))
+            day1_sum=day1_array.arrayReduce(reducer=ee.Reducer.sum(),axes=[0])
+            day2_sum=day2_array.arrayReduce(reducer=ee.Reducer.sum(),axes=[0])
+            rs24_img_temp1=day1_sum.add(day2_sum).arrayFlatten([['array']]).rename(['rs'])
+          #when lt 0
+            rs24_coll_1 = ee.ImageCollection('projects/disalexi/insol_data/GLOBAL_V001')\
+                   .filterDate(self.start_date.advance(-1,'day'), self.end_date.advance(-1,'day'))  #check it yun
+            rs24_coll_2 = ee.ImageCollection('projects/disalexi/insol_data/GLOBAL_V001')\
+                   .filterDate(self.start_date, self.end_date)  #check it yun                
+            rs24_coll_1_array=rs24_coll_1.first().toArray()
+            rs24_coll_2_array=rs24_coll_1.first().toArray()
+            day1_array=rs24_coll_1_array.arraySlice(0,int(start_hour.subtract(24).multiply(-1).getInfo()),24)
+            day2_array=rs24_coll_2_array.arraySlice(0,0,int(end_hour.getInfo()))
+            day1_sum=day1_array.arrayReduce(reducer=ee.Reducer.sum(),axes=[0])
+            day2_sum=day2_array.arrayReduce(reducer=ee.Reducer.sum(),axes=[0])
+            rs24_img_temp2=day1_sum.add(day2_sum).arrayFlatten([['array']]).rename(['rs'])
+          #normal
+            rs24_coll = ee.ImageCollection('projects/disalexi/inso_data/GLOBAL_V001')\
+                   .filterDate(self.start_date,self.end_date)
+            rs24_coll_array=rs24_coll.first().toArray()
+            day_array=rs24_coll_array.arraySlice(0,int(start_hour.getInfo()),int(end_hour.getInfo()))
+            day_sum=day_array.arrayReduce(reducer=ee.Reducer.sum(),axes=[0])
+            rs24_img=day_sum.arrayFlatten([['array']]).rename(['rs'])
+            
+            rs24_img = ee.Algorithms.If(end_hour.gt(24),rs24_img_temp1,rs24_img)
+            rs24_img = ee.Algorithms.If(start_hour.lt(0), rs24_img_temp2,rs24_img)
+              
         else:
             raise ValueError('Unsupported rs_daily_source: {}\n'.format(
                 self.rs_daily_source))
-        return rs24_img.rename(['rs'])
+        return ee.Image(rs24_img)
 
     @lazy_property
     def ta(self):
@@ -695,10 +796,80 @@ class Image(object):
                 .filterDate(self.start_date, self.end_date)
             windspeed_img = windspeed_coll.mean() \
                 .expression('sqrt(b(0) ** 2 + b(1) ** 2)')
+        elif self.windspeed_source.upper() == 'CFSR':
+            wind_img_temp1=ee.ImageCollection('projects/disalexi/meteo_data/windspeed/CONUS_V001')\
+                           .filterDate(self.start_date, self.end_date).first().select(['b8']).rename(['windspeed'])
+            wind_img_temp2=ee.ImageCollection('projects/disalexi/meteo_data/windspeed/CONUS_V001')\
+                           .filterDate(self.start_date, self.end_date).first().select(['b1']).rename(['windspeed']) 
+            windspeed_coll = ee.ImageCollection('projects/disalexi/meteo_data/windspeed/CONUS_V001')\
+                   .filterDate(self.start_date, self.end_date)  #check it yun 
+            temp1 = self.hour_int.divide(3).floor().add(1)
+            temp2 = self.hour_int.divide(3).floor().add(2)
+            aname = ee.String('b').cat(temp1.int().format())
+            bname = ee.String('b').cat(temp2.int().format())
+            wind_a_img = windspeed_coll.first().select([aname])
+            wind_b_img = windspeed_coll.first().select([bname])
+            t_a = self.hour_int.divide(3).floor().multiply(3)
+            t_b = t_a.add(3)
+            interp_dt=self.hour
+            wind_img = ee.Algorithms.If(self.hour_int.lt(24) and self.hour_int.gt(0),
+                                        wind_b_img.subtract(wind_a_img)\
+                                                  .multiply(interp_dt.subtract(t_a).divide(3))\
+                                                  .add(wind_a_img).rename(['windspeed']),
+                                        wind_b_img)            
+            wind_img = ee.Algorithms.If(self.hour_int.gte(24),wind_img_temp1,wind_img)
+            wind_img = ee.Algorithms.If(self.hour_int.eq(0), wind_img_temp2,wind_img)                            
         else:
             raise ValueError('Invalid windspeed_source: {}\n'.format(
                 self.windspeed_source))
-        return windspeed_img.rename(['windspeed'])
+        return ee.Image(wind_img)
+
+    @lazy_property
+    def vpd(self):
+        """vapor pressure"""
+        if utils.is_number(self.vpd_source):
+            vpd_img = ee.Image.constant(float(self.vpd_source))
+        elif isinstance(self.vpd_source, ee.computedobject.ComputedObject):
+            vpd_img = self.vpd_source
+        elif self.vpd_source.upper() == 'CFSV2':
+            # It would be more correct to compute the magnitude for each image,
+            #   then compute the average.
+            # Do we need daily, 6hr, or interpolated instantaneous data?
+            vpd_coll = ee.ImageCollection('NOAA/CFSV2/FOR6H') \
+                .select([
+                    'u-component_of_wind_height_above_ground',
+                    'v-component_of_wind_height_above_ground']) \
+                .filterDate(self.start_date, self.end_date)
+            vpd_img = vpd_coll.mean() \
+                .expression('sqrt(b(0) ** 2 + b(1) ** 2)')
+        elif self.vpd_source.upper() == 'CFSR':
+            vpd_img_temp1=ee.ImageCollection('projects/disalexi/meteo_data/vpd/CONUS_V001')\
+                           .filterDate(self.start_date, self.end_date).first().select(['b8']).rename(['vpd'])
+            vpd_img_temp2=ee.ImageCollection('projects/disalexi/meteo_data/vpd/CONUS_V001')\
+                           .filterDate(self.start_date, self.end_date).first().select(['b1']).rename(['vpd']) 
+            vpd_coll = ee.ImageCollection('projects/disalexi/meteo_data/vpd/CONUS_V001')\
+                   .filterDate(self.start_date, self.end_date)  #check it yun 
+            temp1 = self.hour_int.divide(3).floor().add(1)
+            temp2 = self.hour_int.divide(3).floor().add(2)
+            aname = ee.String('b').cat(temp1.int().format())
+            bname = ee.String('b').cat(temp2.int().format())
+            vpd_a_img = vpd_coll.first().select([aname])
+            vpd_b_img = vpd_coll.first().select([bname])
+            t_a = self.hour_int.divide(3).floor().multiply(3)
+            t_b = t_a.add(3)
+            interp_dt=self.hour
+            vpd_img = ee.Algorithms.If(self.hour_int.lt(24) and self.hour_int.gt(0),
+                                        vpd_b_img.subtract(vpd_a_img)\
+                                                  .multiply(interp_dt.subtract(t_a).divide(3))\
+                                                  .add(vpd_a_img).rename(['vpd']),
+                                        vpd_b_img)            
+            vpd_img = ee.Algorithms.If(self.hour_int.gte(24),vpd_img_temp1,vpd_img)
+            vpd_img = ee.Algorithms.If(self.hour_int.eq(0), vpd_img_temp2,vpd_img)                                          
+            
+        else:
+            raise ValueError('Invalid vpd_source: {}\n'.format(
+                self.vpd_source))
+        return ee.Image(vpd_img)   
 
     def set_landcover_vars(self):
         """Compute Land Cover / LAI derived variables
@@ -781,7 +952,7 @@ class Image(object):
 
         """
         et_fine = tseb.tseb_pt(
-            t_air=ta_img, t_rad=self.lst,
+            t_air=ta_img, t_rad=self.lst,e_air=self.vpd,
             # t_air=ta_img.reproject(crs=self.crs, crsTransform=self.transform),
             # lat=lat, lon=lon,
             u=self.windspeed, p=self.pressure, z=self.elevation,
@@ -833,7 +1004,7 @@ class Image(object):
         def ta_func(ta):
             """Compute TSEB ET for the target t_air value"""
             et_fine = tseb.tseb_pt(
-                t_air=ta, t_rad=self.lst,
+                t_air=ta, t_rad=self.lst,e_air=self.vpd,
                 u=self.windspeed, p=self.pressure, z=self.elevation,
                 rs_1=self.rs1, rs24=self.rs24, vza=0,
                 aleafv=self.aleafv, aleafn=self.aleafn, aleafl=self.aleafl,
@@ -896,7 +1067,7 @@ class Image(object):
         def ta_func(ta):
             """Compute TSEB ET for the target t_air value"""
             et_fine = tseb.tseb_pt(
-                t_air=ta, t_rad=self.lst,
+                t_air=ta, t_rad=self.lst,e_air=self.vpd,
                 # t_air=ta.reproject(crs=self.crs, crsTransform=self.transform),
                 u=self.windspeed, p=self.pressure, z=self.elevation,
                 rs_1=self.rs1, rs24=self.rs24, vza=0,
@@ -952,7 +1123,7 @@ class Image(object):
 
         # Aggregate the Landsat scale ET up to the ALEXI scale
         et_fine = tseb.tseb_pt(
-            t_air=ta_img, t_rad=self.lst,
+            t_air=ta_img, t_rad=self.lst,e_air=self.vpd,
             # t_air=ta_img.reproject(crs=self.crs, crsTransform=self.transform),
             # lat=lat, lon=lon,
             u=self.windspeed, p=self.pressure, z=self.elevation,
@@ -994,7 +1165,7 @@ class Image(object):
 
         """
         et = tseb.tseb_pt(
-            t_air=ta_img, t_rad=self.lst,
+            t_air=ta_img, t_rad=self.lst,e_air=self.vpd,
             # t_air=ta_img.reproject(crs=self.crs, crsTransform=self.transform),
             u=self.windspeed, p=self.pressure, z=self.elevation,
             rs_1=self.rs1, rs24=self.rs24, vza=0,
