@@ -227,7 +227,7 @@ def tseb_pt(t_air, t_rad, e_air, u, p, z, rs_1, rs24, vza,
     e_s = t_air.expression(
         '0.6108 * exp((17.27 * (t_air - 273.16)) / ((t_air - 273.16) + 237.3))',
         {'t_air': t_air})
-    vpd = e_s.subtract(e_air) #yun
+    vpd = e_s.subtract(e_air)
     # Slope of the saturation vapor pressure [kPa] (FAO56 3-9)
     Ss = t_air.expression(
         '4098. * e_s / (((t_air - 273.16) + 237.3) ** 2)',
@@ -245,12 +245,12 @@ def tseb_pt(t_air, t_rad, e_air, u, p, z, rs_1, rs24, vza,
     vpd1 = ee.Number(2.0)
     dvpd = ee.Number(0.4)
     a_pt_temp = a_pt.expression(
-        '(a_pt+(vpd-vpd1)*dvpd)',
-        {'a_pt':a_pt,'vpd':vpd,'vpd1':vpd1,'dvpd':dvpd})
-    a_pt = a_pt.where(vpd.gte(vpd1),a_pt_temp)
+        '(a_pt + (vpd - vpd1) * dvpd)',
+        {'a_pt': a_pt, 'vpd': vpd, 'vpd1': vpd1, 'dvpd': dvpd})
+    a_pt = a_pt.where(vpd.gte(vpd1), a_pt_temp)
     pt_lim = ee.Number(2.5)
     ind = a_pt.gt(pt_lim)
-    a_pt = a_pt.where(ind,2.5)  ##yun added
+    a_pt = a_pt.where(ind, 2.5)
     # a_pt = ee.Image.constant(a_pt_in)
     # a_pt = mask.multiply(a_pt)
 
