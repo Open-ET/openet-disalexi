@@ -84,9 +84,11 @@ def test_Image_init_default_parameters():
     assert m.alexi_source == 'CONUS_V001'
     assert m.elevation_source == 'USGS/SRTMGL1_003'
     assert m.landcover_source == 'NLCD2011'
-    assert m.rs_daily_source == 'MERRA2'
-    assert m.rs_hourly_source == 'MERRA2'
-    assert m.windspeed_source == 'CFSV2'
+    assert m.rs_daily_source == 'CFSR'
+    assert m.rs_hourly_source == 'CFSR'
+    assert m.windspeed_source == 'CFSR'
+    assert m.vpd_source == 'CFSR'
+    assert m.airpressure_source == 'CFSR'
     assert m.stabil_iter == 36
     assert m.albedo_iter == 10
     assert m.rs_interp_flag == True

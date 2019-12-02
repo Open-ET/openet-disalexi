@@ -6,7 +6,7 @@ import pytest
 
 import openet.disalexi.tseb_utils as tseb_utils
 import openet.disalexi.utils as utils
-from .idl_values import ne1, ne2, ne3
+from idl_values import ne1, ne2, ne3
 
 
 # AmeriFlux sites adjusted to nearest Landsat cell centroid
