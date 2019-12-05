@@ -48,9 +48,10 @@ class Image(object):
             rs_interp_flag=True,
             ta_interp_flag=True,
             ta_smooth_flag=True,
-            etr_source=None,
-            etr_band=None,
-            etr_factor=1.0,
+            et_reference_source=None,
+            et_reference_band=None,
+            et_reference_factor=None,
+            et_reference_resample=None,
             lat=None,
             lon=None,
         ):
@@ -87,14 +88,18 @@ class Image(object):
             Ta interpolation is not implemented.
         ta_smooth_flag : bool, optional
             If True, smooth and resample Ta image.
-        etr_source : str, float, optional
+        et_reference_source : str, float, optional
             Reference ET source (the default is None).
-            Parameter is required if computing 'etf' or 'etr'.
-        etr_band : str, optional
+            Parameter is required if computing 'et' or 'et_reference'.
+        et_reference_band : str, optional
             Reference ET band name (the default is None).
-            Parameter is required if computing 'etf' or 'etr'.
-        etr_factor : float, optional
-            Reference ET scaling factor (the default is 1.0).
+            Parameter is required if computing 'et' or 'et_reference'.
+        et_reference_factor : float, None, optional
+            Reference ET scaling factor.  The default is None which is
+            equivalent to 1.0 (or no scaling).
+        et_reference_resample : {'nearest', 'bilinear', 'bicubic', None}, optional
+            Reference ET resampling.  The default is None which is equivalent
+            to nearest neighbor resampling.
         lat : ee.Image, optional
             Latitude [deg].  If not set will default to ee.Image.pixelLonLat().
         lon : ee.Image, optional
@@ -146,7 +151,7 @@ class Image(object):
         # self.date = ee.Date(self.datetime.format('yyyy-MM-dd'))
         # self.doy = ee.Number(self.datetime.getRelative('day', 'year')).add(1).double()
         self.hour = ee.Number(self.datetime.getFraction('day')).multiply(24)
-        self.hour_int = self.hour.floor()
+        self.hour_int = self.hour.floor().int()
         # Time used in IDL is hours and fractional minutes (no seconds)
         # self.time = ee.Date(self.datetime).get('hour').add(
         #     ee.Date(self.datetime).get('minute').divide(60))
@@ -189,9 +194,20 @@ class Image(object):
         self.ta_smooth_flag = utils.boolean(ta_smooth_flag)
 
         # Reference ET parameters
-        self.etr_source = etr_source
-        self.etr_band = etr_band
-        self.etr_factor = etr_factor
+        self.et_reference_source = et_reference_source
+        self.et_reference_band = et_reference_band
+        self.et_reference_factor = et_reference_factor
+        self.et_reference_resample = et_reference_resample
+
+        # Check reference ET parameters
+        if et_reference_factor and not utils.is_number(et_reference_factor):
+            raise ValueError('et_reference_factor must be a number')
+        if et_reference_factor and self.et_reference_factor < 0:
+            raise ValueError('et_reference_factor must be greater than zero')
+        et_reference_resample_methods = ['nearest', 'bilinear', 'bicubic']
+        if (et_reference_resample and
+                et_reference_resample.lower() not in et_reference_resample_methods):
+            raise ValueError('unsupported et_reference_resample method')
 
         if lat is None:
             self.lat = self.lst.multiply(0).add(
@@ -340,7 +356,7 @@ class Image(object):
     #     """
     #     return cls(landsat.LandsatTOA(toa_image).prep(), **kwargs)
 
-    def calculate(self, variables=['et', 'etr', 'etf']):
+    def calculate(self, variables=['et', 'et_reference', 'et_fraction']):
         """Return a multiband image of calculated variables
 
         Parameters
@@ -356,10 +372,10 @@ class Image(object):
         for v in variables:
             if v.lower() == 'et':
                 output_images.append(self.et.float())
-            elif v.lower() == 'etf':
-                output_images.append(self.etf.float())
-            elif v.lower() == 'etr':
-                output_images.append(self.etr.float())
+            elif v.lower() == 'et_fraction':
+                output_images.append(self.et_fraction.float())
+            elif v.lower() == 'et_reference':
+                output_images.append(self.et_reference.float())
             elif v.lower() == 'lst':
                 output_images.append(self.lst.float())
             elif v.lower() == 'mask':
@@ -410,37 +426,37 @@ class Image(object):
         #     .set({'ta_step_size': self.ta.get('ta_step_size')})
 
     @lazy_property
-    def etr(self):
+    def et_reference(self):
         """Compute reference ET for the image date"""
-        if utils.is_number(self.etr_source):
+        if utils.is_number(self.et_reference_source):
             # Interpret numbers as constant images
             # CGM - Should we use the ee_types here instead?
             #   i.e. ee.ee_types.isNumber(self.etr_source)
-            etr_img = ee.Image.constant(float(self.etr_source))
-        elif type(self.etr_source) is str:
+            et_reference_img = ee.Image.constant(float(self.et_reference_source))
+        elif type(self.et_reference_source) is str:
             # Assume a string source is an image collection ID (not an image ID)
-            etr_img = ee.Image(
-                ee.ImageCollection(self.etr_source)\
+            et_reference_img = ee.Image(
+                ee.ImageCollection(self.et_reference_source)\
                     .filterDate(self.start_date, self.end_date)\
-                    .select([self.etr_band])\
+                    .select([self.et_reference_band])\
                     .first())
         else:
-            raise ValueError('unsupported etr_source: {}'.format(
-                self.etr_source))
+            raise ValueError('unsupported et_reference_source: {}'.format(
+                self.et_reference_source))
 
         # Map ETr values directly to the input (i.e. Landsat) image pixels
         # The benefit of this is the ETr image is now in the same crs as the
         #   input image.  Not all models may want this though.
         # CGM - Should the output band name match the input ETr band name?
-        return self.ndvi.multiply(0).add(etr_img)\
-            .multiply(self.etr_factor)\
-            .rename(['etr']).set(self.properties)
+        return self.ndvi.multiply(0).add(et_reference_img)\
+            .multiply(self.et_reference_factor)\
+            .rename(['et_reference']).set(self.properties)
 
     @lazy_property
-    def etf(self):
+    def et_fraction(self):
         """Compute ET fraction as actual ET divided by the reference ET"""
-        return self.et.divide(self.etr)\
-            .rename(['etf']).set(self.properties)
+        return self.et.divide(self.et_reference)\
+            .rename(['et_fraction']).set(self.properties)
 
     @lazy_property
     def et_alexi(self):
@@ -597,10 +613,6 @@ class Image(object):
 
             rs1_img_temp1 = rs1_img.select(['b24'])
             rs1_img_temp2 = rs1_img.select(['b1'])
-            # CGM - temp1 and temp2 aren't used in this function?
-            # CGM - We really should not be making getInfo calls here!
-            temp1 = int(self.hour_int.floor().getInfo())
-            temp2 = int(self.hour_int.ceil().getInfo())
             aname = ee.String('b').cat(self.hour.floor().int().format())
             bname = ee.String('b').cat(self.hour.ceil().int().format())
             rs1_a_img = rs1_coll.first().select([aname])
@@ -650,13 +662,11 @@ class Image(object):
                 .filterDate(self.start_date.advance(1, 'day'),
                             self.end_date.advance(1, 'day'))
             rs24_coll_1_array = rs24_coll_1.first().toArray()
-            # CGM - Should this be rs24_coll_2 instead of rs24_coll_1?
-            rs24_coll_2_array = rs24_coll_1.first().toArray()
-            # CGM - We really should not be making getInfo calls here!
+            rs24_coll_2_array = rs24_coll_2.first().toArray()
             day1_array = rs24_coll_1_array.arraySlice(
-                0, int(start_hour.getInfo()), 24)
+                0, start_hour.int(), 24)
             day2_array = rs24_coll_2_array.arraySlice(
-                0, 0, int(end_hour.subtract(24).getInfo()))
+                0, 0, end_hour.int().subtract(24))
             day1_sum = day1_array.arrayReduce(reducer=ee.Reducer.sum(), axes=[0])
             day2_sum = day2_array.arrayReduce(reducer=ee.Reducer.sum(), axes=[0])
             rs24_img_temp1 = day1_sum.add(day2_sum).arrayFlatten([['array']])
@@ -667,13 +677,11 @@ class Image(object):
                             self.end_date.advance(-1, 'day'))
             rs24_coll_2 = rs24_coll.filterDate(self.start_date, self.end_date)
             rs24_coll_1_array = rs24_coll_1.first().toArray()
-            # CGM - Should this be rs24_coll_2 instead of rs24_coll_1?
-            rs24_coll_2_array = rs24_coll_1.first().toArray()
-            # CGM - We really should not be making a getInfo call right here
+            rs24_coll_2_array = rs24_coll_2.first().toArray()
             day1_array = rs24_coll_1_array.arraySlice(
-                0, int(start_hour.subtract(24).multiply(-1).getInfo()), 24)
+                0, start_hour.subtract(24).multiply(-1).int(), 24)
             day2_array = rs24_coll_2_array.arraySlice(
-                0, 0, int(end_hour.getInfo()))
+                0, 0, end_hour.int())
             day1_sum = day1_array.arrayReduce(reducer=ee.Reducer.sum(), axes=[0])
             day2_sum = day2_array.arrayReduce(reducer=ee.Reducer.sum(), axes=[0])
             rs24_img_temp2 = day1_sum.add(day2_sum).arrayFlatten([['array']])
@@ -683,7 +691,7 @@ class Image(object):
             rs24_coll_array = rs24_coll.first().toArray()
             # CGM - We really should not be making a getInfo call right here
             day_array = rs24_coll_array.arraySlice(
-                0, int(start_hour.getInfo()), int(end_hour.getInfo()))
+                0, start_hour.int(), end_hour.int())
             day_sum = day_array.arrayReduce(reducer=ee.Reducer.sum(), axes=[0])
             rs24_img = day_sum.arrayFlatten([['array']])
             

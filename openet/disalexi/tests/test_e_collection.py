@@ -21,16 +21,20 @@ END_DATE = '2017-07-18'
 # END_DATE = '2017-08-01'
 SCENE_GEOM = (-121.91, 38.99, -121.89, 39.01)
 SCENE_POINT = (-121.9, 39)
-VARIABLES = {'et', 'etf', 'etr'}
+VARIABLES = {'et', 'et_fraction', 'et_reference'}
 TEST_POINT = (-121.5265, 38.7399)
 
 
 default_coll_args = {
-    'collections': COLLECTIONS, 'geometry': ee.Geometry.Point(SCENE_POINT),
+    'collections': COLLECTIONS,
+    'geometry': ee.Geometry.Point(SCENE_POINT),
     'start_date': START_DATE, 'end_date': END_DATE,
     'variables': list(VARIABLES), 'cloud_cover_max': 70,
-    'etr_source': 'IDAHO_EPSCOR/GRIDMET', 'etr_band': 'etr',
-    'etr_factor': 0.85, 'model_args': {}, 'filter_args': {},
+    'et_reference_source': 'IDAHO_EPSCOR/GRIDMET',
+    'et_reference_band': 'etr',
+    'et_reference_factor': 1.0,
+    'et_reference_resample': 'nearest',
+    'model_args': {}, 'filter_args': {},
 }
 
 def default_coll_obj(**kwargs):
@@ -49,20 +53,22 @@ def test_Collection_init_default_parameters():
     """Test if init sets default parameters"""
     args = default_coll_args.copy()
     # These values are being set above but have defaults that need to be checked
-    del args['etr_source']
-    del args['etr_band']
-    del args['etr_factor']
+    del args['et_reference_source']
+    del args['et_reference_band']
+    del args['et_reference_factor']
+    del args['et_reference_resample']
     del args['variables']
 
     m = disalexi.Collection(**args)
     assert m.variables == None
-    assert m.etr_source == None
-    assert m.etr_band == None
-    assert m.etr_factor == 1.0
+    assert m.et_reference_source == None
+    assert m.et_reference_band == None
+    assert m.et_reference_factor == None
+    assert m.et_reference_resample == None
     assert m.cloud_cover_max == 70
     assert m.model_args == {}
     assert m.filter_args == {}
-    assert m._interp_vars == ['ndvi', 'etf']
+    assert m._interp_vars == ['ndvi', 'et_fraction']
 
 
 def test_Collection_init_collection_str(coll_id='LANDSAT/LC08/C01/T1_SR'):
@@ -239,13 +245,13 @@ def test_Collection_overpass_default():
 def test_Collection_overpass_class_variables():
     """Test that custom class variables are passed through to build function"""
     output = utils.getinfo(default_coll_obj(variables=['et']).overpass())
-    output = {y['id'] for x in output['features'] for y in x['bands']} == {'et'}
+    assert {y['id'] for x in output['features'] for y in x['bands']} == {'et'}
 
 
 def test_Collection_overpass_method_variables():
     """Test that custom method variables are passed through to build function"""
     output = utils.getinfo(default_coll_obj().overpass(variables=['et']))
-    output = {y['id'] for x in output['features'] for y in x['bands']} == {'et'}
+    assert {y['id'] for x in output['features'] for y in x['bands']} == {'et'}
 
 
 def test_Collection_overpass_no_variables_exception():
@@ -318,55 +324,59 @@ def test_Collection_interpolate_t_interval_custom():
 
 # NOTE: For the following tests the collection class is not being
 #   re-instantiated for each test so it is necessary to clear the model_args
-def test_Collection_interpolate_etr_source_not_set():
-    """Test if Exception is raised if etr_source is not set"""
+def test_Collection_interpolate_et_reference_source_not_set():
+    """Test if Exception is raised if et_reference_source is not set"""
     with pytest.raises(ValueError):
         utils.getinfo(default_coll_obj(
-            etr_source=None, model_args={}).interpolate())
+            et_reference_source=None, model_args={}).interpolate())
 
 
-def test_Collection_interpolate_etr_band_not_set():
-    """Test if Exception is raised if etr_band is not set"""
+def test_Collection_interpolate_et_reference_band_not_set():
+    """Test if Exception is raised if et_reference_band is not set"""
     with pytest.raises(ValueError):
         utils.getinfo(default_coll_obj(
-            etr_band=None, model_args={}).interpolate())
+            et_reference_band=None, model_args={}).interpolate())
 
 
-def test_Collection_interpolate_etr_factor_not_set():
-    """Test if Exception is raised if etr_factor is not set"""
+def test_Collection_interpolate_et_reference_factor_not_set():
+    """Test if Exception is raised if et_reference_factor is not set"""
     with pytest.raises(ValueError):
         utils.getinfo(default_coll_obj(
-            etr_factor=None, model_args={}).interpolate())
+            et_reference_factor=None, model_args={}).interpolate())
 
 
-def test_Collection_interpolate_etr_params_kwargs():
-    """Test setting etr parameters in the Collection init args"""
+def test_Collection_interpolate_et_reference_params_kwargs():
+    """Test setting reference ET parameters in the Collection init args"""
     output = utils.getinfo(default_coll_obj(
-        etr_source='IDAHO_EPSCOR/GRIDMET', etr_band='etr',
-        etr_factor=0.5, model_args={}).interpolate())
+        et_reference_source='IDAHO_EPSCOR/GRIDMET', et_reference_band='etr',
+        et_reference_factor=0.5, et_reference_resample='bicubic',
+        model_args={}).interpolate())
     assert {y['id'] for x in output['features'] for y in x['bands']} == VARIABLES
-    assert output['features'][0]['properties']['etr_factor'] == 0.5
+    assert output['features'][0]['properties']['et_reference_factor'] == 0.5
 
 
 def test_Collection_interpolate_etr_params_model_args():
-    """Test setting etr parameters in the model_args"""
+    """Test setting reference ET parameters in the model_args"""
     output = utils.getinfo(default_coll_obj(
-        etr_source=None, etr_band=None, etr_factor=None,
-        model_args={'etr_source': 'IDAHO_EPSCOR/GRIDMET',
-                    'etr_band': 'etr', 'etr_factor': 0.5}).interpolate())
+        et_reference_source=None, et_reference_band=None,
+        et_reference_factor=None, et_reference_resample=None,
+        model_args={'et_reference_source': 'IDAHO_EPSCOR/GRIDMET',
+                    'et_reference_band': 'etr', 'et_reference_factor': 0.5,
+                    'et_reference_resample': 'bicubic'}).interpolate())
     assert {y['id'] for x in output['features'] for y in x['bands']} == VARIABLES
-    assert output['features'][0]['properties']['etr_factor'] == 0.5
+    assert output['features'][0]['properties']['et_reference_factor'] == 0.5
 
 
-def test_Collection_interpolate_etr_params_interpolate_args():
-    """Test setting etr parameters in the interpolate call"""
-    etr_args = {'etr_source': 'IDAHO_EPSCOR/GRIDMET',
-                'etr_band': 'etr', 'etr_factor': 0.5}
+def test_Collection_interpolate_et_reference_params_interpolate_args():
+    """Test setting reference ET parameters in the interpolate call"""
+    etr_args = {'et_reference_source': 'IDAHO_EPSCOR/GRIDMET',
+                'et_reference_band': 'etr', 'et_reference_factor': 0.5,
+                'et_reference_resample': 'bicubic'}
     output = utils.getinfo(default_coll_obj(
-        etr_source=None, etr_band=None, etr_factor=None,
-        model_args={}).interpolate(**etr_args))
+        et_reference_source=None, et_reference_band=None,
+        et_reference_factor=None, model_args={}).interpolate(**etr_args))
     assert {y['id'] for x in output['features'] for y in x['bands']} == VARIABLES
-    assert output['features'][0]['properties']['etr_factor'] == 0.5
+    assert output['features'][0]['properties']['et_reference_factor'] == 0.5
 
 
 def test_Collection_interpolate_t_interval_exception():
@@ -395,44 +405,23 @@ def test_Collection_interpolate_no_variables_exception():
 
 def test_Collection_interpolate_output_type_default():
     """Test if output_type parameter is defaulting to float"""
-    output = utils.getinfo(default_coll_obj(
-        variables=['et', 'etr', 'etf', 'ndvi', 'count']).interpolate())
+    test_vars = ['et', 'et_reference', 'et_fraction', 'ndvi', 'count']
+    output = utils.getinfo(default_coll_obj(variables=test_vars).interpolate())
     output = output['features'][0]['bands']
     bands = {info['id']: i for i, info in enumerate(output)}
     assert(output[bands['et']]['data_type']['precision'] == 'float')
-    assert(output[bands['etr']]['data_type']['precision'] == 'float')
-    assert(output[bands['etf']]['data_type']['precision'] == 'float')
+    assert(output[bands['et_reference']]['data_type']['precision'] == 'float')
+    assert(output[bands['et_fraction']]['data_type']['precision'] == 'float')
     assert(output[bands['ndvi']]['data_type']['precision'] == 'float')
     assert(output[bands['count']]['data_type']['precision'] == 'int')
 
 
-@pytest.mark.parametrize(
-    'output_type, precision, max_value',
-    [
-        ['int8', 'int', 127],
-        ['uint8', 'int', 255],
-        ['int16', 'int', 32767],
-        ['uint16', 'int', 65535],
-        ['float', 'float', None],
-        ['double', 'double', None],
-    ]
-)
-def test_Collection_interpolate_output_type_parameter(output_type, precision,
-                                                      max_value):
-    """Test if changing the output_type parameter works"""
-    output = utils.getinfo(default_coll_obj().interpolate(output_type=output_type))
-    output = output['features'][0]['bands']
-    bands = {info['id']: i for i, info in enumerate(output)}
-
-    assert(output[bands['et']]['data_type']['precision'] == precision)
-    assert(output[bands['etr']]['data_type']['precision'] == precision)
-
-    if max_value is not None:
-        assert(output[bands['et']]['data_type']['max'] == max_value)
-        assert(output[bands['etr']]['data_type']['max'] == max_value)
-
-
-def test_Collection_interpolate_output_type_exception():
-    """Test if Exception is raised for an invalid interp_method parameter"""
-    with pytest.raises(ValueError):
-        utils.getinfo(default_coll_obj().interpolate(output_type='DEADBEEF'))
+def test_Collection_interpolate_only_interpolate_images():
+    """Test if count band is returned if no images in the date range"""
+    variables = {'et', 'count'}
+    output = utils.getinfo(default_coll_obj(
+        collections=['LANDSAT/LC08/C01/T1_SR'],
+        geometry=ee.Geometry.Point(-123.623, 44.745),
+        start_date='2017-04-01', end_date='2017-04-30',
+        variables=list(variables), cloud_cover_max=70).interpolate())
+    assert {y['id'] for x in output['features'] for y in x['bands']} == variables
