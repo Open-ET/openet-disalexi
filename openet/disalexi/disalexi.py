@@ -41,17 +41,16 @@ class Image(object):
             rs_daily_source='CFSR',
             rs_hourly_source='CFSR',
             windspeed_source='CFSR',
-            vpd_source='CFSR',
+            vp_source='CFSR',
             airpressure_source='CFSR',
             stabil_iterations=36,
             albedo_iterations=10,
             rs_interp_flag=True,
             ta_interp_flag=True,
             ta_smooth_flag=True,
-            et_reference_source=None,
-            et_reference_band=None,
-            et_reference_factor=None,
-            et_reference_resample=None,
+            etr_source=None,
+            etr_band=None,
+            etr_factor=1.0,
             lat=None,
             lon=None,
         ):
@@ -71,12 +70,16 @@ class Image(object):
             Units must be in meters.
         landcover_source : {'NLCD2011', 'NLCD2006', 'GLOBELAND30'}
             Land cover source keyword (the default is 'NLCD2011').
-        rs_daily_source : {'MERRA2'}
-            Daily solar insolation source keyword (the default is 'MERRA2').
-        rs_hourly_source : {'MERRA2'}
-            Hourly solar insolation source keyword (the default is 'MERRA2').
-        windspeed_source : {'CFSV2}
-            Windspeed source keyword (the default is 'CFSV2').
+        rs_daily_source : {'MERRA2','CFSR'}
+            Daily solar insolation source keyword (the default is 'CFSR').
+        rs_hourly_source : {'MERRA2','CFSR'}
+            Hourly solar insolation source keyword (the default is 'CFSR').
+        windspeed_source : {'CFSV2','CFSR'}
+            Windspeed source keyword (the default is 'CFSR').
+        vp_source : {'CFSR'}
+            vapour pressure source keyword (the default is 'CFSR').
+        airpressure_source: {'CFSR'}
+            airpressure source keyword (the default is 'CFSR').
         stabil_iterations : int
             Number of istability calculation iterations (the default is 36).
         albedo_iterations : int
@@ -88,18 +91,14 @@ class Image(object):
             Ta interpolation is not implemented.
         ta_smooth_flag : bool, optional
             If True, smooth and resample Ta image.
-        et_reference_source : str, float, optional
+        etr_source : str, float, optional
             Reference ET source (the default is None).
-            Parameter is required if computing 'et' or 'et_reference'.
-        et_reference_band : str, optional
+            Parameter is required if computing 'etf' or 'etr'.
+        etr_band : str, optional
             Reference ET band name (the default is None).
-            Parameter is required if computing 'et' or 'et_reference'.
-        et_reference_factor : float, None, optional
-            Reference ET scaling factor.  The default is None which is
-            equivalent to 1.0 (or no scaling).
-        et_reference_resample : {'nearest', 'bilinear', 'bicubic', None}, optional
-            Reference ET resampling.  The default is None which is equivalent
-            to nearest neighbor resampling.
+            Parameter is required if computing 'etf' or 'etr'.
+        etr_factor : float, optional
+            Reference ET scaling factor (the default is 1.0).
         lat : ee.Image, optional
             Latitude [deg].  If not set will default to ee.Image.pixelLonLat().
         lon : ee.Image, optional
@@ -151,7 +150,7 @@ class Image(object):
         # self.date = ee.Date(self.datetime.format('yyyy-MM-dd'))
         # self.doy = ee.Number(self.datetime.getRelative('day', 'year')).add(1).double()
         self.hour = ee.Number(self.datetime.getFraction('day')).multiply(24)
-        self.hour_int = self.hour.floor().int()
+        self.hour_int = self.hour.floor()
         # Time used in IDL is hours and fractional minutes (no seconds)
         # self.time = ee.Date(self.datetime).get('hour').add(
         #     ee.Date(self.datetime).get('minute').divide(60))
@@ -185,7 +184,7 @@ class Image(object):
         self.rs_daily_source = rs_daily_source
         self.rs_hourly_source = rs_hourly_source
         self.windspeed_source = windspeed_source
-        self.vpd_source = vpd_source
+        self.vp_source = vp_source
         self.airpressure_source = airpressure_source
         self.stabil_iter = int(stabil_iterations + 0.5)
         self.albedo_iter = int(albedo_iterations + 0.5)
@@ -194,20 +193,9 @@ class Image(object):
         self.ta_smooth_flag = utils.boolean(ta_smooth_flag)
 
         # Reference ET parameters
-        self.et_reference_source = et_reference_source
-        self.et_reference_band = et_reference_band
-        self.et_reference_factor = et_reference_factor
-        self.et_reference_resample = et_reference_resample
-
-        # Check reference ET parameters
-        if et_reference_factor and not utils.is_number(et_reference_factor):
-            raise ValueError('et_reference_factor must be a number')
-        if et_reference_factor and self.et_reference_factor < 0:
-            raise ValueError('et_reference_factor must be greater than zero')
-        et_reference_resample_methods = ['nearest', 'bilinear', 'bicubic']
-        if (et_reference_resample and
-                et_reference_resample.lower() not in et_reference_resample_methods):
-            raise ValueError('unsupported et_reference_resample method')
+        self.etr_source = etr_source
+        self.etr_band = etr_band
+        self.etr_factor = etr_factor
 
         if lat is None:
             self.lat = self.lst.multiply(0).add(
@@ -356,7 +344,7 @@ class Image(object):
     #     """
     #     return cls(landsat.LandsatTOA(toa_image).prep(), **kwargs)
 
-    def calculate(self, variables=['et', 'et_reference', 'et_fraction']):
+    def calculate(self, variables=['et', 'etr', 'etf']):
         """Return a multiband image of calculated variables
 
         Parameters
@@ -372,10 +360,10 @@ class Image(object):
         for v in variables:
             if v.lower() == 'et':
                 output_images.append(self.et.float())
-            elif v.lower() == 'et_fraction':
-                output_images.append(self.et_fraction.float())
-            elif v.lower() == 'et_reference':
-                output_images.append(self.et_reference.float())
+            elif v.lower() == 'etf':
+                output_images.append(self.etf.float())
+            elif v.lower() == 'etr':
+                output_images.append(self.etr.float())
             elif v.lower() == 'lst':
                 output_images.append(self.lst.float())
             elif v.lower() == 'mask':
@@ -409,7 +397,7 @@ class Image(object):
 
         """
         et = tseb.tseb_pt(
-            t_air=self.ta, t_rad=self.lst, e_air=self.vpd,
+            t_air=self.ta, t_rad=self.lst, e_air=self.vp,
             u=self.windspeed, p=self.pressure, z=self.elevation,
             rs_1=self.rs1, rs24=self.rs24, vza=0,
             # CGM - Need to add GEE gaussian_filter call to rs24
@@ -426,37 +414,37 @@ class Image(object):
         #     .set({'ta_step_size': self.ta.get('ta_step_size')})
 
     @lazy_property
-    def et_reference(self):
+    def etr(self):
         """Compute reference ET for the image date"""
-        if utils.is_number(self.et_reference_source):
+        if utils.is_number(self.etr_source):
             # Interpret numbers as constant images
             # CGM - Should we use the ee_types here instead?
             #   i.e. ee.ee_types.isNumber(self.etr_source)
-            et_reference_img = ee.Image.constant(float(self.et_reference_source))
-        elif type(self.et_reference_source) is str:
+            etr_img = ee.Image.constant(float(self.etr_source))
+        elif type(self.etr_source) is str:
             # Assume a string source is an image collection ID (not an image ID)
-            et_reference_img = ee.Image(
-                ee.ImageCollection(self.et_reference_source)\
+            etr_img = ee.Image(
+                ee.ImageCollection(self.etr_source)\
                     .filterDate(self.start_date, self.end_date)\
-                    .select([self.et_reference_band])\
+                    .select([self.etr_band])\
                     .first())
         else:
-            raise ValueError('unsupported et_reference_source: {}'.format(
-                self.et_reference_source))
+            raise ValueError('unsupported etr_source: {}'.format(
+                self.etr_source))
 
         # Map ETr values directly to the input (i.e. Landsat) image pixels
         # The benefit of this is the ETr image is now in the same crs as the
         #   input image.  Not all models may want this though.
         # CGM - Should the output band name match the input ETr band name?
-        return self.ndvi.multiply(0).add(et_reference_img)\
-            .multiply(self.et_reference_factor)\
-            .rename(['et_reference']).set(self.properties)
+        return self.ndvi.multiply(0).add(etr_img)\
+            .multiply(self.etr_factor)\
+            .rename(['etr']).set(self.properties)
 
     @lazy_property
-    def et_fraction(self):
+    def etf(self):
         """Compute ET fraction as actual ET divided by the reference ET"""
-        return self.et.divide(self.et_reference)\
-            .rename(['et_fraction']).set(self.properties)
+        return self.et.divide(self.etr)\
+            .rename(['etf']).set(self.properties)
 
     @lazy_property
     def et_alexi(self):
@@ -573,7 +561,7 @@ class Image(object):
 
     @lazy_property
     def rs1(self):
-        """Hourly solar insolation [units?]"""
+        """Hourly solar insolation [W m-2]"""
         if utils.is_number(self.rs_hourly_source):
             rs1_img = ee.Image.constant(float(self.rs_hourly_source))
         elif isinstance(self.rs_hourly_source, ee.computedobject.ComputedObject):
@@ -613,6 +601,10 @@ class Image(object):
 
             rs1_img_temp1 = rs1_img.select(['b24'])
             rs1_img_temp2 = rs1_img.select(['b1'])
+            # CGM - temp1 and temp2 aren't used in this function?
+            # CGM - We really should not be making getInfo calls here!
+            temp1 = self.hour_int.floor().int()
+            temp2 = self.hour_int.ceil().int()
             aname = ee.String('b').cat(self.hour.floor().int().format())
             bname = ee.String('b').cat(self.hour.ceil().int().format())
             rs1_a_img = rs1_coll.first().select([aname])
@@ -638,7 +630,7 @@ class Image(object):
 
     @lazy_property
     def rs24(self):
-        """Daily (24 hour) solar insolation [units?]"""
+        """Daily (24 hour) solar insolation [W m-2]"""
         if utils.is_number(self.rs_daily_source):
             rs24_img = ee.Image.constant(float(self.rs_daily_source))
         elif isinstance(self.rs_daily_source, ee.computedobject.ComputedObject):
@@ -662,11 +654,13 @@ class Image(object):
                 .filterDate(self.start_date.advance(1, 'day'),
                             self.end_date.advance(1, 'day'))
             rs24_coll_1_array = rs24_coll_1.first().toArray()
+            # CGM - Should this be rs24_coll_2 instead of rs24_coll_1?
             rs24_coll_2_array = rs24_coll_2.first().toArray()
+            # CGM - We really should not be making getInfo calls here!
             day1_array = rs24_coll_1_array.arraySlice(
-                0, start_hour.int(), 24)
+                0,start_hour.int(), 24)
             day2_array = rs24_coll_2_array.arraySlice(
-                0, 0, end_hour.int().subtract(24))
+                0, 0, end_hour.subtract(24).int())
             day1_sum = day1_array.arrayReduce(reducer=ee.Reducer.sum(), axes=[0])
             day2_sum = day2_array.arrayReduce(reducer=ee.Reducer.sum(), axes=[0])
             rs24_img_temp1 = day1_sum.add(day2_sum).arrayFlatten([['array']])
@@ -677,7 +671,9 @@ class Image(object):
                             self.end_date.advance(-1, 'day'))
             rs24_coll_2 = rs24_coll.filterDate(self.start_date, self.end_date)
             rs24_coll_1_array = rs24_coll_1.first().toArray()
+            # CGM - Should this be rs24_coll_2 instead of rs24_coll_1?
             rs24_coll_2_array = rs24_coll_2.first().toArray()
+            # CGM - We really should not be making a getInfo call right here
             day1_array = rs24_coll_1_array.arraySlice(
                 0, start_hour.subtract(24).multiply(-1).int(), 24)
             day2_array = rs24_coll_2_array.arraySlice(
@@ -863,12 +859,12 @@ class Image(object):
         return ee.Image(windspeed_img).rename(['windspeed'])
 
     @lazy_property
-    def vpd(self):
-        """Vapor pressure deficit [?]"""
-        if utils.is_number(self.vpd_source):
-            vpd_img = ee.Image.constant(float(self.vpd_source))
-        elif isinstance(self.vpd_source, ee.computedobject.ComputedObject):
-            vpd_img = self.vpd_source
+    def vp(self):
+        """Vapor pressure [kPa]"""
+        if utils.is_number(self.vp_source):
+            vp_img = ee.Image.constant(float(self.vp_source))
+        elif isinstance(self.vp_source, ee.computedobject.ComputedObject):
+            vp_img = self.vp_source
         # CGM - This is windspeed, not vpd and should either be removed or fixed
         # elif self.vpd_source.upper() == 'CFSV2':
         #     # It would be more correct to compute the magnitude for each image,
@@ -881,38 +877,38 @@ class Image(object):
         #         .filterDate(self.start_date, self.end_date)
         #     vpd_img = vpd_coll.mean() \
         #         .expression('sqrt(b(0) ** 2 + b(1) ** 2)')
-        elif self.vpd_source.upper() == 'CFSR':
-            vpd_coll_id = 'projects/disalexi/meteo_data/vpd/CONUS_V001'
-            vpd_coll = ee.ImageCollection(vpd_coll_id)\
+        elif self.vp_source.upper() == 'CFSR':
+            vp_coll_id = 'projects/disalexi/meteo_data/vpd/CONUS_V001'
+            vp_coll = ee.ImageCollection(vp_coll_id)\
                 .filterDate(self.start_date, self.end_date)
-            vpd_img = ee.Image(vpd_coll.first())
+            vp_img = ee.Image(vp_coll.first())
 
-            vpd_img_temp1 = vpd_img.select(['b8'])
-            vpd_img_temp2 = vpd_img.select(['b1'])
+            vp_img_temp1 = vp_img.select(['b8'])
+            vp_img_temp2 = vp_img.select(['b1'])
             temp1 = self.hour_int.divide(3).floor().add(1)
             temp2 = self.hour_int.divide(3).floor().add(2)
             aname = ee.String('b').cat(temp1.int().format())
             bname = ee.String('b').cat(temp2.int().format())
-            vpd_a_img = vpd_img.select([aname])
-            vpd_b_img = vpd_img.select([bname])
+            vp_a_img = vpd_img.select([aname])
+            vp_b_img = vpd_img.select([bname])
             t_a = self.hour_int.divide(3).floor().multiply(3)
             t_b = t_a.add(3)
 
-            vpd_img = ee.Algorithms.If(
+            vp_img = ee.Algorithms.If(
                 self.hour_int.lt(24) and self.hour_int.gt(0),
-                vpd_b_img.subtract(vpd_a_img)\
+                vp_b_img.subtract(vp_a_img)\
                     .multiply(self.hour.subtract(t_a).divide(3))\
-                    .add(vpd_a_img),
-                vpd_b_img)
-            vpd_img = ee.Algorithms.If(
-                self.hour_int.gte(24), vpd_img_temp1, vpd_img)
-            vpd_img = ee.Algorithms.If(
-                self.hour_int.eq(0), vpd_img_temp2, vpd_img)
+                    .add(vp_a_img),
+                vp_b_img)
+            vp_img = ee.Algorithms.If(
+                self.hour_int.gte(24), vp_img_temp1, vp_img)
+            vp_img = ee.Algorithms.If(
+                self.hour_int.eq(0), vp_img_temp2, vp_img)
         else:
-            raise ValueError('Invalid vpd_source: {}\n'.format(
+            raise ValueError('Invalid vp_source: {}\n'.format(
                 self.vpd_source))
 
-        return ee.Image(vpd_img).rename(['vpd'])
+        return ee.Image(vp_img).rename(['vp'])
 
     def set_landcover_vars(self):
         """Compute Land Cover / LAI derived variables
@@ -995,7 +991,7 @@ class Image(object):
 
         """
         et_fine = tseb.tseb_pt(
-            t_air=ta_img, t_rad=self.lst, e_air=self.vpd,
+            t_air=ta_img, t_rad=self.lst, e_air=self.vp,
             # t_air=ta_img.reproject(crs=self.crs, crsTransform=self.transform),
             # lat=lat, lon=lon,
             u=self.windspeed, p=self.pressure, z=self.elevation,
@@ -1047,7 +1043,7 @@ class Image(object):
         def ta_func(ta):
             """Compute TSEB ET for the target t_air value"""
             et_fine = tseb.tseb_pt(
-                t_air=ta, t_rad=self.lst, e_air=self.vpd,
+                t_air=ta, t_rad=self.lst, e_air=self.vp,
                 u=self.windspeed, p=self.pressure, z=self.elevation,
                 rs_1=self.rs1, rs24=self.rs24, vza=0,
                 aleafv=self.aleafv, aleafn=self.aleafn, aleafl=self.aleafl,
@@ -1110,7 +1106,7 @@ class Image(object):
         def ta_func(ta):
             """Compute TSEB ET for the target t_air value"""
             et_fine = tseb.tseb_pt(
-                t_air=ta, t_rad=self.lst, e_air=self.vpd,
+                t_air=ta, t_rad=self.lst, e_air=self.vp,
                 # t_air=ta.reproject(crs=self.crs, crsTransform=self.transform),
                 u=self.windspeed, p=self.pressure, z=self.elevation,
                 rs_1=self.rs1, rs24=self.rs24, vza=0,
@@ -1166,7 +1162,7 @@ class Image(object):
 
         # Aggregate the Landsat scale ET up to the ALEXI scale
         et_fine = tseb.tseb_pt(
-            t_air=ta_img, t_rad=self.lst, e_air=self.vpd,
+            t_air=ta_img, t_rad=self.lst, e_air=self.vp,
             # t_air=ta_img.reproject(crs=self.crs, crsTransform=self.transform),
             # lat=lat, lon=lon,
             u=self.windspeed, p=self.pressure, z=self.elevation,
@@ -1208,7 +1204,7 @@ class Image(object):
 
         """
         et = tseb.tseb_pt(
-            t_air=ta_img, t_rad=self.lst, e_air=self.vpd,
+            t_air=ta_img, t_rad=self.lst, e_air=self.vp,
             # t_air=ta_img.reproject(crs=self.crs, crsTransform=self.transform),
             u=self.windspeed, p=self.pressure, z=self.elevation,
             rs_1=self.rs1, rs24=self.rs24, vza=0,

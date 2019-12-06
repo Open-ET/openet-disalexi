@@ -384,7 +384,7 @@ def main(ini_path=None, overwrite_flag=False, delay=0, key=None,
                     ta_source_coll = ee.ImageCollection('NASA/NLDAS/FORA0125_H002')\
                         .select(['temperature'])\
                         .filterDate(export_dt)
-                    input_image = ee.Image(ta_source_coll.first()).add(273.15).subtract(35)
+                    input_image = ee.Image(ta_source_coll.first()).add(273.15).subtract(25)
                     ta_source_img = alexi_mask.add(input_image).rename(['ta'])
                     print(export_dt)
                 else:

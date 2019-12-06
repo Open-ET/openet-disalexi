@@ -31,7 +31,7 @@ def tseb_pt(t_air, t_rad, e_air, u, p, z, rs_1, rs24, vza,
     t_rad : ee.Image
         Radiometric composite temperature [K].
     e_air : ee.Image
-
+        Vapour pressure [kPa]
     u : ee.Image
         Wind speed above the canopy [m s-1].
     p : ee.Image
