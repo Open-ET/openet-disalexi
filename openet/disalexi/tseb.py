@@ -30,6 +30,11 @@ def tseb_pt(t_air, t_rad, u, p, z, rs_1, rs24, vza,
         Air temperature [K].
     t_rad : ee.Image
         Radiometric composite temperature [K].
+<<<<<<< Updated upstream
+=======
+    e_air : ee.Image
+        Vapour pressure [kPa]
+>>>>>>> Stashed changes
     u : ee.Image
         Wind speed above the canopy [m s-1].
     p : ee.Image

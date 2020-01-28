@@ -38,9 +38,17 @@ class Image(object):
             alexi_source='CONUS_V001',
             elevation_source='USGS/SRTMGL1_003',
             landcover_source='NLCD2011',
+<<<<<<< Updated upstream
             rs_daily_source='MERRA2',
             rs_hourly_source='MERRA2',
             windspeed_source='CFSV2',
+=======
+            rs_daily_source='CFSR',
+            rs_hourly_source='CFSR',
+            windspeed_source='CFSR',
+            vp_source='CFSR',
+            airpressure_source='CFSR',
+>>>>>>> Stashed changes
             stabil_iterations=36,
             albedo_iterations=10,
             rs_interp_flag=True,
@@ -68,12 +76,16 @@ class Image(object):
             Units must be in meters.
         landcover_source : {'NLCD2011', 'NLCD2006', 'GLOBELAND30'}
             Land cover source keyword (the default is 'NLCD2011').
-        rs_daily_source : {'MERRA2'}
-            Daily solar insolation source keyword (the default is 'MERRA2').
-        rs_hourly_source : {'MERRA2'}
-            Hourly solar insolation source keyword (the default is 'MERRA2').
-        windspeed_source : {'CFSV2}
-            Windspeed source keyword (the default is 'CFSV2').
+        rs_daily_source : {'MERRA2','CFSR'}
+            Daily solar insolation source keyword (the default is 'CFSR').
+        rs_hourly_source : {'MERRA2','CFSR'}
+            Hourly solar insolation source keyword (the default is 'CFSR').
+        windspeed_source : {'CFSV2','CFSR'}
+            Windspeed source keyword (the default is 'CFSR').
+        vp_source : {'CFSR'}
+            vapour pressure source keyword (the default is 'CFSR').
+        airpressure_source: {'CFSR'}
+            airpressure source keyword (the default is 'CFSR').
         stabil_iterations : int
             Number of istability calculation iterations (the default is 36).
         albedo_iterations : int
@@ -178,6 +190,11 @@ class Image(object):
         self.rs_daily_source = rs_daily_source
         self.rs_hourly_source = rs_hourly_source
         self.windspeed_source = windspeed_source
+<<<<<<< Updated upstream
+=======
+        self.vp_source = vp_source
+        self.airpressure_source = airpressure_source
+>>>>>>> Stashed changes
         self.stabil_iter = int(stabil_iterations + 0.5)
         self.albedo_iter = int(albedo_iterations + 0.5)
         self.rs_interp_flag = utils.boolean(rs_interp_flag)
@@ -389,7 +406,11 @@ class Image(object):
 
         """
         et = tseb.tseb_pt(
+<<<<<<< Updated upstream
             t_air=self.ta, t_rad=self.lst,
+=======
+            t_air=self.ta, t_rad=self.lst, e_air=self.vp,
+>>>>>>> Stashed changes
             u=self.windspeed, p=self.pressure, z=self.elevation,
             rs_1=self.rs1, rs24=self.rs24, vza=0,
             # CGM - Need to add GEE gaussian_filter call to rs24
@@ -515,11 +536,15 @@ class Image(object):
 
     @lazy_property
     def rs1(self):
+<<<<<<< Updated upstream
         """Extract MERRA2 solar images for the target image time"""
         # Interpolate rs hourly image at image time
         # Hourly Rs is time average so time starts are 30 minutes early
         # Move image time 30 minutes earlier to simplify filtering/interpolation
         # This interpolation scheme will only work for hourly data
+=======
+        """Hourly solar insolation [W m-2]"""
+>>>>>>> Stashed changes
         if utils.is_number(self.rs_hourly_source):
             rs1_img = ee.Image.constant(float(self.rs_hourly_source))
         elif isinstance(self.rs_hourly_source, ee.computedobject.ComputedObject):
@@ -546,8 +571,41 @@ class Image(object):
                         .filterDate(self.start_date, self.end_date)\
                         .filter(ee.Filter.calendarRange(
                             self.hour_int, self.hour_int, 'hour'))
+<<<<<<< Updated upstream
                         .first()) \
                     .rename(['rs'])
+=======
+                        .first())
+        elif self.rs_hourly_source.upper() == 'CFSR':
+            rs1_coll_id = 'projects/disalexi/insol_data/GLOBAL_V001'
+            rs1_coll = ee.ImageCollection(rs1_coll_id)\
+                .filterDate(self.start_date, self.end_date)
+            rs1_img = ee.Image(rs1_coll.first())
+
+            rs1_img_temp1 = rs1_img.select(['b24'])
+            rs1_img_temp2 = rs1_img.select(['b1'])
+            # CGM - temp1 and temp2 aren't used in this function?
+            # CGM - We really should not be making getInfo calls here!
+            temp1 = self.hour_int.floor().int()
+            temp2 = self.hour_int.ceil().int()
+            aname = ee.String('b').cat(self.hour.floor().int().format())
+            bname = ee.String('b').cat(self.hour.ceil().int().format())
+            rs1_a_img = rs1_coll.first().select([aname])
+            rs1_b_img = rs1_coll.first().select([bname])
+            t_a = self.hour.floor()
+            t_b = self.hour.ceil()
+
+            rs1_img = ee.Algorithms.If(
+                self.hour_int.gt(0) and self.hour_int.lt(24),
+                rs1_b_img.subtract(rs1_a_img)\
+                    .multiply(self.hour.subtract(t_a).divide(t_b.subtract(t_a)))\
+                    .add(rs1_a_img),
+                rs1_a_img)
+            rs1_img = ee.Algorithms.If(
+                self.hour_int.gte(24), rs1_img_temp1, rs1_img)
+            rs1_img = ee.Algorithms.If(
+                self.hour_int.eq(0), rs1_img_temp2, rs1_img)
+>>>>>>> Stashed changes
         else:
             raise ValueError('Unsupported rs_hourly_source: {}\n'.format(
                 self.rs_hourly_source))
@@ -556,6 +614,10 @@ class Image(object):
 
     @lazy_property
     def rs24(self):
+<<<<<<< Updated upstream
+=======
+        """Daily (24 hour) solar insolation [W m-2]"""
+>>>>>>> Stashed changes
         if utils.is_number(self.rs_daily_source):
             rs24_img = ee.Image.constant(float(self.rs_daily_source))
         elif isinstance(self.rs_daily_source, ee.computedobject.ComputedObject):
@@ -564,7 +626,67 @@ class Image(object):
             rs_coll = ee.ImageCollection('projects/climate-engine/merra2/daily')\
                 .select(['SWGDNCLR'])\
                 .filterDate(self.start_date, self.end_date)
+<<<<<<< Updated upstream
             rs24_img = ee.Image(rs_coll.first())
+=======
+            rs24_img = ee.Image(rs24_coll.first())
+        elif self.rs_daily_source.upper() == 'CFSR':
+            rs24_coll_id = 'projects/disalexi/insol_data/GLOBAL_V001'
+
+            # Hard coded for one day since no sun the rs is 0 in rs data
+            start_hour = self.hour_int.subtract(5)
+            end_hour = self.hour_int.add(10)
+
+            # when gte24
+            rs24_coll = ee.ImageCollection(rs24_coll_id)
+            rs24_coll_1 = rs24_coll.filterDate(self.start_date, self.end_date)
+            rs24_coll_2 = rs24_coll\
+                .filterDate(self.start_date.advance(1, 'day'),
+                            self.end_date.advance(1, 'day'))
+            rs24_coll_1_array = rs24_coll_1.first().toArray()
+            # CGM - Should this be rs24_coll_2 instead of rs24_coll_1?
+            rs24_coll_2_array = rs24_coll_2.first().toArray()
+            # CGM - We really should not be making getInfo calls here!
+            day1_array = rs24_coll_1_array.arraySlice(
+                0,start_hour.int(), 24)
+            day2_array = rs24_coll_2_array.arraySlice(
+                0, 0, end_hour.subtract(24).int())
+            day1_sum = day1_array.arrayReduce(reducer=ee.Reducer.sum(), axes=[0])
+            day2_sum = day2_array.arrayReduce(reducer=ee.Reducer.sum(), axes=[0])
+            rs24_img_temp1 = day1_sum.add(day2_sum).arrayFlatten([['array']])
+
+            # when lt 0
+            rs24_coll_1 = rs24_coll\
+                .filterDate(self.start_date.advance(-1, 'day'),
+                            self.end_date.advance(-1, 'day'))
+            rs24_coll_2 = rs24_coll.filterDate(self.start_date, self.end_date)
+            rs24_coll_1_array = rs24_coll_1.first().toArray()
+            # CGM - Should this be rs24_coll_2 instead of rs24_coll_1?
+            rs24_coll_2_array = rs24_coll_2.first().toArray()
+            # CGM - We really should not be making a getInfo call right here
+            day1_array = rs24_coll_1_array.arraySlice(
+                0, start_hour.subtract(24).multiply(-1).int(), 24)
+            day2_array = rs24_coll_2_array.arraySlice(
+                0, 0, end_hour.int())
+            day1_sum = day1_array.arrayReduce(reducer=ee.Reducer.sum(), axes=[0])
+            day2_sum = day2_array.arrayReduce(reducer=ee.Reducer.sum(), axes=[0])
+            rs24_img_temp2 = day1_sum.add(day2_sum).arrayFlatten([['array']])
+
+            # normal
+            rs24_coll = rs24_coll.filterDate(self.start_date,self.end_date)
+            rs24_coll_array = rs24_coll.first().toArray()
+            # CGM - We really should not be making a getInfo call right here
+            day_array = rs24_coll_array.arraySlice(
+                0, start_hour.int(), end_hour.int())
+            day_sum = day_array.arrayReduce(reducer=ee.Reducer.sum(), axes=[0])
+            rs24_img = day_sum.arrayFlatten([['array']])
+            
+            rs24_img = ee.Algorithms.If(
+                end_hour.gt(24), rs24_img_temp1, rs24_img)
+            rs24_img = ee.Algorithms.If(
+                start_hour.lt(0), rs24_img_temp2, rs24_img)
+              
+>>>>>>> Stashed changes
         else:
             raise ValueError('Unsupported rs_daily_source: {}\n'.format(
                 self.rs_daily_source))
@@ -589,7 +711,7 @@ class Image(object):
             ta_img = ee.Image(self.ta_source)
             #     .set({'ta_iteration': 'image'})
         elif self.ta_source.upper() == 'CONUS_V001':
-            ta_coll_id = 'projects/disalexi/ta/CONUS_V001_0p1K'
+            ta_coll_id = 'projects/disalexi/ta/CONUS_V001_NLDAS_1K'
             ta_coll = ee.ImageCollection(ta_coll_id)\
                 .filterMetadata('id', 'equals', self.id)\
                 .limit(1, 'step_size', False)
@@ -698,7 +820,64 @@ class Image(object):
         else:
             raise ValueError('Invalid windspeed_source: {}\n'.format(
                 self.windspeed_source))
+<<<<<<< Updated upstream
         return windspeed_img.rename(['windspeed'])
+=======
+
+        return ee.Image(windspeed_img).rename(['windspeed'])
+
+    @lazy_property
+    def vp(self):
+        """Vapor pressure [kPa]"""
+        if utils.is_number(self.vp_source):
+            vp_img = ee.Image.constant(float(self.vp_source))
+        elif isinstance(self.vp_source, ee.computedobject.ComputedObject):
+            vp_img = self.vp_source
+        # CGM - This is windspeed, not vpd and should either be removed or fixed
+        # elif self.vpd_source.upper() == 'CFSV2':
+        #     # It would be more correct to compute the magnitude for each image,
+        #     #   then compute the average.
+        #     # Do we need daily, 6hr, or interpolated instantaneous data?
+        #     vpd_coll = ee.ImageCollection('NOAA/CFSV2/FOR6H') \
+        #         .select([
+        #             'u-component_of_wind_height_above_ground',
+        #             'v-component_of_wind_height_above_ground']) \
+        #         .filterDate(self.start_date, self.end_date)
+        #     vpd_img = vpd_coll.mean() \
+        #         .expression('sqrt(b(0) ** 2 + b(1) ** 2)')
+        elif self.vp_source.upper() == 'CFSR':
+            vp_coll_id = 'projects/disalexi/meteo_data/vpd/CONUS_V001'
+            vp_coll = ee.ImageCollection(vp_coll_id)\
+                .filterDate(self.start_date, self.end_date)
+            vp_img = ee.Image(vp_coll.first())
+
+            vp_img_temp1 = vp_img.select(['b8'])
+            vp_img_temp2 = vp_img.select(['b1'])
+            temp1 = self.hour_int.divide(3).floor().add(1)
+            temp2 = self.hour_int.divide(3).floor().add(2)
+            aname = ee.String('b').cat(temp1.int().format())
+            bname = ee.String('b').cat(temp2.int().format())
+            vp_a_img = vp_img.select([aname])
+            vp_b_img = vp_img.select([bname])
+            t_a = self.hour_int.divide(3).floor().multiply(3)
+            t_b = t_a.add(3)
+
+            vp_img = ee.Algorithms.If(
+                self.hour_int.lt(24) and self.hour_int.gt(0),
+                vp_b_img.subtract(vp_a_img)\
+                    .multiply(self.hour.subtract(t_a).divide(3))\
+                    .add(vp_a_img),
+                vp_b_img)
+            vp_img = ee.Algorithms.If(
+                self.hour_int.gte(24), vp_img_temp1, vp_img)
+            vp_img = ee.Algorithms.If(
+                self.hour_int.eq(0), vp_img_temp2, vp_img)
+        else:
+            raise ValueError('Invalid vp_source: {}\n'.format(
+                self.vpd_source))
+
+        return ee.Image(vp_img).rename(['vp'])
+>>>>>>> Stashed changes
 
     def set_landcover_vars(self):
         """Compute Land Cover / LAI derived variables
@@ -781,7 +960,11 @@ class Image(object):
 
         """
         et_fine = tseb.tseb_pt(
+<<<<<<< Updated upstream
             t_air=ta_img, t_rad=self.lst,
+=======
+            t_air=ta_img, t_rad=self.lst, e_air=self.vp,
+>>>>>>> Stashed changes
             # t_air=ta_img.reproject(crs=self.crs, crsTransform=self.transform),
             # lat=lat, lon=lon,
             u=self.windspeed, p=self.pressure, z=self.elevation,
@@ -833,7 +1016,11 @@ class Image(object):
         def ta_func(ta):
             """Compute TSEB ET for the target t_air value"""
             et_fine = tseb.tseb_pt(
+<<<<<<< Updated upstream
                 t_air=ta, t_rad=self.lst,
+=======
+                t_air=ta, t_rad=self.lst, e_air=self.vp,
+>>>>>>> Stashed changes
                 u=self.windspeed, p=self.pressure, z=self.elevation,
                 rs_1=self.rs1, rs24=self.rs24, vza=0,
                 aleafv=self.aleafv, aleafn=self.aleafn, aleafl=self.aleafl,
@@ -896,7 +1083,11 @@ class Image(object):
         def ta_func(ta):
             """Compute TSEB ET for the target t_air value"""
             et_fine = tseb.tseb_pt(
+<<<<<<< Updated upstream
                 t_air=ta, t_rad=self.lst,
+=======
+                t_air=ta, t_rad=self.lst, e_air=self.vp,
+>>>>>>> Stashed changes
                 # t_air=ta.reproject(crs=self.crs, crsTransform=self.transform),
                 u=self.windspeed, p=self.pressure, z=self.elevation,
                 rs_1=self.rs1, rs24=self.rs24, vza=0,
@@ -952,7 +1143,11 @@ class Image(object):
 
         # Aggregate the Landsat scale ET up to the ALEXI scale
         et_fine = tseb.tseb_pt(
+<<<<<<< Updated upstream
             t_air=ta_img, t_rad=self.lst,
+=======
+            t_air=ta_img, t_rad=self.lst, e_air=self.vp,
+>>>>>>> Stashed changes
             # t_air=ta_img.reproject(crs=self.crs, crsTransform=self.transform),
             # lat=lat, lon=lon,
             u=self.windspeed, p=self.pressure, z=self.elevation,
@@ -994,7 +1189,11 @@ class Image(object):
 
         """
         et = tseb.tseb_pt(
+<<<<<<< Updated upstream
             t_air=ta_img, t_rad=self.lst,
+=======
+            t_air=ta_img, t_rad=self.lst, e_air=self.vp,
+>>>>>>> Stashed changes
             # t_air=ta_img.reproject(crs=self.crs, crsTransform=self.transform),
             u=self.windspeed, p=self.pressure, z=self.elevation,
             rs_1=self.rs1, rs24=self.rs24, vza=0,

@@ -446,6 +446,7 @@ class LandsatSR(Landsat):
             .add(snow_mask.multiply(3)) \
             .add(cloud_mask.multiply(4)) \
             .rename(['cfmask'])
+    
 
     @lazy_property
     def _lst(self):
