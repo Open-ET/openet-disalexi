@@ -38,19 +38,20 @@ class Image(object):
             alexi_source='CONUS_V001',
             elevation_source='USGS/SRTMGL1_003',
             landcover_source='NLCD2011',
+            airpressure_source='CFSR',
             rs_daily_source='CFSR',
             rs_hourly_source='CFSR',
             windspeed_source='CFSR',
             vp_source='CFSR',
-            airpressure_source='CFSR',
             stabil_iterations=36,
             albedo_iterations=10,
             rs_interp_flag=True,
             ta_interp_flag=True,
             ta_smooth_flag=True,
-            etr_source=None,
-            etr_band=None,
-            etr_factor=1.0,
+            et_reference_source=None,
+            et_reference_band=None,
+            et_reference_factor=None,
+            et_reference_resample=None,
             lat=None,
             lon=None,
         ):
@@ -91,14 +92,18 @@ class Image(object):
             Ta interpolation is not implemented.
         ta_smooth_flag : bool, optional
             If True, smooth and resample Ta image.
-        etr_source : str, float, optional
+        et_reference_source : str, float, optional
             Reference ET source (the default is None).
-            Parameter is required if computing 'etf' or 'etr'.
-        etr_band : str, optional
+            Parameter is required if computing 'et' or 'et_reference'.
+        et_reference_band : str, optional
             Reference ET band name (the default is None).
-            Parameter is required if computing 'etf' or 'etr'.
-        etr_factor : float, optional
-            Reference ET scaling factor (the default is 1.0).
+            Parameter is required if computing 'et' or 'et_reference'.
+        et_reference_factor : float, None, optional
+            Reference ET scaling factor.  The default is None which is
+            equivalent to 1.0 (or no scaling).
+        et_reference_resample : {'nearest', 'bilinear', 'bicubic', None}, optional
+            Reference ET resampling.  The default is None which is equivalent
+            to nearest neighbor resampling.
         lat : ee.Image, optional
             Latitude [deg].  If not set will default to ee.Image.pixelLonLat().
         lon : ee.Image, optional
@@ -181,11 +186,11 @@ class Image(object):
         self.alexi_source = alexi_source
         self.elevation_source = elevation_source
         self.landcover_source = landcover_source
+        self.airpressure_source = airpressure_source
         self.rs_daily_source = rs_daily_source
         self.rs_hourly_source = rs_hourly_source
         self.windspeed_source = windspeed_source
         self.vp_source = vp_source
-        self.airpressure_source = airpressure_source
         self.stabil_iter = int(stabil_iterations + 0.5)
         self.albedo_iter = int(albedo_iterations + 0.5)
         self.rs_interp_flag = utils.boolean(rs_interp_flag)
@@ -193,9 +198,20 @@ class Image(object):
         self.ta_smooth_flag = utils.boolean(ta_smooth_flag)
 
         # Reference ET parameters
-        self.etr_source = etr_source
-        self.etr_band = etr_band
-        self.etr_factor = etr_factor
+        self.et_reference_source = et_reference_source
+        self.et_reference_band = et_reference_band
+        self.et_reference_factor = et_reference_factor
+        self.et_reference_resample = et_reference_resample
+
+        # Check reference ET parameters
+        if et_reference_factor and not utils.is_number(et_reference_factor):
+            raise ValueError('et_reference_factor must be a number')
+        if et_reference_factor and self.et_reference_factor < 0:
+            raise ValueError('et_reference_factor must be greater than zero')
+        et_reference_resample_methods = ['nearest', 'bilinear', 'bicubic']
+        if (et_reference_resample and \
+                et_reference_resample.lower() not in et_reference_resample_methods):
+            raise ValueError('unsupported et_reference_resample method')
 
         if lat is None:
             self.lat = self.lst.multiply(0).add(
@@ -344,7 +360,7 @@ class Image(object):
     #     """
     #     return cls(landsat.LandsatTOA(toa_image).prep(), **kwargs)
 
-    def calculate(self, variables=['et', 'etr', 'etf']):
+    def calculate(self, variables=['et']):
         """Return a multiband image of calculated variables
 
         Parameters
@@ -360,10 +376,10 @@ class Image(object):
         for v in variables:
             if v.lower() == 'et':
                 output_images.append(self.et.float())
-            elif v.lower() == 'etf':
-                output_images.append(self.etf.float())
-            elif v.lower() == 'etr':
-                output_images.append(self.etr.float())
+            elif v.lower() == 'et_fraction':
+                output_images.append(self.et_fraction.float())
+            elif v.lower() == 'et_reference':
+                output_images.append(self.et_reference.float())
             elif v.lower() == 'lst':
                 output_images.append(self.lst.float())
             elif v.lower() == 'mask':
@@ -414,37 +430,37 @@ class Image(object):
         #     .set({'ta_step_size': self.ta.get('ta_step_size')})
 
     @lazy_property
-    def etr(self):
+    def et_reference(self):
         """Compute reference ET for the image date"""
-        if utils.is_number(self.etr_source):
+        if utils.is_number(self.et_reference_source):
             # Interpret numbers as constant images
             # CGM - Should we use the ee_types here instead?
             #   i.e. ee.ee_types.isNumber(self.etr_source)
-            etr_img = ee.Image.constant(float(self.etr_source))
-        elif type(self.etr_source) is str:
+            et_reference_img = ee.Image.constant(float(self.et_reference_source))
+        elif type(self.et_reference_source) is str:
             # Assume a string source is an image collection ID (not an image ID)
-            etr_img = ee.Image(
-                ee.ImageCollection(self.etr_source)\
+            et_reference_img = ee.Image(
+                ee.ImageCollection(self.et_reference_source)\
                     .filterDate(self.start_date, self.end_date)\
-                    .select([self.etr_band])\
+                    .select([self.et_reference_band])\
                     .first())
         else:
-            raise ValueError('unsupported etr_source: {}'.format(
-                self.etr_source))
+            raise ValueError('unsupported et_reference_source: {}'.format(
+                self.et_reference_source))
 
         # Map ETr values directly to the input (i.e. Landsat) image pixels
         # The benefit of this is the ETr image is now in the same crs as the
         #   input image.  Not all models may want this though.
         # CGM - Should the output band name match the input ETr band name?
-        return self.ndvi.multiply(0).add(etr_img)\
-            .multiply(self.etr_factor)\
-            .rename(['etr']).set(self.properties)
+        return self.ndvi.multiply(0).add(et_reference_img)\
+            .multiply(self.et_reference_factor)\
+            .rename(['et_reference']).set(self.properties)
 
     @lazy_property
-    def etf(self):
+    def et_fraction(self):
         """Compute ET fraction as actual ET divided by the reference ET"""
-        return self.et.divide(self.etr)\
-            .rename(['etf']).set(self.properties)
+        return self.et.divide(self.et_reference)\
+            .rename(['et_fraction']).set(self.properties)
 
     @lazy_property
     def et_alexi(self):
@@ -843,7 +859,8 @@ class Image(object):
             t_b = t_a.add(3)
 
             windspeed_img = ee.Algorithms.If(
-                self.hour_int.lt(24) and self.hour_int.gt(0),
+                self.hour_int.lt(24).And(self.hour_int.gt(0)),
+                # self.hour_int.lt(24) and self.hour_int.gt(0),
                 wind_b_img.subtract(wind_a_img)\
                     .multiply(self.hour.subtract(t_a).divide(3))\
                     .add(wind_a_img),
@@ -895,7 +912,7 @@ class Image(object):
             t_b = t_a.add(3)
 
             vp_img = ee.Algorithms.If(
-                self.hour_int.lt(24) and self.hour_int.gt(0),
+                self.hour_int.lt(24).And(self.hour_int.gt(0)),
                 vp_b_img.subtract(vp_a_img)\
                     .multiply(self.hour.subtract(t_a).divide(3))\
                     .add(vp_a_img),

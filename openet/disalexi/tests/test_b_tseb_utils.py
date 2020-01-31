@@ -6,7 +6,35 @@ import pytest
 
 import openet.disalexi.tseb_utils as tseb_utils
 import openet.disalexi.utils as utils
-from .idl_values import ne1, ne2, ne3
+
+# CGM - I'm not sure why this import isn't working
+# from .idl_values import ne1, ne2, ne3
+ne1 = {
+    'xy': [-96.47672812080845, 41.16506126041818],
+    'timestamp': 1404839150550,
+    'jd': 2456847,
+    't_rise': 11.02448526443880,
+    't_end': 26.01087501850882,
+    'zs': 0.45641128977509,
+}
+
+ne2 = {
+    'xy': [-96.46994024736414, 41.16491226772292],
+    'timestamp': 1404839150550,
+    'jd': 2456847,
+    't_rise': 11.02404074400912,
+    't_end': 26.01041448914592,
+    'zs': 0.45634089368125,
+}
+
+ne3 = {
+    'xy': [-96.43968912903934, 41.17964494123755],
+    'timestamp': 1404839150550,
+    'jd': 2456847,
+    't_rise': 11.02123229380177,
+    't_end': 26.00918945690997,
+    'zs': 0.45619874548449
+}
 
 
 # AmeriFlux sites adjusted to nearest Landsat cell centroid
