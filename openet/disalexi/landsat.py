@@ -139,7 +139,7 @@ class LandsatTOA(Landsat):
             'LANDSAT_7': ['B1', 'B2', 'B3', 'B4', 'B5', 'B7', 'B6_VCID_1', 'BQA'],
             'LANDSAT_8': ['B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B10', 'BQA']})
         # Rename bands to generic names
-        output_bands = ['blue', 'green', 'red', 'nir', 'swir1', 'swir2', 'lst',
+        output_bands = ['blue', 'green', 'red', 'nir', 'swir1', 'swir2', 'tir',
                         'bqa']
 
         # Rename thermal band "k" coefficients to generic names
@@ -161,21 +161,36 @@ class LandsatTOA(Landsat):
                 'system:index': self._index,
                 'system:id': self._id,
                 'k1_constant': ee.Number(output_k1),
-                'k2_constant': ee.Number(output_k2)})
+                'k2_constant': ee.Number(output_k2),
+                'SATELLITE': self._spacecraft_id,
+        })
         super()
 
-    def prep(self):
+    # CGM - Why is this in a separate "prep" method and not part of the init?
+    #   Would you ever
+    def prep(self, sharpen_thermal=False):
         """Return an image with the bands/products needed to run EE DisALEXI
 
         Parameters
         ----------
-        self.raw_image : ee.Image
+        sharpen_thermal : bool
+            Sharpen the thermal band using the openet.sharpen algorithm
+            (the default is False).
 
         Returns
         -------
         prep_image : ee.Image
 
         """
+        # TODO: Decide if sharpening should be in init or prep
+        if sharpen_thermal:
+            # TODO: Move import to top once openet.sharpen is public
+            import openet.sharpen
+            sharpen_img = openet.sharpen.thermal.landsat(self.input_image) \
+                .select(['tir_sharpened'], ['tir'])
+            self.input_image = self.input_image \
+                .addBands(sharpen_img, overwrite=True)
+
         self.prep_image = ee.Image([
             self._albedo,
             self._cfmask,
@@ -224,7 +239,7 @@ class LandsatTOA(Landsat):
         k1 = ee.Number(ee.Image(self.input_image).get('k1_constant'))
         k2 = ee.Number(ee.Image(self.input_image).get('k2_constant'))
 
-        ts_brightness = ee.Image(self.input_image).select(['lst'])
+        ts_brightness = ee.Image(self.input_image).select(['tir'])
         emissivity = self._emissivity
 
         # First back out radiance from brightness temperature
@@ -336,7 +351,7 @@ class LandsatSR(Landsat):
             'LANDSAT_8': ['B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B10', 'pixel_qa']})
         # Rename bands to generic names
         output_bands = [
-            'blue', 'green', 'red', 'nir', 'swir1', 'swir2', 'lst', 'pixel_qa']
+            'blue', 'green', 'red', 'nir', 'swir1', 'swir2', 'tir', 'pixel_qa']
 
         # TODO: Follow up with Simon about adding K1/K2 to SR collection
         k1 = ee.Dictionary({
@@ -352,21 +367,33 @@ class LandsatSR(Landsat):
                 'system:index': self._index,
                 'system:id': self._id,
                 'k1_constant': ee.Number(k1.get(self._spacecraft_id)),
-                'k2_constant': ee.Number(k2.get(self._spacecraft_id))})
+                'k2_constant': ee.Number(k2.get(self._spacecraft_id)),
+                'SATELLITE': self._spacecraft_id,
+            })
         super()
 
-    def prep(self):
+    def prep(self, sharpen_thermal=False):
         """Return an image with the bands/products needed to run EE DisALEXI
 
         Parameters
         ----------
-        self.raw_image : ee.Image
+        sharpen_thermal : bool
+            Sharpen the thermal band using the openet.sharpen algorithm
+            (the default is False).
 
         Returns
         -------
         prep_image : ee.Image
 
         """
+        # TODO: Decide if sharpening should be in init or prep
+        if sharpen_thermal:
+            # TODO: Move import to top once openet.sharpen is public
+            import openet.sharpen
+            sharpen_img = openet.sharpen.thermal.landsat(self.input_image) \
+                .select(['tir_sharpened'], ['tir'])
+            self.input_image = self.input_image \
+                .addBands(sharpen_img, overwrite=True)
 
         self.prep_image = ee.Image([
             self._albedo,
@@ -446,7 +473,6 @@ class LandsatSR(Landsat):
             .add(snow_mask.multiply(3)) \
             .add(cloud_mask.multiply(4)) \
             .rename(['cfmask'])
-    
 
     @lazy_property
     def _lst(self):
@@ -480,7 +506,7 @@ class LandsatSR(Landsat):
         k1 = ee.Number(ee.Image(self.input_image).get('k1_constant'))
         k2 = ee.Number(ee.Image(self.input_image).get('k2_constant'))
 
-        ts_brightness = ee.Image(self.input_image).select(['lst'])
+        ts_brightness = ee.Image(self.input_image).select(['tir'])
         emissivity = self._emissivity
 
         # First back out radiance from brightness temperature

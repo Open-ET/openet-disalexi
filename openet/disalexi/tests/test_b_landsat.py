@@ -40,7 +40,7 @@ def test_LandsatTOA_init(img_id):
     input_img = landsat.LandsatTOA(ee.Image(img_id)).input_image
     input_info = ee.Image(input_img).getInfo()
     assert [b['id'] for b in input_info['bands']] == [
-        'blue', 'green', 'red', 'nir', 'swir1', 'swir2', 'lst', 'bqa']
+        'blue', 'green', 'red', 'nir', 'swir1', 'swir2', 'tir', 'bqa']
     assert input_info['properties']['system:time_start'] == l_info['system:time_start']
     assert input_info['properties']['system:index'] == img_id.split('/')[-1]
     assert input_info['properties']['k1_constant']
@@ -150,7 +150,7 @@ def test_LandsatSR_init(img_id):
     input_img = landsat.LandsatSR(ee.Image(img_id)).input_image
     input_info = ee.Image(input_img).getInfo()
     assert [b['id'] for b in input_info['bands']] == [
-        'blue', 'green', 'red', 'nir', 'swir1', 'swir2', 'lst', 'pixel_qa']
+        'blue', 'green', 'red', 'nir', 'swir1', 'swir2', 'tir', 'pixel_qa']
     assert input_info['properties']['system:time_start'] == l_info['system:time_start']
     assert input_info['properties']['system:index'] == img_id.split('/')[-1]
     assert input_info['properties']['k1_constant']
