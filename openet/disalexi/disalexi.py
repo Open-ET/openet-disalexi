@@ -537,7 +537,7 @@ class Image(object):
                     '101.3 * (((293.0 - 0.0065 * z) / 293.0) ** 5.26)',
                     {'z': self.elevation})
         elif self.airpressure_source.upper() == 'CFSR':
-            ap_coll_id = 'projects/disalexi/meteo_data/airpressure/CONUS_V001'
+            ap_coll_id = 'projects/disalexi/meteo_data/airpressure/GLOBAL_V001'
             ap_coll = ee.ImageCollection(ap_coll_id)\
                 .filterDate(self.start_date, self.end_date)
             ap_img = ee.Image(ap_coll.first())
@@ -551,6 +551,7 @@ class Image(object):
             ap_a_img = ap_img.select([aname])
             ap_b_img = ap_img.select([bname])
             t_a = self.hour_int.divide(3).floor().multiply(3)
+            # CGM - This variable is not being used
             t_b = t_a.add(3)
 
             ap_img = ee.Algorithms.If(
@@ -564,8 +565,6 @@ class Image(object):
             ap_img = ee.Algorithms.If(
                 self.hour_int.eq(0), ap_img_temp2, ap_img)
 
-            # CGM - Why are you making this calculation if you have an actual
-            #   air pressure image?
             ap_img = self.elevation.expression(
                 'ap_img * (((293.0 - 0.0065 * z) / 293.0) ** 5.26)',
                 {'z': self.elevation, 'ap_img': ap_img})
@@ -842,7 +841,7 @@ class Image(object):
             windspeed_img = windspeed_coll.mean() \
                 .expression('sqrt(b(0) ** 2 + b(1) ** 2)')
         elif self.windspeed_source.upper() == 'CFSR':
-            windspeed_coll_id = 'projects/disalexi/meteo_data/windspeed/CONUS_V001'
+            windspeed_coll_id = 'projects/disalexi/meteo_data/windspeed/GLOBAL_V001'
             windspeed_coll = ee.ImageCollection(windspeed_coll_id)\
                 .filterDate(self.start_date, self.end_date)
             windspeed_img = ee.Image(windspeed_coll.first())
@@ -856,6 +855,7 @@ class Image(object):
             wind_a_img = windspeed_img.select([aname])
             wind_b_img = windspeed_img.select([bname])
             t_a = self.hour_int.divide(3).floor().multiply(3)
+            # CGM - This variable is not being used
             t_b = t_a.add(3)
 
             windspeed_img = ee.Algorithms.If(
@@ -882,20 +882,8 @@ class Image(object):
             vp_img = ee.Image.constant(float(self.vp_source))
         elif isinstance(self.vp_source, ee.computedobject.ComputedObject):
             vp_img = self.vp_source
-        # CGM - This is windspeed, not vpd and should either be removed or fixed
-        # elif self.vpd_source.upper() == 'CFSV2':
-        #     # It would be more correct to compute the magnitude for each image,
-        #     #   then compute the average.
-        #     # Do we need daily, 6hr, or interpolated instantaneous data?
-        #     vpd_coll = ee.ImageCollection('NOAA/CFSV2/FOR6H') \
-        #         .select([
-        #             'u-component_of_wind_height_above_ground',
-        #             'v-component_of_wind_height_above_ground']) \
-        #         .filterDate(self.start_date, self.end_date)
-        #     vpd_img = vpd_coll.mean() \
-        #         .expression('sqrt(b(0) ** 2 + b(1) ** 2)')
         elif self.vp_source.upper() == 'CFSR':
-            vp_coll_id = 'projects/disalexi/meteo_data/vpd/CONUS_V001'
+            vp_coll_id = 'projects/disalexi/meteo_data/vp/GLOBAL_V001'
             vp_coll = ee.ImageCollection(vp_coll_id)\
                 .filterDate(self.start_date, self.end_date)
             vp_img = ee.Image(vp_coll.first())
@@ -909,6 +897,7 @@ class Image(object):
             vp_a_img = vp_img.select([aname])
             vp_b_img = vp_img.select([bname])
             t_a = self.hour_int.divide(3).floor().multiply(3)
+            # CGM - This variable is not being used
             t_b = t_a.add(3)
 
             vp_img = ee.Algorithms.If(
@@ -923,7 +912,7 @@ class Image(object):
                 self.hour_int.eq(0), vp_img_temp2, vp_img)
         else:
             raise ValueError('Invalid vp_source: {}\n'.format(
-                self.vpd_source))
+                self.vp_source))
 
         return ee.Image(vp_img).rename(['vp'])
 
