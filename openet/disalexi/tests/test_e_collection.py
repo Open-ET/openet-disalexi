@@ -30,10 +30,17 @@ default_coll_args = {
     'collections': COLLECTIONS, 'geometry': ee.Geometry.Point(SCENE_POINT),
     'start_date': START_DATE, 'end_date': END_DATE,
     'variables': list(VARIABLES), 'cloud_cover_max': 70,
-    'et_reference_source': 'IDAHO_EPSCOR/GRIDMET', 'et_reference_band': 'etr',
-    'et_reference_factor': 0.85, 'et_reference_resample': 'nearest',
-    'model_args': {},
+    'model_args': {
+        'et_reference_source': 'IDAHO_EPSCOR/GRIDMET',
+        'et_reference_band': 'etr',
+        'et_reference_factor': 0.85, 'et_reference_resample': 'nearest'},
     'filter_args': {},
+}
+interp_args = {
+    'interp_source': 'IDAHO_EPSCOR/GRIDMET',
+    'interp_band': 'etr',
+    'interp_resample': 'nearest',
+    # 'interp_factor': 0.85,
 }
 
 def default_coll_obj(**kwargs):
@@ -51,23 +58,16 @@ def parse_scene_id(output_info):
 def test_Collection_init_default_parameters():
     """Test if init sets default parameters"""
     args = default_coll_args.copy()
-    # These values are being set above but have defaults that need to be checked
-    del args['et_reference_source']
-    del args['et_reference_band']
-    del args['et_reference_factor']
-    del args['et_reference_resample']
     del args['variables']
+    del args['model_args']
+    # del args['interp_args']
 
     m = disalexi.Collection(**args)
     assert m.variables == None
-    assert m.et_reference_source == None
-    assert m.et_reference_band == None
-    assert m.et_reference_factor == None
-    assert m.et_reference_factor == None
     assert m.cloud_cover_max == 70
     assert m.model_args == {}
     assert m.filter_args == {}
-    assert set(m._interp_vars) == {'ndvi', 'et_fraction'}
+    # assert m.interp_args == {}
 
 
 def test_Collection_init_collection_str(coll_id='LANDSAT/LC08/C01/T1_SR'):
@@ -211,6 +211,28 @@ def test_Collection_build_cloud_cover():
     assert 'LE07_044033_20170724' not in parse_scene_id(output)
 
 
+# def test_Collection_build_filter_dates_lt05():
+#     """Test that bad Landsat 5 images are filtered"""
+#     output = utils.getinfo(default_coll_obj(
+#         collections=['LANDSAT/LT05/C01/T1_TOA'],
+#         start_date='2012-01-01', end_date='2013-01-01',
+#         geometry=ee.Geometry.Rectangle(-125, 25, -65, 50))._build(variables=['et']))
+#     assert parse_scene_id(output) == []
+#
+#
+# def test_Collection_build_filter_dates_lc08():
+#     """Test that pre-op Landsat 8 images before 2013-03-24 are filtered.
+#
+#     We may want to move this date back to 2013-04-01.
+#     """
+#     output = utils.getinfo(default_coll_obj(
+#         collections=['LANDSAT/LC08/C01/T1_TOA'],
+#         start_date='2013-01-01', end_date='2013-05-01',
+#         geometry=ee.Geometry.Rectangle(-125, 25, -65, 50))._build(variables=['et']))
+#     assert not [x for x in parse_scene_id(output) if x.split('_')[-1] < '20130324']
+#     # assert parse_scene_id(output) == []
+
+
 def test_Collection_build_filter_args():
     # Need to test with two collections to catch bug when deepcopy isn't used
     collections = ['LANDSAT/LC08/C01/T1_SR', 'LANDSAT/LE07/C01/T1_SR']
@@ -247,13 +269,13 @@ def test_Collection_overpass_default():
 def test_Collection_overpass_class_variables():
     """Test that custom class variables are passed through to build function"""
     output = utils.getinfo(default_coll_obj(variables=['et']).overpass())
-    output = {y['id'] for x in output['features'] for y in x['bands']} == {'et'}
+    assert {y['id'] for x in output['features'] for y in x['bands']} == {'et'}
 
 
 def test_Collection_overpass_method_variables():
     """Test that custom method variables are passed through to build function"""
     output = utils.getinfo(default_coll_obj().overpass(variables=['et']))
-    output = {y['id'] for x in output['features'] for y in x['bands']} == {'et'}
+    assert {y['id'] for x in output['features'] for y in x['bands']} == {'et'}
 
 
 def test_Collection_overpass_no_variables_exception():
@@ -264,20 +286,24 @@ def test_Collection_overpass_no_variables_exception():
 
 def test_Collection_interpolate_default():
     """Default t_interval should be custom"""
-    output = utils.getinfo(default_coll_obj().interpolate())
+    output = utils.getinfo(default_coll_obj().interpolate(**interp_args))
     assert output['type'] == 'ImageCollection'
     assert parse_scene_id(output) == [START_DATE.replace('-', '')]
     assert {y['id'] for x in output['features'] for y in x['bands']} == VARIABLES
 
 
 def test_Collection_interpolate_variables_custom_et():
-    output = utils.getinfo(default_coll_obj().interpolate(variables=['et']))
-    assert [y['id'] for x in output['features'] for y in x['bands']] == ['et']
+    output = utils.getinfo(default_coll_obj().interpolate(
+        variables=['et'], **interp_args))
+    assert {y['id'] for x in output['features'] for y in x['bands']} == {'et'}
 
 
-def test_Collection_interpolate_variables_custom_ndvi():
-    output = utils.getinfo(default_coll_obj().interpolate(variables=['ndvi']))
-    assert {y['id'] for x in output['features'] for y in x['bands']} == {'ndvi'}
+# CGM - This test wasn't in PTJPL, I think the non et-fraction models can't be
+#   used to interpolate NDVI right now.
+# def test_Collection_interpolate_variables_custom_ndvi():
+#     output = utils.getinfo(default_coll_obj().interpolate(
+#         variables=['ndvi'], **interp_args))
+#     assert {y['id'] for x in output['features'] for y in x['bands']} == {'ndvi'}
 
 
 def test_Collection_interpolate_t_interval_daily():
@@ -285,7 +311,8 @@ def test_Collection_interpolate_t_interval_daily():
 
     Since end_date is exclusive last image date will be one day earlier
     """
-    output = utils.getinfo(default_coll_obj().interpolate(t_interval='daily'))
+    output = utils.getinfo(default_coll_obj().interpolate(
+        t_interval='daily', **interp_args))
     assert output['type'] == 'ImageCollection'
     assert parse_scene_id(output)[0] == START_DATE.replace('-', '')
     # assert parse_scene_id(output)[-1] == END_DATE.replace('-', '')
@@ -297,7 +324,8 @@ def test_Collection_interpolate_t_interval_daily():
 # def test_Collection_interpolate_t_interval_monthly():
 #     """Test if the monthly time interval parameter works"""
 #     coll_obj = default_coll_obj(start_date='2017-07-01', end_date='2017-08-01')
-#     output = utils.getinfo(coll_obj.interpolate(t_interval='monthly'))
+#     output = utils.getinfo(coll_obj.interpolate(
+#         t_interval='monthly', **interp_args))
 #     assert output['type'] == 'ImageCollection'
 #     assert parse_scene_id(output) == ['201707']
 #     assert {y['id'] for x in output['features'] for y in x['bands']} == VARIABLES
@@ -307,7 +335,8 @@ def test_Collection_interpolate_t_interval_daily():
 # def test_Collection_interpolate_t_interval_annual():
 #     """Test if the annual time interval parameter works"""
 #     coll_obj = default_coll_obj(start_date='2017-01-01', end_date='2018-01-01')
-#     output = utils.getinfo(coll_obj.interpolate(t_interval='annual'))
+#     output = utils.getinfo(coll_obj.interpolate(
+#         t_interval='annual', **interp_args))
 #     assert output['type'] == 'ImageCollection'
 #     assert parse_scene_id(output) == ['2017']
 #     assert {y['id'] for x in output['features'] for y in x['bands']} == VARIABLES
@@ -315,7 +344,8 @@ def test_Collection_interpolate_t_interval_daily():
 
 def test_Collection_interpolate_t_interval_custom():
     """Test if the custom time interval parameter works"""
-    output = utils.getinfo(default_coll_obj().interpolate(t_interval='custom'))
+    output = utils.getinfo(default_coll_obj().interpolate(
+        t_interval='custom', **interp_args))
     assert output['type'] == 'ImageCollection'
     assert parse_scene_id(output) == [START_DATE.replace('-', '')]
     assert {y['id'] for x in output['features'] for y in x['bands']} == VARIABLES
@@ -329,6 +359,9 @@ def test_Collection_interpolate_t_interval_custom():
 #     # Is there any way to test this without pulling values at a point?
 
 
+# DEADBEEF - Collection does not directly take et_reference parameters anymore.
+#   The et_reference parameters can only be set via the model_args dictionary.
+'''
 # NOTE: For the following tests the collection class is not being
 #   re-instantiated for each test so it is necessary to clear the model_args
 def test_Collection_interpolate_et_reference_source_not_set():
@@ -409,6 +442,7 @@ def test_Collection_interpolate_et_reference_params_interpolate_args():
     assert {y['id'] for x in output['features'] for y in x['bands']} == VARIABLES
     assert output['features'][0]['properties']['et_reference_factor'] == 0.5
     assert output['features'][0]['properties']['et_reference_resample'] == 'bicubic'
+'''
 
 
 def test_Collection_interpolate_t_interval_exception():
@@ -437,14 +471,14 @@ def test_Collection_interpolate_no_variables_exception():
 
 def test_Collection_interpolate_output_type_default():
     """Test if output_type parameter is defaulting to float"""
+    vars = ['et', 'et_reference', 'et_fraction', 'count']
     output = utils.getinfo(default_coll_obj(
-        variables=['et', 'et_reference', 'et_fraction', 'ndvi', 'count']).interpolate())
+        variables=vars).interpolate(**interp_args))
     output = output['features'][0]['bands']
     bands = {info['id']: i for i, info in enumerate(output)}
     assert(output[bands['et']]['data_type']['precision'] == 'float')
     assert(output[bands['et_reference']]['data_type']['precision'] == 'float')
     assert(output[bands['et_fraction']]['data_type']['precision'] == 'float')
-    assert(output[bands['ndvi']]['data_type']['precision'] == 'float')
     assert(output[bands['count']]['data_type']['precision'] == 'int')
 
 
@@ -467,3 +501,11 @@ def test_Collection_interpolate_only_interpolate_images():
         variables=list(variables), cloud_cover_max=70).interpolate())
     pprint.pprint(output)
     assert {y['id'] for x in output['features'] for y in x['bands']} == variables
+
+
+# # TODO: Write a test to see if et_fraction_max is being applied
+# def test_Collection_interpolate_et_fraction_max():
+#     custom_args = interp_args.copy()
+#     custom_args['et_fraction_max'] = 1.4
+#     output = utils.getinfo(default_coll_obj().interpolate(**custom_args))
+#     assert ?

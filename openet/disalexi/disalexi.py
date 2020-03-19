@@ -25,6 +25,7 @@ def lazy_property(fn):
         if not hasattr(self, attr_name):
             setattr(self, attr_name, fn(self))
         return getattr(self, attr_name)
+
     return _lazy_property
 
 
@@ -48,13 +49,15 @@ class Image(object):
             rs_interp_flag=True,
             ta_interp_flag=True,
             ta_smooth_flag=True,
-            et_reference_source=None,
-            et_reference_band=None,
-            et_reference_factor=None,
-            et_reference_resample=None,
+            # CGM - Get from kwargs instead
+            # et_reference_source=None,
+            # et_reference_band=None,
+            # et_reference_factor=None,
+            # et_reference_resample=None,
             lat=None,
             lon=None,
-        ):
+            **kwargs
+    ):
         """Initialize an image for computing DisALEXI
 
         Parameters
@@ -92,22 +95,23 @@ class Image(object):
             Ta interpolation is not implemented.
         ta_smooth_flag : bool, optional
             If True, smooth and resample Ta image.
-        et_reference_source : str, float, optional
-            Reference ET source (the default is None).
-            Parameter is required if computing 'et' or 'et_reference'.
-        et_reference_band : str, optional
-            Reference ET band name (the default is None).
-            Parameter is required if computing 'et' or 'et_reference'.
-        et_reference_factor : float, None, optional
-            Reference ET scaling factor.  The default is None which is
-            equivalent to 1.0 (or no scaling).
-        et_reference_resample : {'nearest', 'bilinear', 'bicubic', None}, optional
-            Reference ET resampling.  The default is None which is equivalent
-            to nearest neighbor resampling.
         lat : ee.Image, optional
             Latitude [deg].  If not set will default to ee.Image.pixelLonLat().
         lon : ee.Image, optional
             Longitude [deg].  If not set will default to ee.Image.pixelLonLat().
+        kwargs : dict, optional
+            et_reference_source : str, float
+                Reference ET source (the default is None).
+                Parameter is required if computing 'et_fraction' or 'et_reference'.
+            et_reference_band : str
+                Reference ET band name (the default is None).
+                Parameter is required if computing 'et_fraction' or 'et_reference'.
+            et_reference_factor : float, None
+                Reference ET scaling factor.  The default is None which is
+                equivalent to 1.0 (or no scaling).
+            et_reference_resample : {'nearest', 'bilinear', 'bicubic', None}
+                Reference ET resampling.  The default is None which is
+                equivalent to nearest neighbor resampling.
 
         Notes
         -----
@@ -165,10 +169,10 @@ class Image(object):
         # CGM - Buffering clouds a small amount
         # Buffer distances are currently hardcoded at -30 and +90
         #   but these could be changed to input parameters
-        self.cloud_mask = image.select('cfmask').gte(1)\
-            .reduceNeighborhood(ee.Reducer.min(), ee.Kernel.circle(30, 'meters'))\
-            .reduceNeighborhood(ee.Reducer.max(), ee.Kernel.circle(90, 'meters'))\
-            .eq(0)\
+        self.cloud_mask = image.select('cfmask').gte(1) \
+            .reduceNeighborhood(ee.Reducer.min(), ee.Kernel.circle(30, 'meters')) \
+            .reduceNeighborhood(ee.Reducer.max(), ee.Kernel.circle(90, 'meters')) \
+            .eq(0) \
             .rename(['cloud_mask'])
         # self.cfmask = image.select('cfmask')
         # self.cloud_mask = self.cfmask.eq(0)
@@ -198,19 +202,32 @@ class Image(object):
         self.ta_smooth_flag = utils.boolean(ta_smooth_flag)
 
         # Reference ET parameters
-        self.et_reference_source = et_reference_source
-        self.et_reference_band = et_reference_band
-        self.et_reference_factor = et_reference_factor
-        self.et_reference_resample = et_reference_resample
+        try:
+            self.et_reference_source = kwargs['et_reference_source']
+        except:
+            self.et_reference_source = None
+        try:
+            self.et_reference_band = kwargs['et_reference_band']
+        except:
+            self.et_reference_band = None
+        try:
+            self.et_reference_factor = kwargs['et_reference_factor']
+        except:
+            self.et_reference_factor = None
+        try:
+            self.et_reference_resample = kwargs['et_reference_resample']
+        except:
+            self.et_reference_resample = None
 
         # Check reference ET parameters
-        if et_reference_factor and not utils.is_number(et_reference_factor):
+        if (self.et_reference_factor and
+                not utils.is_number(self.et_reference_factor)):
             raise ValueError('et_reference_factor must be a number')
-        if et_reference_factor and self.et_reference_factor < 0:
+        if self.et_reference_factor and self.et_reference_factor < 0:
             raise ValueError('et_reference_factor must be greater than zero')
-        et_reference_resample_methods = ['nearest', 'bilinear', 'bicubic']
-        if (et_reference_resample and \
-                et_reference_resample.lower() not in et_reference_resample_methods):
+        resample_methods = ['nearest', 'bilinear', 'bicubic']
+        if (self.et_reference_resample and
+                self.et_reference_resample.lower() not in resample_methods):
             raise ValueError('unsupported et_reference_resample method')
 
         if lat is None:
@@ -239,7 +256,7 @@ class Image(object):
         #   since that is currently what is in the landcover.xlsx file.
         # http://www.globallandcover.com/GLC30Download/index.aspx
         if utils.is_number(self.landcover_source):
-            self.lc_source = ee.Image.constant(int(self.landcover_source))\
+            self.lc_source = ee.Image.constant(int(self.landcover_source)) \
                 .rename(['landcover'])
             self.lc_type = 'NLCD'
         elif isinstance(self.landcover_source, ee.computedobject.ComputedObject):
@@ -252,10 +269,10 @@ class Image(object):
             self.lc_source = ee.Image('USGS/NLCD/NLCD2006').select(['landcover'])
             self.lc_type = 'NLCD'
         elif self.landcover_source.upper() == 'GLOBELAND30':
-            lc_coll =  ee.ImageCollection('users/cgmorton/GlobeLand30')\
+            lc_coll = ee.ImageCollection('users/cgmorton/GlobeLand30') \
                 .filterBounds(image.geometry().bounds(1))
-            self.lc_source = ee.Image(lc_coll.mosaic())\
-                .divide(10).floor().multiply(10)\
+            self.lc_source = ee.Image(lc_coll.mosaic()) \
+                .divide(10).floor().multiply(10) \
                 .rename(['landcover'])
             self.lc_type = 'GLOBELAND30'
         else:
@@ -435,7 +452,7 @@ class Image(object):
             clump=self.clump, leaf_width=self.leaf_width,
             hc_min=self.hc_min, hc_max=self.hc_max,
             datetime=self.datetime, lat=self.lat, lon=self.lon,
-            stabil_iter=self.stabil_iter,albedo_iter=self.albedo_iter,
+            stabil_iter=self.stabil_iter, albedo_iter=self.albedo_iter,
         )
         return et.rename(['et']).set(self.properties)
         #     .set({'ta_step_size': self.ta.get('ta_step_size')})
@@ -451,9 +468,9 @@ class Image(object):
         elif type(self.et_reference_source) is str:
             # Assume a string source is an image collection ID (not an image ID)
             et_reference_img = ee.Image(
-                ee.ImageCollection(self.et_reference_source)\
-                    .filterDate(self.start_date, self.end_date)\
-                    .select([self.et_reference_band])\
+                ee.ImageCollection(self.et_reference_source) \
+                    .filterDate(self.start_date, self.end_date) \
+                    .select([self.et_reference_band]) \
                     .first())
         else:
             raise ValueError('unsupported et_reference_source: {}'.format(
@@ -463,14 +480,14 @@ class Image(object):
         # The benefit of this is the ETr image is now in the same crs as the
         #   input image.  Not all models may want this though.
         # CGM - Should the output band name match the input ETr band name?
-        return self.ndvi.multiply(0).add(et_reference_img)\
-            .multiply(self.et_reference_factor)\
+        return self.ndvi.multiply(0).add(et_reference_img) \
+            .multiply(self.et_reference_factor) \
             .rename(['et_reference']).set(self.properties)
 
     @lazy_property
     def et_fraction(self):
         """Compute ET fraction as actual ET divided by the reference ET"""
-        return self.et.divide(self.et_reference)\
+        return self.et.divide(self.et_reference) \
             .rename(['et_fraction']).set(self.properties)
 
     @lazy_property
@@ -489,7 +506,7 @@ class Image(object):
             alexi_coll_id = 'projects/disalexi/alexi/CONUS_V001'
             alexi_coll = ee.ImageCollection(alexi_coll_id) \
                 .filterDate(self.start_date, self.end_date)
-            alexi_img = ee.Image(alexi_coll.first())\
+            alexi_img = ee.Image(alexi_coll.first()) \
                 .multiply(0.408)
             # self.alexi_geo = [0.04, 0, -125.04, 0, -0.04, 49.8]
             # self.alexi_crs = 'EPSG:4326'
@@ -525,7 +542,7 @@ class Image(object):
     @lazy_property
     def mask(self):
         """Mask of all active pixels (based on the final et)"""
-        return self.et.multiply(0).add(1).updateMask(1)\
+        return self.et.multiply(0).add(1).updateMask(1) \
             .rename(['mask']).set(self.properties).uint8()
 
     # @lazy_property
@@ -545,11 +562,11 @@ class Image(object):
         if self.airpressure_source.upper() == 'ESTIMATE':
             ap_img = self.elevation \
                 .expression(
-                    '101.3 * (((293.0 - 0.0065 * z) / 293.0) ** 5.26)',
-                    {'z': self.elevation})
+                '101.3 * (((293.0 - 0.0065 * z) / 293.0) ** 5.26)',
+                {'z': self.elevation})
         elif self.airpressure_source.upper() == 'CFSR':
             ap_coll_id = 'projects/disalexi/meteo_data/airpressure/GLOBAL_V001'
-            ap_coll = ee.ImageCollection(ap_coll_id)\
+            ap_coll = ee.ImageCollection(ap_coll_id) \
                 .filterDate(self.start_date, self.end_date)
             ap_img = ee.Image(ap_coll.first())
 
@@ -567,8 +584,8 @@ class Image(object):
 
             ap_img = ee.Algorithms.If(
                 self.hour_int.lt(24) and self.hour_int.gt(0),
-                ap_b_img.subtract(ap_a_img)\
-                    .multiply(self.hour.subtract(t_a).divide(3))\
+                ap_b_img.subtract(ap_a_img) \
+                    .multiply(self.hour.subtract(t_a).divide(3)) \
                     .add(ap_a_img).rename(['pressure']),
                 ap_b_img)
             ap_img = ee.Algorithms.If(
@@ -598,15 +615,13 @@ class Image(object):
             # Hourly Rs is time average so time starts are 30 minutes early
             # Move image time 30 minutes earlier to simplify filtering/interpolation
             # This interpolation scheme will only work for hourly data
-            rs_coll = ee.ImageCollection('projects/disalexi/merra2/hourly')\
+            rs_coll = ee.ImageCollection('projects/disalexi/merra2/hourly') \
                 .select(['SWGDNCLR'])
 
             if self.rs_interp_flag:
                 interp_dt = self.datetime.advance(-0.5, 'hour')
-                rs_a_img = ee.Image(rs_coll \
-                    .filterDate(interp_dt.advance(-1, 'hour'), interp_dt).first())
-                rs_b_img = ee.Image(rs_coll \
-                    .filterDate(interp_dt, interp_dt.advance(1, 'hour')).first())
+                rs_a_img = ee.Image(rs_coll.filterDate(interp_dt.advance(-1, 'hour'), interp_dt).first())
+                rs_b_img = ee.Image(rs_coll.filterDate(interp_dt, interp_dt.advance(1, 'hour')).first())
                 t_a = ee.Number(rs_a_img.get('system:time_start'))
                 t_b = ee.Number(rs_b_img.get('system:time_start'))
                 rs1_img = rs_b_img.subtract(rs_a_img) \
@@ -615,20 +630,18 @@ class Image(object):
             else:
                 rs1_img = ee.Image(
                     ee.ImageCollection(rs_coll) \
-                        .filterDate(self.start_date, self.end_date)\
-                        .filter(ee.Filter.calendarRange(
-                            self.hour_int, self.hour_int, 'hour'))
+                        .filterDate(self.start_date, self.end_date) \
+                        .filter(ee.Filter.calendarRange(self.hour_int, self.hour_int, 'hour'))
                         .first())
         elif self.rs_hourly_source.upper() == 'CFSR':
             rs1_coll_id = 'projects/disalexi/insol_data/GLOBAL_V001'
-            rs1_coll = ee.ImageCollection(rs1_coll_id)\
+            rs1_coll = ee.ImageCollection(rs1_coll_id) \
                 .filterDate(self.start_date, self.end_date)
             rs1_img = ee.Image(rs1_coll.first())
 
             rs1_img_temp1 = rs1_img.select(['b24'])
             rs1_img_temp2 = rs1_img.select(['b1'])
             # CGM - temp1 and temp2 aren't used in this function?
-            # CGM - We really should not be making getInfo calls here!
             temp1 = self.hour_int.floor().int()
             temp2 = self.hour_int.ceil().int()
             aname = ee.String('b').cat(self.hour.floor().int().format())
@@ -640,8 +653,8 @@ class Image(object):
 
             rs1_img = ee.Algorithms.If(
                 self.hour_int.gt(0) and self.hour_int.lt(24),
-                rs1_b_img.subtract(rs1_a_img)\
-                    .multiply(self.hour.subtract(t_a).divide(t_b.subtract(t_a)))\
+                rs1_b_img.subtract(rs1_a_img) \
+                    .multiply(self.hour.subtract(t_a).divide(t_b.subtract(t_a))) \
                     .add(rs1_a_img),
                 rs1_a_img)
             rs1_img = ee.Algorithms.If(
@@ -662,8 +675,8 @@ class Image(object):
         elif isinstance(self.rs_daily_source, ee.computedobject.ComputedObject):
             rs24_img = self.rs_daily_source
         elif self.rs_daily_source.upper() == 'MERRA2':
-            rs24_coll = ee.ImageCollection('projects/climate-engine/merra2/daily')\
-                .select(['SWGDNCLR'])\
+            rs24_coll = ee.ImageCollection('projects/climate-engine/merra2/daily') \
+                .select(['SWGDNCLR']) \
                 .filterDate(self.start_date, self.end_date)
             rs24_img = ee.Image(rs24_coll.first())
         elif self.rs_daily_source.upper() == 'CFSR':
@@ -676,15 +689,14 @@ class Image(object):
             # when gte24
             rs24_coll = ee.ImageCollection(rs24_coll_id)
             rs24_coll_1 = rs24_coll.filterDate(self.start_date, self.end_date)
-            rs24_coll_2 = rs24_coll\
+            rs24_coll_2 = rs24_coll \
                 .filterDate(self.start_date.advance(1, 'day'),
                             self.end_date.advance(1, 'day'))
             rs24_coll_1_array = rs24_coll_1.first().toArray()
             # CGM - Should this be rs24_coll_2 instead of rs24_coll_1?
             rs24_coll_2_array = rs24_coll_2.first().toArray()
-            # CGM - We really should not be making getInfo calls here!
             day1_array = rs24_coll_1_array.arraySlice(
-                0,start_hour.int(), 24)
+                0, start_hour.int(), 24)
             day2_array = rs24_coll_2_array.arraySlice(
                 0, 0, end_hour.subtract(24).int())
             day1_sum = day1_array.arrayReduce(reducer=ee.Reducer.sum(), axes=[0])
@@ -692,14 +704,13 @@ class Image(object):
             rs24_img_temp1 = day1_sum.add(day2_sum).arrayFlatten([['array']])
 
             # when lt 0
-            rs24_coll_1 = rs24_coll\
+            rs24_coll_1 = rs24_coll \
                 .filterDate(self.start_date.advance(-1, 'day'),
                             self.end_date.advance(-1, 'day'))
             rs24_coll_2 = rs24_coll.filterDate(self.start_date, self.end_date)
             rs24_coll_1_array = rs24_coll_1.first().toArray()
             # CGM - Should this be rs24_coll_2 instead of rs24_coll_1?
             rs24_coll_2_array = rs24_coll_2.first().toArray()
-            # CGM - We really should not be making a getInfo call right here
             day1_array = rs24_coll_1_array.arraySlice(
                 0, start_hour.subtract(24).multiply(-1).int(), 24)
             day2_array = rs24_coll_2_array.arraySlice(
@@ -709,19 +720,18 @@ class Image(object):
             rs24_img_temp2 = day1_sum.add(day2_sum).arrayFlatten([['array']])
 
             # normal
-            rs24_coll = rs24_coll.filterDate(self.start_date,self.end_date)
+            rs24_coll = rs24_coll.filterDate(self.start_date, self.end_date)
             rs24_coll_array = rs24_coll.first().toArray()
-            # CGM - We really should not be making a getInfo call right here
             day_array = rs24_coll_array.arraySlice(
                 0, start_hour.int(), end_hour.int())
             day_sum = day_array.arrayReduce(reducer=ee.Reducer.sum(), axes=[0])
             rs24_img = day_sum.arrayFlatten([['array']])
-            
+
             rs24_img = ee.Algorithms.If(
                 end_hour.gt(24), rs24_img_temp1, rs24_img)
             rs24_img = ee.Algorithms.If(
                 start_hour.lt(0), rs24_img_temp2, rs24_img)
-              
+
         else:
             raise ValueError('Unsupported rs_daily_source: {}\n'.format(
                 self.rs_daily_source))
@@ -748,15 +758,15 @@ class Image(object):
             #     .set({'ta_iteration': 'image'})
         elif self.ta_source.upper() == 'CONUS_V001':
             ta_coll_id = 'projects/disalexi/ta/CONUS_V001_NLDAS_1K'
-            ta_coll = ee.ImageCollection(ta_coll_id)\
-                .filterMetadata('id', 'equals', self.id)\
+            ta_coll = ee.ImageCollection(ta_coll_id) \
+                .filterMetadata('id', 'equals', self.id) \
                 .limit(1, 'step_size', False)
             input_img = ee.Image(ta_coll.first())
 
             # Select the Ta image with the minimum bias
             ta_array = input_img.select('step_\\d+_ta').toArray()
             bias_array = input_img.select('step_\\d+_bias').toArray()
-            index = bias_array.abs().multiply(-1).arrayArgmax()\
+            index = bias_array.abs().multiply(-1).arrayArgmax() \
                 .arraySlice(0, 0, 1).arrayFlatten([['array']])
             ta_img = ta_array.arrayGet(index)
             # ta_img = ee.Image(ta_array.arrayGet(index))
@@ -816,9 +826,9 @@ class Image(object):
         if self.ta_smooth_flag:
             # CGM suggested using a radius of 4, trying 2 for now
             #
-            ta_img = ta_img.focal_mean(2, 'circle', 'pixels')\
-                .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)\
-                .resample('bilinear')\
+            ta_img = ta_img.focal_mean(2, 'circle', 'pixels') \
+                .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo) \
+                .resample('bilinear') \
                 .reproject(crs=self.crs, crsTransform=self.transform)
             # CGM - This approach doesn't mask nodata correctly
             # ta_img = ta_img.convolve(
@@ -829,8 +839,8 @@ class Image(object):
     @lazy_property
     def time(self):
         """Return an image of the 0 UTC time (in milliseconds)"""
-        return self.mask\
-            .double().multiply(0).add(utils.date_to_time_0utc(self.datetime))\
+        return self.mask \
+            .double().multiply(0).add(utils.date_to_time_0utc(self.datetime)) \
             .rename(['time']).set(self.properties)
 
     @lazy_property
@@ -853,7 +863,7 @@ class Image(object):
                 .expression('sqrt(b(0) ** 2 + b(1) ** 2)')
         elif self.windspeed_source.upper() == 'CFSR':
             windspeed_coll_id = 'projects/disalexi/meteo_data/windspeed/GLOBAL_V001'
-            windspeed_coll = ee.ImageCollection(windspeed_coll_id)\
+            windspeed_coll = ee.ImageCollection(windspeed_coll_id) \
                 .filterDate(self.start_date, self.end_date)
             windspeed_img = ee.Image(windspeed_coll.first())
 
@@ -872,8 +882,8 @@ class Image(object):
             windspeed_img = ee.Algorithms.If(
                 self.hour_int.lt(24).And(self.hour_int.gt(0)),
                 # self.hour_int.lt(24) and self.hour_int.gt(0),
-                wind_b_img.subtract(wind_a_img)\
-                    .multiply(self.hour.subtract(t_a).divide(3))\
+                wind_b_img.subtract(wind_a_img) \
+                    .multiply(self.hour.subtract(t_a).divide(3)) \
                     .add(wind_a_img),
                 wind_b_img)
             windspeed_img = ee.Algorithms.If(
@@ -895,7 +905,7 @@ class Image(object):
             vp_img = self.vp_source
         elif self.vp_source.upper() == 'CFSR':
             vp_coll_id = 'projects/disalexi/meteo_data/vp/GLOBAL_V001'
-            vp_coll = ee.ImageCollection(vp_coll_id)\
+            vp_coll = ee.ImageCollection(vp_coll_id) \
                 .filterDate(self.start_date, self.end_date)
             vp_img = ee.Image(vp_coll.first())
 
@@ -913,8 +923,8 @@ class Image(object):
 
             vp_img = ee.Algorithms.If(
                 self.hour_int.lt(24).And(self.hour_int.gt(0)),
-                vp_b_img.subtract(vp_a_img)\
-                    .multiply(self.hour.subtract(t_a).divide(3))\
+                vp_b_img.subtract(vp_a_img) \
+                    .multiply(self.hour.subtract(t_a).divide(3)) \
                     .add(vp_a_img),
                 vp_b_img)
             vp_img = ee.Algorithms.If(
@@ -989,7 +999,6 @@ class Image(object):
         self.leaf_width = lc_remap(self.lc_source, self.lc_type, 'xl')
         self.clump = lc_remap(self.lc_source, self.lc_type, 'omega')
 
-
     # Helper functions for computing Ta (and ET)
     def ta_coarse(self, ta_img, threshold=0.5):
         """Compute the air temperature for each ALEXI ET cell that minimizes
@@ -1023,15 +1032,15 @@ class Image(object):
         )
 
         # Aggregate the Landsat scale ET up to the ALEXI scale
-        et_coarse = ee.Image(et_fine)\
-            .reproject(crs=self.crs, crsTransform=self.transform)\
+        et_coarse = ee.Image(et_fine) \
+            .reproject(crs=self.crs, crsTransform=self.transform) \
             .reduceResolution(reducer=ee.Reducer.mean().unweighted(),
-                              maxPixels=30000)\
+                              maxPixels=30000) \
             .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)
         et_mask = et_coarse.mask().gte(threshold)
         bias = et_coarse.subtract(self.et_alexi)
-        return ee.Image([ta_img, bias, et_coarse])\
-            .updateMask(et_mask)\
+        return ee.Image([ta_img, bias, et_coarse]) \
+            .updateMask(et_mask) \
             .rename(['ta', 'bias', 'et'])
 
     def ta_qm(self, ta_img, step_size, step_count, threshold=0.5):
@@ -1054,6 +1063,7 @@ class Image(object):
             ALEXI scale air temperature image
 
         """
+
         # CGM - This is basically identical to ta_coarse()
         # Can't use ta_coarse since a mapped function can only have one input
         # Redefining it here allows threshold to be passed in
@@ -1073,18 +1083,18 @@ class Image(object):
             )
 
             # Aggregate the Landsat scale ET up to the ALEXI scale
-            et_coarse = ee.Image(et_fine)\
-                .reproject(crs=self.crs, crsTransform=self.transform)\
+            et_coarse = ee.Image(et_fine) \
+                .reproject(crs=self.crs, crsTransform=self.transform) \
                 .reduceResolution(reducer=ee.Reducer.mean().unweighted(),
-                                  maxPixels=30000)\
+                                  maxPixels=30000) \
                 .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)
             et_mask = et_coarse.mask().gte(threshold)
             bias = et_coarse.subtract(self.alexi_et)
             # Invert the abs(bias) since quality mosaic sorts descending
             qm_bias = bias.abs().multiply(-1)
 
-            return ee.Image([qm_bias, ta, bias, et_coarse])\
-                .updateMask(et_mask)\
+            return ee.Image([qm_bias, ta, bias, et_coarse]) \
+                .updateMask(et_mask) \
                 .rename(['qm_bias', 'ta', 'bias', 'et'])
 
         # Get output for a range of Ta values
@@ -1095,8 +1105,8 @@ class Image(object):
 
         # Return the air temperature associated with the lowest difference
         #   in ET from the ALEXI ET value
-        return ee.ImageCollection(ta_coll.map(ta_func))\
-            .qualityMosaic('qm_bias')\
+        return ee.ImageCollection(ta_coll.map(ta_func)) \
+            .qualityMosaic('qm_bias') \
             .select(['ta', 'bias', 'et'])
 
     def ta_mosaic(self, ta_img, step_size, step_count, threshold=0.5):
@@ -1117,6 +1127,7 @@ class Image(object):
             ALEXI scale air temperature image
 
         """
+
         # CGM - This is basically identical to ta_coarse()
         # Can't use ta_coarse since a mapped function can only have one input
         # Redefining it here allows threshold to be passed in
@@ -1136,15 +1147,15 @@ class Image(object):
                 stabil_iter=self.stabil_iter, albedo_iter=self.albedo_iter,
             )
             # Aggregate the Landsat scale ET up to the ALEXI scale
-            et_coarse = ee.Image(et_fine)\
-                .reproject(crs=self.crs, crsTransform=self.transform)\
+            et_coarse = ee.Image(et_fine) \
+                .reproject(crs=self.crs, crsTransform=self.transform) \
                 .reduceResolution(reducer=ee.Reducer.mean().unweighted(),
-                                  maxPixels=30000)\
+                                  maxPixels=30000) \
                 .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)
             et_mask = et_coarse.mask().gte(threshold)
             bias = et_coarse.subtract(self.et_alexi)
-            return ee.Image([ta, bias]).updateMask(et_mask)\
-                .rename(['ta', 'bias'])\
+            return ee.Image([ta, bias]).updateMask(et_mask) \
+                .rename(['ta', 'bias']) \
                 .set({'system:index': ee.Image(ta).get('system:index')})
 
         # CGM - Adding one extra Ta step and beginning and end to handle
@@ -1194,11 +1205,11 @@ class Image(object):
             datetime=self.datetime, lat=self.lat, lon=self.lon,
             stabil_iter=self.stabil_iter, albedo_iter=self.albedo_iter,
         )
-        et_coarse = et_fine\
-            .reproject(crs=self.crs, crsTransform=self.transform)\
+        et_coarse = et_fine \
+            .reproject(crs=self.crs, crsTransform=self.transform) \
             .reduceResolution(reducer=ee.Reducer.mean().unweighted(),
-                              maxPixels=30000)\
-            .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)\
+                              maxPixels=30000) \
+            .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo) \
             .rename(['et'])
         et_mask = et_coarse.mask().gte(threshold)
         return et_coarse.updateMask(et_mask)
