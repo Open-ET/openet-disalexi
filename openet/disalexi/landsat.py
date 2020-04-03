@@ -1,5 +1,6 @@
 import ee
 
+import openet.sharpen
 # import openet.core.common as common
 
 
@@ -135,6 +136,7 @@ class LandsatTOA(Landsat):
         self._spacecraft_id = ee.String(self.raw_image.get('SPACECRAFT_ID'))
 
         input_bands = ee.Dictionary({
+            # 'LANDSAT_4': ['B1', 'B2', 'B3', 'B4', 'B5', 'B7', 'B6', 'BQA'],
             'LANDSAT_5': ['B1', 'B2', 'B3', 'B4', 'B5', 'B7', 'B6', 'BQA'],
             'LANDSAT_7': ['B1', 'B2', 'B3', 'B4', 'B5', 'B7', 'B6_VCID_1', 'BQA'],
             'LANDSAT_8': ['B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B10', 'BQA']})
@@ -144,10 +146,12 @@ class LandsatTOA(Landsat):
 
         # Rename thermal band "k" coefficients to generic names
         input_k1 = ee.Dictionary({
+            # 'LANDSAT_4': 'K1_CONSTANT_BAND_6',
             'LANDSAT_5': 'K1_CONSTANT_BAND_6',
             'LANDSAT_7': 'K1_CONSTANT_BAND_6_VCID_1',
             'LANDSAT_8': 'K1_CONSTANT_BAND_10'})
         input_k2 = ee.Dictionary({
+            # 'LANDSAT_4': 'K2_CONSTANT_BAND_6',
             'LANDSAT_5': 'K2_CONSTANT_BAND_6',
             'LANDSAT_7': 'K2_CONSTANT_BAND_6_VCID_1',
             'LANDSAT_8': 'K2_CONSTANT_BAND_10'})
@@ -163,33 +167,24 @@ class LandsatTOA(Landsat):
                 'k1_constant': ee.Number(output_k1),
                 'k2_constant': ee.Number(output_k2),
                 'SATELLITE': self._spacecraft_id,
-        })
+            })
         super()
 
     # CGM - Why is this in a separate "prep" method and not part of the init?
-    #   Would you ever
-    def prep(self, sharpen_thermal=False):
+    def prep(self):
         """Return an image with the bands/products needed to run EE DisALEXI
-
-        Parameters
-        ----------
-        sharpen_thermal : bool
-            Sharpen the thermal band using the openet.sharpen algorithm
-            (the default is False).
 
         Returns
         -------
         prep_image : ee.Image
 
         """
-        # TODO: Decide if sharpening should be in init or prep
-        if sharpen_thermal:
-            # TODO: Move import to top once openet.sharpen is public
-            import openet.sharpen
-            sharpen_img = openet.sharpen.thermal.landsat(self.input_image) \
-                .select(['tir_sharpened'], ['tir'])
-            self.input_image = self.input_image \
-                .addBands(sharpen_img, overwrite=True)
+        # Sharpen the thermal band
+        # TODO: Decide if sharpening should be in class init or prep
+        # TODO: Figure out best way to write sharpen version to output image
+        sharpen_img = openet.sharpen.thermal.landsat(self.input_image) \
+            .select(['tir_sharpened'], ['tir'])
+        self.input_image = self.input_image.addBands(sharpen_img, overwrite=True)
 
         self.prep_image = ee.Image([
             self._albedo,
@@ -203,6 +198,7 @@ class LandsatTOA(Landsat):
             'system:time_start': self._time_start,
             'system:index': self._index,
             'system:id': self._id,
+            # 'sharpen_version': openet.sharpen.__version__,
         })
 
         return self.prep_image
@@ -345,6 +341,7 @@ class LandsatSR(Landsat):
         self._spacecraft_id = ee.String(self.raw_image.get('SATELLITE'))
 
         input_bands = ee.Dictionary({
+            # 'LANDSAT_4': ['B1', 'B2', 'B3', 'B4', 'B5', 'B7', 'B6', 'pixel_qa'],
             'LANDSAT_5': ['B1', 'B2', 'B3', 'B4', 'B5', 'B7', 'B6', 'pixel_qa'],
             'LANDSAT_7': ['B1', 'B2', 'B3', 'B4', 'B5', 'B7', 'B6',
                           'pixel_qa'],
@@ -355,9 +352,17 @@ class LandsatSR(Landsat):
 
         # TODO: Follow up with Simon about adding K1/K2 to SR collection
         k1 = ee.Dictionary({
-            'LANDSAT_5': 607.76, 'LANDSAT_7': 666.09, 'LANDSAT_8': 774.8853})
+            # 'LANDSAT_4': 607.76,
+            'LANDSAT_5': 607.76,
+            'LANDSAT_7': 666.09,
+            'LANDSAT_8': 774.8853,
+        })
         k2 = ee.Dictionary({
-            'LANDSAT_5': 1260.56, 'LANDSAT_7': 1282.71, 'LANDSAT_8': 1321.0789})
+            # 'LANDSAT_4': 1260.56,
+            'LANDSAT_5': 1260.56,
+            'LANDSAT_7': 1282.71,
+            'LANDSAT_8': 1321.0789,
+        })
 
         self.input_image = ee.Image(self.raw_image) \
             .select(input_bands.get(self._spacecraft_id), output_bands) \
@@ -372,28 +377,23 @@ class LandsatSR(Landsat):
             })
         super()
 
-    def prep(self, sharpen_thermal=False):
+    def prep(self):
         """Return an image with the bands/products needed to run EE DisALEXI
 
         Parameters
         ----------
-        sharpen_thermal : bool
-            Sharpen the thermal band using the openet.sharpen algorithm
-            (the default is False).
 
         Returns
         -------
         prep_image : ee.Image
 
         """
-        # TODO: Decide if sharpening should be in init or prep
-        if sharpen_thermal:
-            # TODO: Move import to top once openet.sharpen is public
-            import openet.sharpen
-            sharpen_img = openet.sharpen.thermal.landsat(self.input_image) \
-                .select(['tir_sharpened'], ['tir'])
-            self.input_image = self.input_image \
-                .addBands(sharpen_img, overwrite=True)
+        # Sharpen the thermal band
+        # TODO: Decide if sharpening should be in class init or prep
+        # TODO: Figure out best way to write sharpen version to output image
+        sharpen_img = openet.sharpen.thermal.landsat(self.input_image) \
+            .select(['tir_sharpened'], ['tir'])
+        self.input_image = self.input_image.addBands(sharpen_img, overwrite=True)
 
         self.prep_image = ee.Image([
             self._albedo,
@@ -407,6 +407,7 @@ class LandsatSR(Landsat):
             'system:time_start': self._time_start,
             'system:index': self._index,
             'system:id': self._id,
+            # 'sharpen_version': openet.sharpen.__version__,
         })
 
         return self.prep_image

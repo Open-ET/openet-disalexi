@@ -357,18 +357,7 @@ class Image(object):
         Instance of Image class
 
         """
-        # CGM - I'm not sure the "best" way to get the sharpen flags
-        #   into the class init or prep method (or whether the sharpening
-        #   should be in the init or prep.
-        # For now default to False if not set, but this and the default
-        #   in prep()  will likely be changed to True at some point.
-        if 'sharpen_thermal' in kwargs.keys():
-            sharpen_thermal = kwargs.pop('sharpen_thermal')
-        else:
-            sharpen_thermal = False
-
-        return cls(landsat.LandsatSR(sr_image).prep(sharpen_thermal), **kwargs)
-        # return cls(landsat.LandsatSR(sr_image).prep(), **kwargs)
+        return cls(landsat.LandsatSR(sr_image).prep(), **kwargs)
 
     # @classmethod
     # def from_landsat_c1_toa(cls, toa_image, **kwargs):

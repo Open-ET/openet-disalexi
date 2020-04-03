@@ -19,7 +19,8 @@ import time
 import ee
 from osgeo import ogr, osr
 
-import openet.disalexi as disalexi
+import openet.disalexi
+import openet.sharpen
 import utils
 # from . import utils
 
@@ -400,38 +401,22 @@ def main(ini_path=None, overwrite_flag=False, delay=0, key=None,
                     'doy': int(export_dt.strftime('%j')),
                     'cycle_day': ((export_dt - cycle_base_dt).days % 8) + 1,
                     'model_name': model_name,
-                    'model_version': disalexi.__version__,
+                    'model_version': openet.disalexi.__version__,
+                    'sharpen_version': openet.sharpen.__version__,
                     # 'cloud_cover_max': float(ini['INPUTS']['cloud_cover']),
                     'iteration': int(iteration),
                 }
                 properties.update(model_args)
 
-
-                # CGM - I'm not sure the "best" way to get the sharpen flags
-                #   into the class init or prep method (or whether the sharpening
-                #   should be in the init or prep.
-                # For now default to False if not set, but this and the default
-                #   in prep()  will likely be changed to True at some point.
-                if 'sharpen_thermal' in model_args.keys():
-                    sharpen_thermal = model_args.pop('sharpen_thermal')
-                else:
-                    sharpen_thermal = False
-
                 landsat_img = ee.Image(image_id)
-                d_obj = disalexi.Image(
-                    disalexi.LandsatSR(landsat_img).prep(sharpen_thermal),
-                    **model_args)
-
+                d_obj = openet.disalexi.Image(
+                    openet.disalexi.LandsatSR(landsat_img).prep(), **model_args)
 
                 if iteration <= 0:
                     # For initial iteration compute bias at 250 and 350 K
-                    a_img = d_obj.ta_coarse(
-                            ta_img=ee.Image.constant(250),
-                            cell_size=tair_args['cell_size']) \
+                    a_img = d_obj.ta_coarse(ta_img=ee.Image.constant(250)) \
                         .select(['ta', 'bias'], ['ta_a', 'bias_a'])
-                    b_img = d_obj.ta_coarse(
-                            ta_img=ee.Image.constant(350),
-                            cell_size=tair_args['cell_size']) \
+                    b_img = d_obj.ta_coarse(ta_img=ee.Image.constant(350)) \
                         .select(['ta', 'bias'], ['ta_b', 'bias_b'])
                     # Applying both bias masks to the output
                     # This shouldn't be necessary but ta_coarse was returning
