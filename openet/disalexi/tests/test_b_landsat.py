@@ -53,7 +53,7 @@ def test_LandsatTOA_prep(img_id='LANDSAT/LC08/C01/T1_RT_TOA/LC08_028031_20140708
     prepped_img = landsat.LandsatTOA(ee.Image(img_id)).prep()
     prepped_info = ee.Image(prepped_img).getInfo()
     assert sorted([b['id'] for b in prepped_info['bands']]) == [
-        'albedo', 'cfmask', 'lai', 'lst', 'ndvi']
+        'albedo', 'cfmask', 'lst', 'ndvi']
     assert prepped_info['properties']['system:time_start'] == l_info['system:time_start']
     assert prepped_info['properties']['system:index'] == img_id.split('/')[-1]
 
@@ -102,6 +102,8 @@ def test_LandsatTOA_cfmask(bqa, expected):
     assert utils.constant_image_value(cfmask)['cfmask'] == expected
 
 
+# DEADBEEF - LAI is being read from a source image collection
+#   Leaving this test since existing lai method is used in emissivity calculation
 def test_LandsatTOA_lai(red=0.2, nir=0.7, expected=1.200, tol=0.001):
     input_img = ee.Image.constant([0.2, 0.2, red, nir, 0.2, 0.2, 300, 0]) \
         .rename(['B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B10', 'BQA']) \
@@ -164,7 +166,7 @@ def test_LandsatSR_prep(img_id='LANDSAT/LC08/C01/T1_SR/LC08_028031_20140708'):
     prepped_img = landsat.LandsatSR(ee.Image(img_id)).prep()
     prepped_info = ee.Image(prepped_img).getInfo()
     assert sorted([b['id'] for b in prepped_info['bands']]) == [
-        'albedo', 'cfmask', 'lai', 'lst', 'ndvi']
+        'albedo', 'cfmask', 'lst', 'ndvi']
     assert prepped_info['properties']['system:time_start'] == l_info['system:time_start']
     assert prepped_info['properties']['system:index'] == img_id.split('/')[-1]
 
@@ -220,6 +222,8 @@ def test_LandsatSR_cfmask(pixel_qa, expected):
     assert utils.constant_image_value(cfmask)['cfmask'] == expected
 
 
+# DEADBEEF - LAI is being read from a source image collection
+#   Leaving this test since existing lai method is used in emissivity calculation
 def test_LandsatSR_lai(red=0.2, nir=0.7, expected=1.200, tol=0.001):
     # Undo the scalars that are applied in the init
     input_img = ee.Image.constant([0.2, 0.2, red, nir, 0.2, 0.2, 300, 0]) \

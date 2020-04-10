@@ -72,6 +72,8 @@ class Landsat(object):
         #     .subtract(0.0018)\
         #     .rename(['albedo'])
 
+    # DEADBEEF - LAI is being read from a source image collection
+    #   Leaving this method since it is currently used in emissivity calculation
     @lazy_property
     def _lai(self):
         """Leaf Area Index (LAI) computed from METRIC NDVI / LAI equation
@@ -186,10 +188,11 @@ class LandsatTOA(Landsat):
             .select(['tir_sharpened'], ['tir'])
         self.input_image = self.input_image.addBands(sharpen_img, overwrite=True)
 
+        # DEADBEEF - LAI is being read from a source image collection
         self.prep_image = ee.Image([
             self._albedo,
             self._cfmask,
-            self._lai,
+            # self._lai,
             self._lst,
             self._ndvi,
         ])
@@ -395,10 +398,11 @@ class LandsatSR(Landsat):
             .select(['tir_sharpened'], ['tir'])
         self.input_image = self.input_image.addBands(sharpen_img, overwrite=True)
 
+        # DEADBEEF - LAI is being read from a source image collection
         self.prep_image = ee.Image([
             self._albedo,
             self._cfmask,
-            self._lai,
+            # self._lai,
             self._lst,
             self._ndvi,
         ])

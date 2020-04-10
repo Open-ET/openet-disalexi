@@ -37,6 +37,7 @@ class Image(object):
             image,
             ta_source='CONUS_V001',
             alexi_source='CONUS_V001',
+            lai_source='projets/openet/lai/landsat/scene',
             elevation_source='USGS/SRTMGL1_003',
             landcover_source='NLCD2011',
             airpressure_source='CFSR',
@@ -65,10 +66,12 @@ class Image(object):
         image : ee.Image
             Prepped image
         ta_source : {'CONUS_V001'}
-            ALEXI scale air temperature image collection ID (the default is
-            'CONUS_V001').
+            ALEXI scale air temperature image collection ID or keyword
+            (the default is 'CONUS_V001').
         alexi_source : {'CONUS_V001'}
-            ALEXI ET image collection ID (the default is 'CONUS_V001').
+            ALEXI ET image collection ID or keyword (the default is 'CONUS_V001').
+        lai_source : string
+            LAI image collection ID
         elevation_source: str, ee.Image
             Elevation source keyword or asset (the default is USGS/SRTMGL1_003).
             Units must be in meters.
@@ -180,14 +183,16 @@ class Image(object):
 
         # Get input bands from the image
         self.albedo = input_image.select('albedo')
-        self.lai = input_image.select('lai')
-        # self.lai = self.lai.where(lai.mask(), 0.01)
+        # DEADBEEF - LAI is being read from a source image collection
+        # self.lai = input_image.select('lai')
+        # # self.lai = self.lai.where(lai.mask(), 0.01)
         self.lst = input_image.select('lst')
         self.ndvi = input_image.select('ndvi')
 
         # Set input parameters
         self.ta_source = ta_source
         self.alexi_source = alexi_source
+        self.lai_source = lai_source
         self.elevation_source = elevation_source
         self.landcover_source = landcover_source
         self.airpressure_source = airpressure_source
@@ -518,10 +523,26 @@ class Image(object):
                 self.elevation_source))
         return elev_img.select([0], ['elevation'])
 
-    # @lazy_property
-    # def lai(self):
-    #     """Return LAI image"""
-    #     return self.image.select(['lai']).set(self.properties)
+    @lazy_property
+    def lai(self):
+        """Leaf Area Index (LAI)"""
+        if utils.is_number(self.lai_source):
+            lai_img = ee.Image.constant(float(self.lai_source))
+        # elif isinstance(self.lai_source, ee.computedobject.ComputedObject):
+        #     lai_img = self.lai_source
+        elif type(self.lai_source) is str:
+            # Assumptions (for now)
+            #   String lai_source is an image collection ID
+            #   Images are single band and don't need a select()
+            #   LAI images always need to be scaled
+            lai_coll = ee.ImageCollection(self.lai_source) \
+                .filterMetadata('scene_id', 'equals', self.index)
+            lai_img = ee.Image(lai_coll.first())
+            lai_img = lai_img.multiply(ee.Number(lai_img.get('scale_factor')))
+        else:
+            raise ValueError('Unsupported lai_source: {}\n'.format(
+                self.lai_source))
+        return lai_img.select([0], ['lai'])
 
     # @lazy_property
     # def lst(self):
