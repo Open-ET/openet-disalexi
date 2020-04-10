@@ -651,12 +651,7 @@ if __name__ == "__main__":
     args = arg_parse()
 
     logging.basicConfig(level=args.loglevel, format='%(message)s')
-    logging.info('\n{0}'.format('#' * 80))
-    logging.info('{0:<20s} {1}'.format(
-        'Run Time Stamp:', datetime.datetime.now().isoformat(' ')))
-    logging.info('{0:<20s} {1}'.format('Current Directory:', os.getcwd()))
-    logging.info('{0:<20s} {1}'.format(
-        'Script:', os.path.basename(sys.argv[0])))
+    logging.getLogger('googleapiclient').setLevel(logging.ERROR)
 
     main(ini_path=args.ini, overwrite_flag=args.overwrite, delay=args.delay,
          key=args.key, random_flag=args.random)
