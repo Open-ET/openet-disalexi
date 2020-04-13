@@ -2,6 +2,6 @@ from .disalexi import Image
 from .collection import Collection
 from .landsat import LandsatTOA, LandsatSR
 
-__version__ = '0.0.16'
+__version__ = '0.0.17'
 
 MODEL_NAME = 'DISALEXI'

@@ -37,7 +37,8 @@ class Image(object):
             image,
             ta_source='CONUS_V001',
             alexi_source='CONUS_V001',
-            lai_source='projets/openet/lai/landsat/scene',
+            lai_source='projects/openet/lai/landsat/scene',
+            tir_source='projects/openet/tir/landsat/scene',
             elevation_source='USGS/SRTMGL1_003',
             landcover_source='NLCD2011',
             airpressure_source='CFSR',
@@ -72,6 +73,8 @@ class Image(object):
             ALEXI ET image collection ID or keyword (the default is 'CONUS_V001').
         lai_source : string
             LAI image collection ID
+        tir_source : string
+            Sharpened thermal infrared image collection ID
         elevation_source: str, ee.Image
             Elevation source keyword or asset (the default is USGS/SRTMGL1_003).
             Units must be in meters.
@@ -183,16 +186,20 @@ class Image(object):
 
         # Get input bands from the image
         self.albedo = input_image.select('albedo')
+        self.ndvi = input_image.select('ndvi')
+
         # DEADBEEF - LAI is being read from a source image collection
         # self.lai = input_image.select('lai')
         # # self.lai = self.lai.where(lai.mask(), 0.01)
-        self.lst = input_image.select('lst')
-        self.ndvi = input_image.select('ndvi')
+
+        # DEADBEEF - LST is being read from a source image collection
+        # self.lst = input_image.select('lst')
 
         # Set input parameters
         self.ta_source = ta_source
         self.alexi_source = alexi_source
         self.lai_source = lai_source
+        self.tir_source = tir_source
         self.elevation_source = elevation_source
         self.landcover_source = landcover_source
         self.airpressure_source = airpressure_source
@@ -544,10 +551,69 @@ class Image(object):
                 self.lai_source))
         return lai_img.select([0], ['lai'])
 
+    @lazy_property
+    def tir(self):
+        """Sharpened thermal infrared (TIR)"""
+        if utils.is_number(self.tir_source):
+            tir_img = ee.Image.constant(float(self.tir_source))
+        # elif isinstance(self.tir_source, ee.computedobject.ComputedObject):
+        #     tir_img = self.tir_source
+        elif type(self.tir_source) is str:
+            # Assumptions (for now)
+            #   String tir_source is an image collection ID
+            #   Images are single band and don't need a select()
+            #   TIR images always need to be scaled
+            tir_coll = ee.ImageCollection(self.tir_source) \
+                .filterMetadata('scene_id', 'equals', self.index)
+            tir_img = ee.Image(tir_coll.first())
+            tir_img = tir_img.multiply(ee.Number(tir_img.get('scale_factor')))
+        else:
+            raise ValueError('Unsupported tir_source: {}\n'.format(
+                self.tir_source))
+        return tir_img.select([0], ['tir'])
+
+    # TODO: Use the LST and emissivity functions in landsat.py
+    @lazy_property
+    def lst(self):
+        """Return land surface temperature (LST) image"""
+        emissivity = self.lai.divide(300).add(0.97) \
+            .where(self.ndvi.lte(0), 0.99) \
+            .where(self.ndvi.gt(0).And(self.lai.gt(3)), 0.98)
+
+        # Get properties from image
+        k1 = ee.Number(ee.Image(self.image).get('k1_constant'))
+        k2 = ee.Number(ee.Image(self.image).get('k2_constant'))
+
+        # First back out radiance from brightness temperature
+        # Then recalculate emissivity corrected Ts
+        thermal_rad_toa = self.tir.expression(
+            'k1 / (exp(k2 / ts_brightness) - 1)',
+            {'ts_brightness': self.tir, 'k1': k1, 'k2': k2},
+        )
+
+        # tnb = 0.866   # narrow band transmissivity of air
+        # rp = 0.91     # path radiance
+        # rsky = 1.32   # narrow band clear sky downward thermal radiation
+        rc = thermal_rad_toa.expression(
+            '((thermal_rad_toa - rp) / tnb) - ((1. - emiss) * rsky)',
+            {
+                'thermal_rad_toa': thermal_rad_toa,
+                'emiss': emissivity,
+                'rp': 0.91, 'tnb': 0.866, 'rsky': 1.32,
+            }
+        )
+        lst = rc.expression(
+            'k2 / log(emiss * k1 / rc + 1)',
+            {'emiss': emissivity, 'rc': rc, 'k1': k1, 'k2': k2},
+        )
+
+        return lst.set(self.properties)
+
     # @lazy_property
     # def lst(self):
     #     """Return land surface temperature (LST) image"""
     #     return self.image.select(['lst']).set(self.properties)
+
 
     @lazy_property
     def mask(self):

@@ -181,12 +181,13 @@ class LandsatTOA(Landsat):
         prep_image : ee.Image
 
         """
-        # Sharpen the thermal band
-        # TODO: Decide if sharpening should be in class init or prep
-        # TODO: Figure out best way to write sharpen version to output image
-        sharpen_img = openet.sharpen.thermal.landsat(self.input_image) \
-            .select(['tir_sharpened'], ['tir'])
-        self.input_image = self.input_image.addBands(sharpen_img, overwrite=True)
+        # DEADBEEF - TIR/LST is being read from a source image collection
+        # # Sharpen the thermal band
+        # # TODO: Decide if sharpening should be in class init or prep
+        # # TODO: Figure out best way to write sharpen version to output image
+        # sharpen_img = openet.sharpen.thermal.landsat(self.input_image) \
+        #     .select(['tir_sharpened'], ['tir'])
+        # self.input_image = self.input_image.addBands(sharpen_img, overwrite=True)
 
         # DEADBEEF - LAI is being read from a source image collection
         self.prep_image = ee.Image([
@@ -196,7 +197,8 @@ class LandsatTOA(Landsat):
             self._lst,
             self._ndvi,
         ])
-
+        self.prep_image = ee.Image(
+            self.prep_image.copyProperties(self.input_image))
         self.prep_image = self.prep_image.set({
             'system:time_start': self._time_start,
             'system:index': self._index,
@@ -391,14 +393,16 @@ class LandsatSR(Landsat):
         prep_image : ee.Image
 
         """
-        # Sharpen the thermal band
-        # TODO: Decide if sharpening should be in class init or prep
-        # TODO: Figure out best way to write sharpen version to output image
-        sharpen_img = openet.sharpen.thermal.landsat(self.input_image) \
-            .select(['tir_sharpened'], ['tir'])
-        self.input_image = self.input_image.addBands(sharpen_img, overwrite=True)
+        # DEADBEEF - TIR/LST is being read from a source image collection
+        # # Sharpen the thermal band
+        # # TODO: Decide if sharpening should be in class init or prep
+        # # TODO: Figure out best way to write sharpen version to output image
+        # sharpen_img = openet.sharpen.thermal.landsat(self.input_image) \
+        #     .select(['tir_sharpened'], ['tir'])
+        # self.input_image = self.input_image.addBands(sharpen_img, overwrite=True)
 
         # DEADBEEF - LAI is being read from a source image collection
+        # DEADBEEF - TIR/LST is being read from a source image collection
         self.prep_image = ee.Image([
             self._albedo,
             self._cfmask,
@@ -413,6 +417,8 @@ class LandsatSR(Landsat):
             'system:id': self._id,
             # 'sharpen_version': openet.sharpen.__version__,
         })
+        self.prep_image = ee.Image(
+            self.prep_image.copyProperties(self.input_image))
 
         return self.prep_image
 
