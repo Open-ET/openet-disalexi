@@ -40,7 +40,7 @@ class Image(object):
             lai_source='projects/openet/lai/landsat/scene',
             tir_source='projects/openet/tir/landsat/scene',
             elevation_source='USGS/SRTMGL1_003',
-            landcover_source='NLCD2011',
+            landcover_source='USGS/NLCD/NLCD2016',
             airpressure_source='CFSR',
             rs_daily_source='CFSR',
             rs_hourly_source='CFSR',
@@ -273,6 +273,10 @@ class Image(object):
             self.lc_type = 'NLCD'
         elif isinstance(self.landcover_source, ee.computedobject.ComputedObject):
             self.lc_source = self.landcover_source.rename(['landcover'])
+            self.lc_type = 'NLCD'
+        elif self.landcover_source.upper().startswith('USGS/NLCD/'):
+            self.lc_source = ee.Image(self.landcover_source.upper())\
+                .select(['landcover'])
             self.lc_type = 'NLCD'
         elif self.landcover_source.upper() == 'NLCD2011':
             self.lc_source = ee.Image('USGS/NLCD/NLCD2011').select(['landcover'])

@@ -1,6 +1,5 @@
 import ee
 
-import openet.sharpen
 # import openet.core.common as common
 
 
