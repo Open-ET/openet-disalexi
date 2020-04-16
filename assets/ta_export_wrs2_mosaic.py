@@ -126,6 +126,18 @@ def main(ini_path=None, overwrite_flag=False, delay=0, key=None,
     else:
         ee.Initialize()
 
+    if not ee.data.getInfo(ta_wrs2_coll_id.rsplit('/', 1)[0]):
+        logging.debug('\nFolder does not exist and will be built'
+                      '\n  {}'.format(ta_wrs2_coll_id.rsplit('/', 1)[0]))
+        input('Press ENTER to continue')
+        ee.data.createAsset({'type': 'FOLDER'},
+                            ta_wrs2_coll_id.rsplit('/', 1)[0])
+    if not ee.data.getInfo(ta_wrs2_coll_id):
+        logging.info('\nExport collection does not exist and will be built'
+                     '\n  {}'.format(ta_wrs2_coll_id))
+        input('Press ENTER to continue')
+        ee.data.createAsset({'type': 'IMAGE_COLLECTION'}, ta_wrs2_coll_id)
+
     # Get an ET image to set the Ta values to
     logging.debug('\nALEXI ET properties')
     alexi_coll_id = ini['DISALEXI']['alexi_source']
@@ -144,7 +156,6 @@ def main(ini_path=None, overwrite_flag=False, delay=0, key=None,
     alexi_cs = 0.04
     alexi_x, alexi_y = -125.04, 49.8
     logging.debug('  Collection: {}'.format(alexi_coll_id))
-
 
     if 'study_area_path' in ini['INPUTS'].keys():
         logging.info('\nReading study area shapefile')
@@ -176,7 +187,6 @@ def main(ini_path=None, overwrite_flag=False, delay=0, key=None,
 
     else:
         export_geom = alexi_mask.geometry()
-
 
     # Get current asset list
     logging.debug('\nGetting asset list')
@@ -373,47 +383,48 @@ def main(ini_path=None, overwrite_flag=False, delay=0, key=None,
                 'cycle_day': ((export_dt - cycle_base_dt).days % 8) + 1,
                 'model_name': model_name,
                 'model_version': openet.disalexi.__version__,
-                'sharpen_version': openet.sharpen.__version__,
                 # 'cloud_cover_max': float(ini['INPUTS']['cloud_cover']),
             }
             properties.update(model_args)
             properties.update(tair_args)
 
-            # Either Ta is being read from an existing collection
-            #   or it will be computed f
-            if tair_args['source_coll'] is not None:
-                if tair_args['source_coll'] == 'NLDAS':
-                    ta_source_coll = ee.ImageCollection('NASA/NLDAS/FORA0125_H002')\
-                        .select(['temperature'])\
-                        .filterDate(export_dt)
-                    input_image = ee.Image(ta_source_coll.first()).add(273.15).subtract(40)
-                    ta_source_img = alexi_mask.add(input_image).rename(['ta'])
-                    # print(export_dt)
-                else:
-                    ta_source_coll = ee.ImageCollection(tair_args['source_coll'])\
-                        .filterMetadata('id', 'equals', image_id)
-                    if ta_source_coll.size().getInfo() == 0:
-                        logging.info('  No images in Ta source coll, skipping')
-                        continue
-
-                    # A lot code to figure out the starting Ta value
-                    # This identifies the first Ta that has a positive bias and
-                    #   a bias that is larger than the previous bias
-                    # It then selects the Ta for the previous step
-                    # This should bracket a bias of zero but it is not guaranteed
-                    input_img = ee.Image(ta_source_coll.first())
-                    ta_array = input_img.select('step_\\d+_ta').toArray()
-                    bias_array = input_img.select('step_\\d+_bias').toArray()
-                    diff = bias_array.arraySlice(0, 1)\
-                        .subtract(bias_array.arraySlice(0, 0, -1))
-                    index = diff.gt(0).And(bias_array.arraySlice(0, 1).gt(0))
-                    # Intentionally use 0,0,-1 slice here (instead of 0,1)
-                    #   to get Ta before bias goes positive
-                    ta_source_img = ta_array.arraySlice(0, 0, -1).arrayMask(index)\
-                        .arraySlice(0, 0, 1).arrayFlatten([['array']])\
-                        .rename(['ta'])
-            else:
+            if tair_args['source_coll'] is None:
+                logging.debug('  Tair source: {}'.format(tair_args['ta_start']))
                 ta_source_img = alexi_mask.add(float(tair_args['ta_start']))\
+                    .rename(['ta'])
+            elif tair_args['source_coll'] == 'NLDAS':
+                logging.debug('  Tair source: NLDAS')
+                # TODO - Check if selecting the 0 UTC time is intentional
+                ta_source_coll = ee.ImageCollection('NASA/NLDAS/FORA0125_H002')\
+                    .select(['temperature'])\
+                    .filterDate(export_dt, export_dt + datetime.timedelta(days=1))
+                input_image = ee.Image(ta_source_coll.first())\
+                    .add(273.15).subtract(40).floor()
+                ta_source_img = alexi_mask.add(input_image).rename(['ta'])
+            else:
+                logging.debug('  Tair source: {}'.format(tair_args['source_coll']))
+                ta_source_coll = ee.ImageCollection(tair_args['source_coll'])\
+                    .filterMetadata('id', 'equals', image_id)
+                if ta_source_coll.size().getInfo() == 0:
+                    logging.info('  No images in Ta source coll, skipping')
+                    input('ENTER')
+                    continue
+
+                # A lot code to figure out the starting Ta value
+                # This identifies the first Ta that has a positive bias and
+                #   a bias that is larger than the previous bias
+                # It then selects the Ta for the previous step
+                # This should bracket a bias of zero but it is not guaranteed
+                input_img = ee.Image(ta_source_coll.first())
+                ta_array = input_img.select('step_\\d+_ta').toArray()
+                bias_array = input_img.select('step_\\d+_bias').toArray()
+                diff = bias_array.arraySlice(0, 1)\
+                    .subtract(bias_array.arraySlice(0, 0, -1))
+                index = diff.gt(0).And(bias_array.arraySlice(0, 1).gt(0))
+                # Intentionally use 0,0,-1 slice here (instead of 0,1)
+                #   to get Ta before bias goes positive
+                ta_source_img = ta_array.arraySlice(0, 0, -1).arrayMask(index)\
+                    .arraySlice(0, 0, 1).arrayFlatten([['array']])\
                     .rename(['ta'])
 
             landsat_img = ee.Image(image_id)
@@ -472,6 +483,7 @@ def main(ini_path=None, overwrite_flag=False, delay=0, key=None,
             )
             logging.info('  Starting export task')
             utils.ee_task_start(task)
+            logging.debug('    {}'.format(task.id))
 
             # Pause before starting next task
             utils.delay_task(delay)

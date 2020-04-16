@@ -128,6 +128,18 @@ def main(ini_path=None, overwrite_flag=False, delay=0, key=None,
     else:
         ee.Initialize()
 
+    if not ee.data.getInfo(ta_wrs2_coll_id.rsplit('/', 1)[0]):
+        logging.debug('\nFolder does not exist and will be built'
+                      '\n  {}'.format(ta_wrs2_coll_id.rsplit('/', 1)[0]))
+        input('Press ENTER to continue')
+        ee.data.createAsset({'type': 'FOLDER'},
+                            ta_wrs2_coll_id.rsplit('/', 1)[0])
+    if not ee.data.getInfo(ta_wrs2_coll_id):
+        logging.info('\nExport collection does not exist and will be built'
+                     '\n  {}'.format(ta_wrs2_coll_id))
+        input('Press ENTER to continue')
+        ee.data.createAsset({'type': 'IMAGE_COLLECTION'}, ta_wrs2_coll_id)
+
     # Get an ET image to set the Ta values to
     logging.debug('\nALEXI ET properties')
     alexi_coll_id = ini['DISALEXI']['alexi_source']
@@ -402,7 +414,6 @@ def main(ini_path=None, overwrite_flag=False, delay=0, key=None,
                     'cycle_day': ((export_dt - cycle_base_dt).days % 8) + 1,
                     'model_name': model_name,
                     'model_version': openet.disalexi.__version__,
-                    'sharpen_version': openet.sharpen.__version__,
                     # 'cloud_cover_max': float(ini['INPUTS']['cloud_cover']),
                     'iteration': int(iteration),
                 }
@@ -578,6 +589,7 @@ def main(ini_path=None, overwrite_flag=False, delay=0, key=None,
                 )
                 logging.info('  Starting export task')
                 utils.ee_task_start(task)
+                logging.debug('    {}'.format(task.id))
 
                 # Pause before starting next task
                 utils.delay_task(delay)
