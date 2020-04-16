@@ -143,7 +143,11 @@ def main(ini_path=None, overwrite_flag=False, delay=0, key=None,
     # Get an ET image to set the Ta values to
     logging.debug('\nALEXI ET properties')
     alexi_coll_id = ini['DISALEXI']['alexi_source']
-    if alexi_coll_id.upper() == 'CONUS_V001':
+    if alexi_coll_id.upper() == 'CONUS_V002':
+        alexi_coll_id = 'projects/disalexi/alexi/CONUS_V002'
+        alexi_mask = ee.Image('projects/disalexi/alexi/conus_v001_mask')\
+            .double().multiply(0)
+    elif alexi_coll_id.upper() == 'CONUS_V001':
         alexi_coll_id = 'projects/disalexi/alexi/CONUS_V001'
         alexi_mask = ee.Image('projects/disalexi/alexi/conus_v001_mask')
     else:
