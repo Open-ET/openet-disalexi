@@ -50,31 +50,57 @@ def date_range(start_dt, end_dt, days=1, skip_leap_days=True):
         curr_dt += datetime.timedelta(days=days)
 
 
-def delay_task(delay_time):
-    """"""
-    if delay_time and delay_time > 0:
+def delay_task(delay_time=0, max_ready=-1):
+    """Delay script execution based on number of RUNNING and READY tasks
+
+    Parameters
+    ----------
+    delay_time : float, int
+        Delay time in seconds between starting export tasks or checking the
+        number of queued tasks if "max_ready" is > 0.  The default is 0.
+        The delay time will be set to a minimum of 30 seconds if max_ready > 0.
+    max_ready : int, optional
+        Maximum number of queued "READY" tasks.  The default is -1 which
+        implies no limit to the number of tasks that will be submitted.
+
+    Returns
+    -------
+    None
+
+    """
+    # Force delay time to be a positive value
+    # (since parameter used to support negative values)
+    if delay_time < 0:
+        delay_time = abs(delay_time)
+
+    logging.debug('  Pausing {} seconds'.format(delay_time))
+
+    if max_ready <= 0:
         time.sleep(delay_time)
-    elif delay_time and delay_time <= -1:
-        # Don't continue to the next export until all tasks are RUNNING
+    elif max_ready > 0:
+        # Don't continue to the next export until the number of READY tasks
+        # is greater than or equal to "max_ready"
+
+        # Force delay_time to be at least 30 seconds if max_ready is set
+        #   to avoid excessive EE calls
+        delay_time = max(delay_time, 30)
+
         # Make an initial pause before checking tasks lists to allow
         #   for previous export to start up.
-        delay_time = abs(delay_time)
-        logging.debug('  Pausing {} seconds'.format(delay_time))
         time.sleep(delay_time)
 
-        # Don't continue until all there are no "READY" tasks
         while True:
             ready_tasks = get_ee_tasks(states=['READY'], verbose=True)
-            logging.debug('  Ready tasks: {}'.format(
-                ', '.join(sorted(ready_tasks.keys()))))
+            ready_task_count = len(ready_tasks.keys())
+            # logging.debug('  Ready tasks: {}'.format(
+            #     ', '.join(sorted(ready_tasks.keys()))))
 
-            # Try to keep 2 tasks queued
-            if len(ready_tasks.keys()) >= 2:
-                logging.debug(
-                    '  Waiting {} seconds to start more tasks'.format(delay_time))
+            if ready_task_count >= max_ready:
+                logging.debug('  {} tasks queued, waiting {} seconds to start '
+                              'more tasks'.format(ready_task_count, delay_time))
                 time.sleep(delay_time)
             else:
-                logging.debug('  All tasks running, continuing iteration')
+                logging.debug('  Continuing iteration')
                 break
 
 

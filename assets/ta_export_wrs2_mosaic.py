@@ -23,8 +23,8 @@ import utils
 # from . import utils
 
 
-def main(ini_path=None, overwrite_flag=False, delay=0, key=None,
-         random_flag=False):
+def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
+         random_flag=False, max_ready=-1, reverse_flag=False):
     """Compute WRS2 Ta images
 
     Parameters
@@ -33,12 +33,18 @@ def main(ini_path=None, overwrite_flag=False, delay=0, key=None,
         Input file path.
     overwrite_flag : bool, optional
         If True, overwrite existing files (the default is False).
-    delay : float, optional
-        Delay time between each export task (the default is 0).
-    key : str, optional
-        File path to an Earth Engine json key file (the default is None).
+    delay_time : float, optional
+        Delay time in seconds between starting export tasks (or checking the
+        number of queued tasks, see "max_ready" parameter).  The default is 0.
+    gee_key_file : str, None, optional
+        Earth Engine service account JSON key file (the default is None).
     random_flag : bool, optional
         If True, process dates and tiles in random order (the default is False).
+    max_ready: int, optional
+        Maximum number of queued "READY" tasks.  The default is -1 which is
+        implies no limit to the number of tasks that will be submitted.
+    reverse_flag : bool, optional
+        If True, process WRS2 tiles in reverse order (the default is False).
 
     """
     logging.info('\nCompute WRS2 Ta images')
@@ -119,10 +125,11 @@ def main(ini_path=None, overwrite_flag=False, delay=0, key=None,
     ta_wrs2_coll_id = '{}'.format(ini['EXPORT']['export_coll'])
 
     logging.info('\nInitializing Earth Engine')
-    if key:
-        logging.info('  Using service account key file: {}'.format(key))
+    if gee_key_file:
+        logging.info('  Using service account key file: {}'.format(gee_key_file))
         # The "EE_ACCOUNT" parameter is not used if the key file is valid
-        ee.Initialize(ee.ServiceAccountCredentials('deadbeef', key_file=key))
+        ee.Initialize(ee.ServiceAccountCredentials(
+            'deadbeef', key_file=gee_key_file))
     else:
         ee.Initialize()
 
@@ -198,7 +205,6 @@ def main(ini_path=None, overwrite_flag=False, delay=0, key=None,
 
     # Get current asset list
     logging.debug('\nGetting asset list')
-    # DEADBEEF - daily is hardcoded in the asset_id for now
     asset_list = utils.get_ee_assets(ta_wrs2_coll_id)
 
     # Get current running tasks
@@ -267,7 +273,8 @@ def main(ini_path=None, overwrite_flag=False, delay=0, key=None,
         random.shuffle(date_list)
 
     # Iterate over date ranges
-    for export_dt in date_list:
+    # for export_dt in date_list:
+    for export_dt in sorted(date_list, reverse=reverse_flag):
         export_date = export_dt.strftime('%Y-%m-%d')
         if ((month_list and export_dt.month not in month_list) or
                 ( year_list and export_dt.year not in year_list)):
@@ -493,8 +500,8 @@ def main(ini_path=None, overwrite_flag=False, delay=0, key=None,
             utils.ee_task_start(task)
             logging.debug('    {}'.format(task.id))
 
-            # Pause before starting next task
-            utils.delay_task(delay)
+            # Pause before starting the next export task
+            utils.delay_task(delay_time, max_ready)
             logging.debug('')
 
 
@@ -537,6 +544,9 @@ def arg_parse():
         '--random', default=False, action='store_true',
         help='Process dates and tiles in random order')
     parser.add_argument(
+        '--ready', default=-1, type=int,
+        help='Maximum number of queued READY tasks')
+    parser.add_argument(
         '-o', '--overwrite', default=False, action='store_true',
         help='Force overwrite of existing files')
     parser.add_argument(
@@ -557,5 +567,7 @@ if __name__ == "__main__":
     logging.basicConfig(level=args.loglevel, format='%(message)s')
     logging.getLogger('googleapiclient').setLevel(logging.ERROR)
 
-    main(ini_path=args.ini, overwrite_flag=args.overwrite, delay=args.delay,
-         key=args.key, random_flag=args.random)
+    main(ini_path=args.ini, overwrite_flag=args.overwrite,
+         delay_time=args.delay, gee_key_file=args.key, random_flag=args.random,
+         max_ready=args.ready,
+         )
