@@ -144,12 +144,17 @@ def main(ini_path=None, overwrite_flag=False, delay=0, key=None,
     logging.debug('\nALEXI ET properties')
     alexi_coll_id = ini['DISALEXI']['alexi_source']
     if alexi_coll_id.upper() == 'CONUS_V002':
-        alexi_coll_id = 'projects/disalexi/alexi/CONUS_V002'
-        alexi_mask = ee.Image('projects/disalexi/alexi/conus_v002_mask')\
+        alexi_coll_id = 'projects/earthengine-legacy/assets/' \
+                        'projects/disalexi/alexi/CONUS_V002'
+        alexi_mask = ee.Image('projects/earthengine-legacy/assets/'
+                              'projects/disalexi/alexi/conus_v002_mask')\
             .double().multiply(0)
     elif alexi_coll_id.upper() == 'CONUS_V001':
-        alexi_coll_id = 'projects/disalexi/alexi/CONUS_V001'
-        alexi_mask = ee.Image('projects/disalexi/alexi/conus_v001_mask')
+        alexi_coll_id = 'projects/earthengine-legacy/assets/' \
+                        'projects/disalexi/alexi/CONUS_V001'
+        alexi_mask = ee.Image('projects/earthengine-legacy/assets/'
+                              'projects/disalexi/alexi/conus_v001_mask')\
+            .double().multiply(0)
     else:
         raise ValueError('unsupported ALEXI source')
     # alexi_coll = ee.ImageCollection(alexi_coll_id)

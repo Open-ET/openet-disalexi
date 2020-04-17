@@ -90,8 +90,8 @@ def test_Image_init_default_parameters():
     m = disalexi.Image(default_image())
     assert m.ta_source == 'CONUS_V002'
     assert m.alexi_source == 'CONUS_V002'
-    assert m.lai_source == 'projects/openet/lai/landsat/scene'
-    assert m.tir_source == 'projects/openet/tir/landsat/scene'
+    assert m.lai_source == 'projects/earthengine-legacy/assets/projects/openet/lai/landsat/scene'
+    assert m.tir_source == 'projects/earthengine-legacy/assets/projects/openet/tir/landsat/scene'
     assert m.elevation_source == 'USGS/SRTMGL1_003'
     assert m.landcover_source == 'USGS/NLCD/NLCD2016'
     assert m.airpressure_source == 'CFSR'

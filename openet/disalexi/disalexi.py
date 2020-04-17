@@ -37,8 +37,8 @@ class Image(object):
             image,
             ta_source='CONUS_V002',
             alexi_source='CONUS_V002',
-            lai_source='projects/openet/lai/landsat/scene',
-            tir_source='projects/openet/tir/landsat/scene',
+            lai_source='projects/earthengine-legacy/assets/projects/openet/lai/landsat/scene',
+            tir_source='projects/earthengine-legacy/assets/projects/openet/tir/landsat/scene',
             elevation_source='USGS/SRTMGL1_003',
             landcover_source='USGS/NLCD/NLCD2016',
             airpressure_source='CFSR',
@@ -524,7 +524,8 @@ class Image(object):
         elif isinstance(self.alexi_source, ee.computedobject.ComputedObject):
             alexi_img = self.alexi_source
         elif self.alexi_source.upper() == 'CONUS_V002':
-            alexi_coll_id = 'projects/disalexi/alexi/CONUS_V002'
+            alexi_coll_id = 'projects/earthengine-legacy/assets/' \
+                            'projects/disalexi/alexi/CONUS_V002'
             alexi_coll = ee.ImageCollection(alexi_coll_id) \
                 .filterDate(self.start_date, self.end_date)
             alexi_img = ee.Image(alexi_coll.first()) \
@@ -532,14 +533,15 @@ class Image(object):
             # self.alexi_geo = [0.04, 0, -125.04, 0, -0.04, 49.8]
             # self.alexi_crs = 'EPSG:4326'
         elif self.alexi_source.upper() == 'CONUS_V001':
-            alexi_coll_id = 'projects/disalexi/alexi/CONUS_V001'
+            alexi_coll_id = 'projects/earthengine-legacy/assets/' \
+                            'projects/disalexi/alexi/CONUS_V001'
             alexi_coll = ee.ImageCollection(alexi_coll_id) \
                 .filterDate(self.start_date, self.end_date)
             alexi_img = ee.Image(alexi_coll.first()) \
                 .multiply(0.408)
             # self.alexi_geo = [0.04, 0, -125.04, 0, -0.04, 49.8]
             # self.alexi_crs = 'EPSG:4326'
-        elif self.alexi_source.startswith('projects/disalexi/alexi/CONUS_V'):
+        elif 'projects/disalexi/alexi/CONUS_V' in self.alexi_source:
             alexi_coll = ee.ImageCollection(self.alexi_source) \
                 .filterDate(self.start_date, self.end_date)
             alexi_img = ee.Image(alexi_coll.first()) \
