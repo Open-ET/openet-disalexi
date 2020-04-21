@@ -422,7 +422,7 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
                     .filterMetadata('id', 'equals', image_id)
                 if ta_source_coll.size().getInfo() == 0:
                     logging.info('  No images in Ta source coll, skipping')
-                    input('ENTER')
+                    # input('ENTER')
                     continue
 
                 # A lot code to figure out the starting Ta value
@@ -547,16 +547,15 @@ def arg_parse():
         '--ready', default=-1, type=int,
         help='Maximum number of queued READY tasks')
     parser.add_argument(
+        '--reverse', default=False, action='store_true',
+        help='Process WRS2 tiles in reverse order')
+    parser.add_argument(
         '-o', '--overwrite', default=False, action='store_true',
         help='Force overwrite of existing files')
     parser.add_argument(
         '-d', '--debug', default=logging.INFO, const=logging.DEBUG,
         help='Debug level logging', action='store_const', dest='loglevel')
     args = parser.parse_args()
-
-    # Prompt user to select an INI file if not set at command line
-    # if not args.ini:
-    #     args.ini = utils.get_ini_path(os.getcwd())
 
     return args
 
@@ -569,5 +568,5 @@ if __name__ == "__main__":
 
     main(ini_path=args.ini, overwrite_flag=args.overwrite,
          delay_time=args.delay, gee_key_file=args.key, random_flag=args.random,
-         max_ready=args.ready,
+         max_ready=args.ready, reverse_flag=args.reverse,
          )
