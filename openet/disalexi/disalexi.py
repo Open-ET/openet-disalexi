@@ -35,10 +35,10 @@ class Image(object):
     def __init__(
             self,
             image,
-            ta_source='CONUS_V001',
-            alexi_source='CONUS_V001',
-            lai_source='projects/openet/lai/landsat/scene',
-            tir_source='projects/openet/tir/landsat/scene',
+            ta_source='CONUS_V002',
+            alexi_source='CONUS_V002',
+            lai_source='projects/earthengine-legacy/assets/projects/openet/lai/landsat/scene',
+            tir_source='projects/earthengine-legacy/assets/projects/openet/tir/landsat/scene',
             elevation_source='USGS/SRTMGL1_003',
             landcover_source='USGS/NLCD/NLCD2016',
             airpressure_source='CFSR',
@@ -66,19 +66,19 @@ class Image(object):
         ----------
         image : ee.Image
             Prepped image
-        ta_source : {'CONUS_V001'}
+        ta_source : {'CONUS_V002', 'CONUS_V001'}
             ALEXI scale air temperature image collection ID or keyword
-            (the default is 'CONUS_V001').
-        alexi_source : {'CONUS_V001'}
-            ALEXI ET image collection ID or keyword (the default is 'CONUS_V001').
+            (the default is 'CONUS_V002').
+        alexi_source : {'CONUS_V002', 'CONUS_V001'}
+            ALEXI ET image collection ID or keyword (the default is 'CONUS_V002').
         lai_source : string
-            LAI image collection ID
+            LAI image collection ID.
         tir_source : string
-            Sharpened thermal infrared image collection ID
+            Sharpened thermal infrared image collection ID.
         elevation_source: str, ee.Image
             Elevation source keyword or asset (the default is USGS/SRTMGL1_003).
             Units must be in meters.
-        landcover_source : {'NLCD2011', 'NLCD2006', 'GLOBELAND30'}
+        landcover_source : {'NLCD2016', 'NLCD2011', 'NLCD2006', 'GLOBELAND30'}
             Land cover source keyword (the default is 'NLCD2011').
         rs_daily_source : {'MERRA2','CFSR'}
             Daily solar insolation source keyword (the default is 'CFSR').
@@ -278,6 +278,10 @@ class Image(object):
             self.lc_source = ee.Image(self.landcover_source.upper())\
                 .select(['landcover'])
             self.lc_type = 'NLCD'
+        # DEADBEEF - Eventually remove the landcover keyword sources
+        elif self.landcover_source.upper() == 'NLCD2016':
+            self.lc_source = ee.Image('USGS/NLCD/NLCD2016').select(['landcover'])
+            self.lc_type = 'NLCD'
         elif self.landcover_source.upper() == 'NLCD2011':
             self.lc_source = ee.Image('USGS/NLCD/NLCD2011').select(['landcover'])
             self.lc_type = 'NLCD'
@@ -303,11 +307,23 @@ class Image(object):
         # self.crs = image.select([0]).projection().getInfo()['crs']
         # self.transform = image.select([0]).projection().getInfo()['transform']
 
+        # TODO: Fix this so it matches if logic in et_alexi()
+        # TODO: Fix this so it uses the source transform and crs
         # CGM - This should probably be set in et_alexi() but that wasn't working
-        if (type(self.alexi_source) is str and
-                self.alexi_source.upper() == 'CONUS_V001'):
-            self.alexi_geo = [0.04, 0, -125.04, 0, -0.04, 49.8]
-            self.alexi_crs = 'EPSG:4326'
+        if type(self.alexi_source) is str:
+            if self.alexi_source.upper() == 'CONUS_V002':
+                self.alexi_geo = [0.04, 0, -125.04, 0, -0.04, 49.8]
+                self.alexi_crs = 'EPSG:4326'
+            elif self.alexi_source.upper() == 'CONUS_V001':
+                self.alexi_geo = [0.04, 0, -125.04, 0, -0.04, 49.8]
+                self.alexi_crs = 'EPSG:4326'
+            else:
+                # Assume ALEXI source is an image collection ID if it is a string
+                #   but doesn't match on any of the keywords.
+                alexi_img = ee.Image(ee.ImageCollection(self.alexi_source).first())
+                self.alexi_geo = ee.List(ee.Dictionary(
+                    ee.Algorithms.Describe(alexi_img.projection())).get('transform'))
+                self.alexi_crs = alexi_img.projection().crs()
         else:
             self.alexi_geo = [0.04, 0, -125.04, 0, -0.04, 49.8]
             self.alexi_crs = 'EPSG:4326'
@@ -507,14 +523,29 @@ class Image(object):
             alexi_img = ee.Image.constant(float(self.alexi_source))
         elif isinstance(self.alexi_source, ee.computedobject.ComputedObject):
             alexi_img = self.alexi_source
-        elif self.alexi_source.upper() == 'CONUS_V001':
-            alexi_coll_id = 'projects/disalexi/alexi/CONUS_V001'
+        elif self.alexi_source.upper() == 'CONUS_V002':
+            alexi_coll_id = 'projects/earthengine-legacy/assets/' \
+                            'projects/disalexi/alexi/CONUS_V002'
             alexi_coll = ee.ImageCollection(alexi_coll_id) \
                 .filterDate(self.start_date, self.end_date)
             alexi_img = ee.Image(alexi_coll.first()) \
                 .multiply(0.408)
             # self.alexi_geo = [0.04, 0, -125.04, 0, -0.04, 49.8]
             # self.alexi_crs = 'EPSG:4326'
+        elif self.alexi_source.upper() == 'CONUS_V001':
+            alexi_coll_id = 'projects/earthengine-legacy/assets/' \
+                            'projects/disalexi/alexi/CONUS_V001'
+            alexi_coll = ee.ImageCollection(alexi_coll_id) \
+                .filterDate(self.start_date, self.end_date)
+            alexi_img = ee.Image(alexi_coll.first()) \
+                .multiply(0.408)
+            # self.alexi_geo = [0.04, 0, -125.04, 0, -0.04, 49.8]
+            # self.alexi_crs = 'EPSG:4326'
+        elif 'projects/disalexi/alexi/CONUS_V' in self.alexi_source:
+            alexi_coll = ee.ImageCollection(self.alexi_source) \
+                .filterDate(self.start_date, self.end_date)
+            alexi_img = ee.Image(alexi_coll.first()) \
+                .multiply(0.408)
         else:
             raise ValueError('unsupported alexi_source: {}'.format(
                 self.alexi_source))
@@ -617,7 +648,6 @@ class Image(object):
     # def lst(self):
     #     """Return land surface temperature (LST) image"""
     #     return self.image.select(['lst']).set(self.properties)
-
 
     @lazy_property
     def mask(self):
@@ -836,6 +866,18 @@ class Image(object):
         elif isinstance(self.ta_source, ee.computedobject.ComputedObject):
             ta_img = ee.Image(self.ta_source)
             #     .set({'ta_iteration': 'image'})
+        elif self.ta_source.upper() == 'CONUS_V002':
+            ta_coll_id = 'projects/disalexi/ta/CONUS_V002_NLDAS_1K'
+            ta_coll = ee.ImageCollection(ta_coll_id) \
+                .filterMetadata('id', 'equals', self.id) \
+                .limit(1, 'step_size', False)
+            input_img = ee.Image(ta_coll.first())
+            # Select the Ta image with the minimum bias
+            ta_array = input_img.select('step_\\d+_ta').toArray()
+            bias_array = input_img.select('step_\\d+_bias').toArray()
+            index = bias_array.abs().multiply(-1).arrayArgmax() \
+                .arraySlice(0, 0, 1).arrayFlatten([['array']])
+            ta_img = ta_array.arrayGet(index)
         elif self.ta_source.upper() == 'CONUS_V001':
             ta_coll_id = 'projects/disalexi/ta/CONUS_V001_NLDAS_1K'
             ta_coll = ee.ImageCollection(ta_coll_id) \
@@ -899,6 +941,19 @@ class Image(object):
             # #     .updateMask(bias_a.lt(0))
             # ta_img = ee.Image(ta_img.copyProperties(input_img))
             # #     .set({'ta_step_size': input_img.get('step_size')})
+
+        elif self.ta_source.startswith('projects/disalexi/ta/CONUS_V'):
+            # CGM - How can I ensure it is an image collection ID?
+            ta_coll = ee.ImageCollection(self.ta_source) \
+                .filterMetadata('id', 'equals', self.id) \
+                .limit(1, 'step_size', False)
+            input_img = ee.Image(ta_coll.first())
+            # Select the Ta image with the minimum bias
+            ta_array = input_img.select('step_\\d+_ta').toArray()
+            bias_array = input_img.select('step_\\d+_bias').toArray()
+            index = bias_array.abs().multiply(-1).arrayArgmax() \
+                .arraySlice(0, 0, 1).arrayFlatten([['array']])
+            ta_img = ta_array.arrayGet(index)
         else:
             raise ValueError('Unsupported ta_source: {}\n'.format(
                 self.ta_source))
