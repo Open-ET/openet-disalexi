@@ -869,7 +869,7 @@ class Image(object):
         elif self.ta_source.upper() == 'CONUS_V002':
             ta_coll_id = 'projects/disalexi/ta/CONUS_V002_NLDAS_1K'
             ta_coll = ee.ImageCollection(ta_coll_id) \
-                .filterMetadata('id', 'equals', self.id) \
+                .filterMetadata('image_id', 'equals', self.id) \
                 .limit(1, 'step_size', False)
             input_img = ee.Image(ta_coll.first())
             # Select the Ta image with the minimum bias

@@ -18,8 +18,7 @@ import ee
 from osgeo import ogr, osr
 
 import openet.disalexi as disalexi
-import utils
-# from . import utils
+import openet.core.utils as utils
 
 
 def main(ini_path=None, overwrite_flag=False, delay=0, key=None,
