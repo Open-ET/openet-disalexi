@@ -71,6 +71,8 @@ class Landsat(object):
         #     .subtract(0.0018)\
         #     .rename(['albedo'])
 
+    # DEADBEEF - LAI is being read from a source image collection
+    #   Leaving this method since it is currently used in emissivity calculation
     @lazy_property
     def _lai(self):
         """Leaf Area Index (LAI) computed from METRIC NDVI / LAI equation
@@ -135,19 +137,22 @@ class LandsatTOA(Landsat):
         self._spacecraft_id = ee.String(self.raw_image.get('SPACECRAFT_ID'))
 
         input_bands = ee.Dictionary({
+            # 'LANDSAT_4': ['B1', 'B2', 'B3', 'B4', 'B5', 'B7', 'B6', 'BQA'],
             'LANDSAT_5': ['B1', 'B2', 'B3', 'B4', 'B5', 'B7', 'B6', 'BQA'],
             'LANDSAT_7': ['B1', 'B2', 'B3', 'B4', 'B5', 'B7', 'B6_VCID_1', 'BQA'],
             'LANDSAT_8': ['B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B10', 'BQA']})
         # Rename bands to generic names
-        output_bands = ['blue', 'green', 'red', 'nir', 'swir1', 'swir2', 'lst',
+        output_bands = ['blue', 'green', 'red', 'nir', 'swir1', 'swir2', 'tir',
                         'bqa']
 
         # Rename thermal band "k" coefficients to generic names
         input_k1 = ee.Dictionary({
+            # 'LANDSAT_4': 'K1_CONSTANT_BAND_6',
             'LANDSAT_5': 'K1_CONSTANT_BAND_6',
             'LANDSAT_7': 'K1_CONSTANT_BAND_6_VCID_1',
             'LANDSAT_8': 'K1_CONSTANT_BAND_10'})
         input_k2 = ee.Dictionary({
+            # 'LANDSAT_4': 'K2_CONSTANT_BAND_6',
             'LANDSAT_5': 'K2_CONSTANT_BAND_6',
             'LANDSAT_7': 'K2_CONSTANT_BAND_6_VCID_1',
             'LANDSAT_8': 'K2_CONSTANT_BAND_10'})
@@ -161,33 +166,43 @@ class LandsatTOA(Landsat):
                 'system:index': self._index,
                 'system:id': self._id,
                 'k1_constant': ee.Number(output_k1),
-                'k2_constant': ee.Number(output_k2)})
+                'k2_constant': ee.Number(output_k2),
+                'SATELLITE': self._spacecraft_id,
+            })
         super()
 
+    # CGM - Why is this in a separate "prep" method and not part of the init?
     def prep(self):
         """Return an image with the bands/products needed to run EE DisALEXI
-
-        Parameters
-        ----------
-        self.raw_image : ee.Image
 
         Returns
         -------
         prep_image : ee.Image
 
         """
+        # DEADBEEF - TIR/LST is being read from a source image collection
+        # # Sharpen the thermal band
+        # # TODO: Decide if sharpening should be in class init or prep
+        # # TODO: Figure out best way to write sharpen version to output image
+        # sharpen_img = openet.sharpen.thermal.landsat(self.input_image) \
+        #     .select(['tir_sharpened'], ['tir'])
+        # self.input_image = self.input_image.addBands(sharpen_img, overwrite=True)
+
+        # DEADBEEF - LAI is being read from a source image collection
         self.prep_image = ee.Image([
             self._albedo,
             self._cfmask,
-            self._lai,
+            # self._lai,
             self._lst,
             self._ndvi,
         ])
-
+        self.prep_image = ee.Image(
+            self.prep_image.copyProperties(self.input_image))
         self.prep_image = self.prep_image.set({
             'system:time_start': self._time_start,
             'system:index': self._index,
             'system:id': self._id,
+            # 'sharpen_version': openet.sharpen.__version__,
         })
 
         return self.prep_image
@@ -224,7 +239,7 @@ class LandsatTOA(Landsat):
         k1 = ee.Number(ee.Image(self.input_image).get('k1_constant'))
         k2 = ee.Number(ee.Image(self.input_image).get('k2_constant'))
 
-        ts_brightness = ee.Image(self.input_image).select(['lst'])
+        ts_brightness = ee.Image(self.input_image).select(['tir'])
         emissivity = self._emissivity
 
         # First back out radiance from brightness temperature
@@ -330,19 +345,28 @@ class LandsatSR(Landsat):
         self._spacecraft_id = ee.String(self.raw_image.get('SATELLITE'))
 
         input_bands = ee.Dictionary({
+            # 'LANDSAT_4': ['B1', 'B2', 'B3', 'B4', 'B5', 'B7', 'B6', 'pixel_qa'],
             'LANDSAT_5': ['B1', 'B2', 'B3', 'B4', 'B5', 'B7', 'B6', 'pixel_qa'],
             'LANDSAT_7': ['B1', 'B2', 'B3', 'B4', 'B5', 'B7', 'B6',
                           'pixel_qa'],
             'LANDSAT_8': ['B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B10', 'pixel_qa']})
         # Rename bands to generic names
         output_bands = [
-            'blue', 'green', 'red', 'nir', 'swir1', 'swir2', 'lst', 'pixel_qa']
+            'blue', 'green', 'red', 'nir', 'swir1', 'swir2', 'tir', 'pixel_qa']
 
         # TODO: Follow up with Simon about adding K1/K2 to SR collection
         k1 = ee.Dictionary({
-            'LANDSAT_5': 607.76, 'LANDSAT_7': 666.09, 'LANDSAT_8': 774.8853})
+            # 'LANDSAT_4': 607.76,
+            'LANDSAT_5': 607.76,
+            'LANDSAT_7': 666.09,
+            'LANDSAT_8': 774.8853,
+        })
         k2 = ee.Dictionary({
-            'LANDSAT_5': 1260.56, 'LANDSAT_7': 1282.71, 'LANDSAT_8': 1321.0789})
+            # 'LANDSAT_4': 1260.56,
+            'LANDSAT_5': 1260.56,
+            'LANDSAT_7': 1282.71,
+            'LANDSAT_8': 1321.0789,
+        })
 
         self.input_image = ee.Image(self.raw_image) \
             .select(input_bands.get(self._spacecraft_id), output_bands) \
@@ -352,7 +376,9 @@ class LandsatSR(Landsat):
                 'system:index': self._index,
                 'system:id': self._id,
                 'k1_constant': ee.Number(k1.get(self._spacecraft_id)),
-                'k2_constant': ee.Number(k2.get(self._spacecraft_id))})
+                'k2_constant': ee.Number(k2.get(self._spacecraft_id)),
+                'SATELLITE': self._spacecraft_id,
+            })
         super()
 
     def prep(self):
@@ -360,18 +386,26 @@ class LandsatSR(Landsat):
 
         Parameters
         ----------
-        self.raw_image : ee.Image
 
         Returns
         -------
         prep_image : ee.Image
 
         """
+        # DEADBEEF - TIR/LST is being read from a source image collection
+        # # Sharpen the thermal band
+        # # TODO: Decide if sharpening should be in class init or prep
+        # # TODO: Figure out best way to write sharpen version to output image
+        # sharpen_img = openet.sharpen.thermal.landsat(self.input_image) \
+        #     .select(['tir_sharpened'], ['tir'])
+        # self.input_image = self.input_image.addBands(sharpen_img, overwrite=True)
 
+        # DEADBEEF - LAI is being read from a source image collection
+        # DEADBEEF - TIR/LST is being read from a source image collection
         self.prep_image = ee.Image([
             self._albedo,
             self._cfmask,
-            self._lai,
+            # self._lai,
             self._lst,
             self._ndvi,
         ])
@@ -380,7 +414,10 @@ class LandsatSR(Landsat):
             'system:time_start': self._time_start,
             'system:index': self._index,
             'system:id': self._id,
+            # 'sharpen_version': openet.sharpen.__version__,
         })
+        self.prep_image = ee.Image(
+            self.prep_image.copyProperties(self.input_image))
 
         return self.prep_image
 
@@ -479,7 +516,7 @@ class LandsatSR(Landsat):
         k1 = ee.Number(ee.Image(self.input_image).get('k1_constant'))
         k2 = ee.Number(ee.Image(self.input_image).get('k2_constant'))
 
-        ts_brightness = ee.Image(self.input_image).select(['lst'])
+        ts_brightness = ee.Image(self.input_image).select(['tir'])
         emissivity = self._emissivity
 
         # First back out radiance from brightness temperature

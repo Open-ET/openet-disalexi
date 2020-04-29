@@ -14,7 +14,7 @@ def debug(x_var, x_str, xy=test_xy, scale=1):
         x_var.rename(['test']), xy=xy, scale=scale)['test'])))
 
 
-def tseb_pt(t_air, t_rad, u, p, z, rs_1, rs24, vza,
+def tseb_pt(t_air, t_rad, e_air, u, p, z, rs_1, rs24, vza,
             aleafv, aleafn, aleafl, adeadv, adeadn, adeadl,
             albedo, ndvi, lai, clump, leaf_width, hc_min, hc_max,
             datetime, lon=None, lat=None, a_pt_in=1.32,
@@ -30,6 +30,8 @@ def tseb_pt(t_air, t_rad, u, p, z, rs_1, rs24, vza,
         Air temperature [K].
     t_rad : ee.Image
         Radiometric composite temperature [K].
+    e_air : ee.Image
+        Vapour pressure [kPa]
     u : ee.Image
         Wind speed above the canopy [m s-1].
     p : ee.Image
@@ -188,11 +190,6 @@ def tseb_pt(t_air, t_rad, u, p, z, rs_1, rs24, vza,
     d0 = hc.multiply(2.0 / 3.0)
     # d0 = hc.expression('hc * (2.0 / 3.0)', {'hc': hc})
 
-    # Correction of roughness parameters for bare soils (F < 0.1)
-    d0 = d0.where(F.lte(0.1), 0.00001)
-    z0m = z0m.where(F.lte(0.1), 0.01)
-    z0h = z0h.where(F.lte(0.1), 0.0001)
-
     # Correction of roughness parameters for water bodies
     # (NDVI < 0 and albedo < 0.05)
     water_mask = ndvi.lte(0).And(albedo.lte(0.05))
@@ -232,6 +229,7 @@ def tseb_pt(t_air, t_rad, u, p, z, rs_1, rs24, vza,
     e_s = t_air.expression(
         '0.6108 * exp((17.27 * (t_air - 273.16)) / ((t_air - 273.16) + 237.3))',
         {'t_air': t_air})
+    vpd = e_s.subtract(e_air)
     # Slope of the saturation vapor pressure [kPa] (FAO56 3-9)
     Ss = t_air.expression(
         '4098. * e_s / (((t_air - 273.16) + 237.3) ** 2)',
@@ -246,6 +244,15 @@ def tseb_pt(t_air, t_rad, u, p, z, rs_1, rs24, vza,
     # ************************************************************************
     # Initialization of
     a_pt = albedo.multiply(0).add(a_pt_in)
+    vpd1 = ee.Number(2.0)
+    dvpd = ee.Number(0.4)
+    a_pt_temp = a_pt.expression(
+        '(a_pt + (vpd - vpd1) * dvpd)',
+        {'a_pt': a_pt, 'vpd': vpd, 'vpd1': vpd1, 'dvpd': dvpd})
+    a_pt = a_pt.where(vpd.gte(vpd1), a_pt_temp)
+    pt_lim = ee.Number(2.5)
+    ind = a_pt.gt(pt_lim)
+    a_pt = a_pt.where(ind, 2.5)
     # a_pt = ee.Image.constant(a_pt_in)
     # a_pt = mask.multiply(a_pt)
 

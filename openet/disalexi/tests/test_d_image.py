@@ -63,38 +63,51 @@ def default_image(albedo=0.125, cfmask=0, lai=4.7, lst=306, ndvi=0.875):
         })
 
 def default_image_args(albedo=0.125, cfmask=0, lai=4.7, lst=306, ndvi=0.875,
-                       etr_source=10, etr_band=None):
+                       et_reference_source=10, et_reference_band=None,
+                       et_reference_factor=1.0, et_reference_resample='nearest'):
     return {
         'image': default_image(albedo=albedo, cfmask=cfmask, lai=lai, lst=lst,
                                ndvi=ndvi),
-        'etr_source': etr_source, 'etr_band': etr_band
+        'et_reference_source': et_reference_source,
+        'et_reference_band': et_reference_band,
+        'et_reference_factor': et_reference_factor,
+        'et_reference_resample': et_reference_resample,
     }
 
 def default_image_obj(albedo=0.125, cfmask=0, lai=4.7, lst=306, ndvi=0.875,
-                      etr_source=10, etr_band=None):
+                      et_reference_source=10, et_reference_band=None,
+                      et_reference_factor=1.0, et_reference_resample='nearest'):
     return disalexi.Image(**default_image_args(
         albedo=albedo, cfmask=cfmask, lai=lai, lst=lst, ndvi=ndvi,
-        etr_source=etr_source, etr_band=etr_band,
+        et_reference_source=et_reference_source,
+        et_reference_band=et_reference_band,
+        et_reference_factor=et_reference_factor,
+        et_reference_resample=et_reference_resample,
     ))
 
 
 def test_Image_init_default_parameters():
     m = disalexi.Image(default_image())
-    assert m.ta_source == 'CONUS_V001'
-    assert m.alexi_source == 'CONUS_V001'
+    assert m.ta_source == 'CONUS_V002'
+    assert m.alexi_source == 'CONUS_V002'
+    assert m.lai_source == 'projects/earthengine-legacy/assets/projects/openet/lai/landsat/scene'
+    assert m.tir_source == 'projects/earthengine-legacy/assets/projects/openet/tir/landsat/scene'
     assert m.elevation_source == 'USGS/SRTMGL1_003'
-    assert m.landcover_source == 'NLCD2011'
-    assert m.rs_daily_source == 'MERRA2'
-    assert m.rs_hourly_source == 'MERRA2'
-    assert m.windspeed_source == 'CFSV2'
+    assert m.landcover_source == 'USGS/NLCD/NLCD2016'
+    assert m.airpressure_source == 'CFSR'
+    assert m.rs_daily_source == 'CFSR'
+    assert m.rs_hourly_source == 'CFSR'
+    assert m.vp_source == 'CFSR'
+    assert m.windspeed_source == 'CFSR'
     assert m.stabil_iter == 36
     assert m.albedo_iter == 10
     assert m.rs_interp_flag == True
     # assert m.ta_interp_flag == True
     assert m.ta_smooth_flag == True
-    assert m.etr_source == None
-    assert m.etr_band == None
-    assert m.etr_factor == 1.0
+    assert m.et_reference_source == None
+    assert m.et_reference_band == None
+    assert m.et_reference_factor == None
+    assert m.et_reference_resample == None
 
 
 # Todo: Break these up into separate functions?
@@ -150,7 +163,8 @@ def test_Image_init_date_properties():
 @pytest.mark.parametrize(
     'source, xy, expected',
     [
-        ['CONUS_V001', TEST_POINT, 289.10],
+        ['CONUS_V001', TEST_POINT, 297.58],
+        # ['CONUS_V001', TEST_POINT, 289.10],
         [ee.Image('USGS/SRTMGL1_003').multiply(0).add(10), TEST_POINT, 10],
         ['294.8', TEST_POINT, 294.8],  # Check constant values
         [294.8, TEST_POINT, 294.8],    # Check constant values
@@ -358,7 +372,7 @@ def test_Image_windspeed_band_name():
     assert output == 'windspeed'
 
 
-def test_Image_et_default_values(expected=2.5799, tol=0.0001):
+def test_Image_et_default_values(expected=7.7809, tol=0.0001):
     output = utils.point_image_value(default_image_obj().et, TEST_POINT)
     assert abs(output['et'] - expected) <= tol
 
@@ -422,19 +436,19 @@ def test_Image_et_properties():
     # assert output['properties']['ta_iteration'] > 0
 
 
-def test_Image_etr_properties():
+def test_Image_et_reference_properties():
     """Test if properties are set on the ETr image"""
-    output =  utils.getinfo(default_image_obj().etr)
-    assert output['bands'][0]['id'] == 'etr'
+    output =  utils.getinfo(default_image_obj().et_reference)
+    assert output['bands'][0]['id'] == 'et_reference'
     assert output['properties']['system:index'] == SCENE_ID
     assert output['properties']['system:time_start'] == SCENE_TIME
     assert output['properties']['image_id'] == COLL_ID + SCENE_ID
 
 
-def test_Image_etr_default_values(expected=10.0, tol=0.0001):
-    output = utils.point_image_value(
-        default_image_obj(etr_source=expected).etr, TEST_POINT)
-    assert abs(output['etr'] - expected) <= tol
+def test_Image_et_reference_default_values(expected=10.0, tol=0.0001):
+    output = utils.point_image_value(default_image_obj(
+        et_reference_source=expected).et_reference, TEST_POINT)
+    assert abs(output['et_reference'] - expected) <= tol
 
 
 @pytest.mark.parametrize(
@@ -446,23 +460,24 @@ def test_Image_etr_default_values(expected=10.0, tol=0.0001):
         [10.8985, None, TEST_POINT, 10.8985],
     ]
 )
-def test_Image_etr_sources(source, band, xy, expected, tol=0.001):
-    output = utils.point_image_value(
-        default_image_obj(etr_source=source, etr_band=band).etr, xy)
-    assert abs(output['etr'] - expected) <= tol
+def test_Image_et_reference_sources(source, band, xy, expected, tol=0.001):
+    output = utils.point_image_value(default_image_obj(
+        et_reference_source=source, et_reference_band=band).et_reference, xy)
+    assert abs(output['et_reference'] - expected) <= tol
 
 
-def test_Image_etf_default_values(etr_source=10, expected=2.5799/10, tol=0.0001):
+def test_Image_et_fraction_default_values(et_reference_source=10,
+                                          expected=2.5799/10, tol=0.0001):
     # Check that ETf = ET / ETr
-    output_img = default_image_obj(etr_source=etr_source).etf
-    output = utils.point_image_value(output_img, TEST_POINT)
-    assert abs(output['etf'] - expected) <= tol
+    output = utils.point_image_value(default_image_obj(
+        et_reference_source=et_reference_source).et_fraction, TEST_POINT)
+    assert abs(output['et_fraction'] - expected) <= tol
 
 
-def test_Image_etf_properties():
+def test_Image_et_fraction_properties():
     """Test if properties are set on the ETf image"""
-    output = utils.getinfo(default_image_obj().etf)
-    assert output['bands'][0]['id'] == 'etf'
+    output = utils.getinfo(default_image_obj().et_fraction)
+    assert output['bands'][0]['id'] == 'et_fraction'
     assert output['properties']['system:index'] == SCENE_ID
     assert output['properties']['system:time_start'] == SCENE_TIME
 
@@ -502,7 +517,7 @@ def test_Image_time_properties():
 
 def test_Image_calculate_variables_default():
     output = utils.getinfo(default_image_obj().calculate())
-    assert set([x['id'] for x in output['bands']]) == set(['et', 'etr', 'etf'])
+    assert set([x['id'] for x in output['bands']]) == set(['et'])
 
 
 def test_Image_calculate_variables_custom():
@@ -535,11 +550,11 @@ def test_Image_calculate_values(tol=0.0001):
             landcover_source=82, rs_daily_source=8600, rs_hourly_source=950,
             windspeed_source=3.25, stabil_iterations=6, albedo_iterations=3)\
         .calculate(['et'])
-    #     .calculate(['et', 'etr', 'etf'])
+    #     .calculate(['et', 'et_reference', 'et_fraction'])
     output = utils.point_image_value(output_img, TEST_POINT)
     assert abs(output['et'] - 6.94414) <= tol
-    # assert abs(output['etr'] - 10) <= tol
-    # assert abs(output['etf'] - 0.58) <= tol
+    # assert abs(output['et_reference'] - 10) <= tol
+    # assert abs(output['et_fraction'] - 0.58) <= tol
 
 
 def test_Image_calculate_variables_valueerror():
@@ -579,10 +594,10 @@ def test_Image_calculate_variables_valueerror():
 #     assert output['properties']['system:index'] == image_id.split('/')[-1]
 #
 #
-# def test_Image_from_landsat_c1_toa_etf():
-#     """Test if ETf can be built for a Landsat images"""
+# def test_Image_from_landsat_c1_toa_et_fraction():
+#     """Test if ET fraction can be built for a Landsat images"""
 #     image_id = 'LANDSAT/LC08/C01/T1_TOA/LC08_044033_20170716'
-#     output = utils.getinfo(disalexi.Image.from_landsat_c1_toa(image_id).etf)
+#     output = utils.getinfo(disalexi.Image.from_landsat_c1_toa(image_id).et_fraction)
 #     assert output['properties']['system:index'] == image_id.split('/')[-1]
 #
 #
@@ -590,7 +605,8 @@ def test_Image_calculate_variables_valueerror():
 #     """Test if ET can be built for a Landsat images"""
 #     image_id = 'LANDSAT/LC08/C01/T1_TOA/LC08_044033_20170716'
 #     output = utils.getinfo(disalexi.Image.from_landsat_c1_toa(
-#         image_id, etr_source='IDAHO_EPSCOR/GRIDMET', etr_band='etr').et)
+#         image_id, et_reference_source='IDAHO_EPSCOR/GRIDMET',
+#         et_reference_band='etr').et)
 #     assert output['properties']['system:index'] == image_id.split('/')[-1]
 #
 #
@@ -623,8 +639,8 @@ def test_Image_from_landsat_c1_sr_image_id(image_id):
 def test_Image_from_landsat_c1_sr_image():
     """Test instantiating the class from a Landsat ee.Image"""
     image_id = 'LANDSAT/LC08/C01/T1_SR/LC08_044033_20170716'
-    output = utils.getinfo(
-        disalexi.Image.from_landsat_c1_sr(ee.Image(image_id)).ndvi)
+    output = utils.getinfo(disalexi.Image.from_landsat_c1_sr(
+        ee.Image(image_id)).ndvi)
     assert output['properties']['system:index'] == image_id.split('/')[-1]
 
 

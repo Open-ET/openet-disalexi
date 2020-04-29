@@ -10,6 +10,7 @@ def pytest_configure():
     # Called before tests are collected
     # https://docs.pytest.org/en/latest/reference.html#_pytest.hookspec.pytest_sessionstart
     logging.basicConfig(level=logging.DEBUG, format='%(message)s')
+    logging.getLogger('googleapiclient').setLevel(logging.ERROR)
     logging.debug('Test Setup')
 
     # On Travis-CI authenticate using private key environment variable
