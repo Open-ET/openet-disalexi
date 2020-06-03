@@ -12,12 +12,14 @@ import re
 import time
 
 import ee
-# from google.cloud import datastore
 from osgeo import ogr, osr
 
 import openet.disalexi
 import openet.core
 import openet.core.utils as utils
+
+TOOL_NAME = 'tair_image_wrs2_export'
+TOOL_VERSION = '0.1.5'
 
 
 def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
@@ -302,20 +304,22 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
         ee.Initialize()
 
 
-    # # TODO: set datastore key file as a parameter?
-    # datastore_key_file = 'openet-dri-datastore.json'
-    # if log_tasks and not os.path.isfile(datastore_key_file):
-    #     logging.info('Task logging disabled, datastore key does not exist')
-    #     log_tasks = False
-    #     # input('ENTER')
-    # if log_tasks:
-    #     logging.info('\nInitializing task datastore client')
-    #     try:
-    #         datastore_client = datastore.Client.from_service_account_json(
-    #             datastore_key_file)
-    #     except Exception as e:
-    #         logging.error('{}'.format(e))
-    #         return False
+    # TODO: set datastore key file as a parameter?
+    datastore_key_file = 'openet-dri-datastore.json'
+    if log_tasks and not os.path.isfile(datastore_key_file):
+        logging.info('Task logging disabled, datastore key does not exist')
+        log_tasks = False
+        # input('ENTER')
+    if log_tasks:
+        logging.info('\nInitializing task datastore client')
+        # TODO: Move to top and add to requirements.txt and environment.yaml
+        from google.cloud import datastore
+        try:
+            datastore_client = datastore.Client.from_service_account_json(
+                datastore_key_file)
+        except Exception as e:
+            logging.error('{}'.format(e))
+            return False
 
 
     # Get current running tasks
@@ -483,8 +487,9 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
             image_id_list = sorted(list(set(
                 landsat_coll.aggregate_array('system:id').getInfo())))
             if not image_id_list:
-                logging.debug('  Empty image ID list, exiting')
-                return False
+                logging.info('  Empty image ID list, skipping tile')
+                # logging.debug('  Empty image ID list, exiting')
+                # return False
 
             # Get list of existing images for the target tile
             logging.debug('  Getting GEE asset list')
@@ -564,6 +569,23 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
                             except:
                                 logging.info('    Error removing asset, skipping')
                                 continue
+                        elif (asset_props[asset_id]['alexi_source'] <
+                              model_args['alexi_source']):
+                            logging.info('    ALEXI source is old, removing')
+                            # input('ENTER')
+                            try:
+                                ee.data.deleteAsset(asset_id)
+                            except:
+                                logging.info('    Error removing asset, skipping')
+                                continue
+                        # elif (asset_props[asset_id]['date_ingested'] <= '2020-04-27'):
+                        #     logging.info('    date_ingested is old, removing')
+                        #     # input('ENTER')
+                        #     try:
+                        #         ee.data.deleteAsset(asset_id)
+                        #     except:
+                        #         logging.info('    Error removing asset, skipping')
+                        #         continue
                         # elif ((('T1_RT_TOA' in asset_props[asset_id]['coll_id']) and
                         #        ('T1_RT_TOA' not in image_id)) or
                         #       (('T1_RT' in asset_props[asset_id]['coll_id']) and
@@ -613,9 +635,10 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
                     if export_id in tasks.keys():
                         logging.info('    Task already submitted, skipping')
                         continue
-                    if asset_props and asset_id in asset_props.keys():
+                    elif asset_props and asset_id in asset_props.keys():
                         logging.info('    Asset already exists, skipping')
                         continue
+
 
                 if tair_args['source_coll'] is None:
                     logging.debug('    Tair source: {}'.format(tair_args['ta_start']))
@@ -625,8 +648,8 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
                     logging.debug('    Tair source: NLDAS')
                     # TODO - Check if selecting the 0 UTC time is intentional
                     ta_source_coll = ee.ImageCollection('NASA/NLDAS/FORA0125_H002')\
-                        .select(['temperature'])\
-                        .filterDate(image_date, next_date)
+                        .filterDate(image_date, next_date)\
+                        .select(['temperature'])
                     input_image = ee.Image(ta_source_coll.first())\
                         .add(273.15).subtract(40).floor()
                     ta_source_img = alexi_mask.add(input_image).rename(['ta'])
@@ -635,7 +658,7 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
                     ta_source_coll = ee.ImageCollection(tair_args['source_coll'])\
                         .filterMetadata('image_id', 'equals', image_id)
                     if ta_source_coll.size().getInfo() == 0:
-                        logging.info('  No images in Ta source coll, skipping')
+                        logging.info('  No Tair image in source coll, skipping')
                         # input('ENTER')
                         continue
 
@@ -656,13 +679,44 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
                         .arraySlice(0, 0, 1).arrayFlatten([['array']])\
                         .rename(['ta'])
 
+
+                # Manually check if the source LAI and TIR images are present
+                # Eventually this should/could be done inside the model instead
+                if ('tir_source' in model_args.keys() and \
+                        type(model_args['tir_source']) is str):
+                    # Assumptions: string tir_source is an image collection ID
+                    tir_coll = ee.ImageCollection(model_args['tir_source']) \
+                        .filterMetadata('scene_id', 'equals', scene_id)
+                    if tir_coll.size().getInfo() == 0:
+                        logging.info('  No TIR image in source, skipping')
+                        input('ENTER')
+                        continue
+                if ('lai_source' in model_args.keys() and \
+                        type(model_args['lai_source']) is str):
+                    # Assumptions: string lai_source is an image collection ID
+                    lai_coll = ee.ImageCollection(model_args['lai_source']) \
+                        .filterMetadata('scene_id', 'equals', scene_id)
+                    if lai_coll.size().getInfo() == 0:
+                        logging.info('  No LAI image in source, skipping')
+                        input('ENTER')
+                        continue
+
+
                 landsat_img = ee.Image(image_id)
+                # CGM: We could pre-compute (or compute once and then save)
+                #   the crs, transform, and shape since they should (will?) be
+                #   the same for each wrs2 tile
+                output_info = utils.get_info(landsat_img.select(['B2']))
+
                 d_obj = openet.disalexi.Image(
                     openet.disalexi.LandsatSR(landsat_img).prep(), **model_args)
                 export_img = d_obj.ta_mosaic(
                     ta_img=ta_source_img,
                     step_size=tair_args['step_size'],
                     step_count=tair_args['step_count'])
+
+                # pprint.pprint(export_img.getInfo())
+                # input('ENTER')
 
                 if tair_args['retile'] and tair_args['retile'] > 0:
                     export_img = export_img.retile(tair_args['retile'])
@@ -676,15 +730,16 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
                     'model_name': model_name,
                     'model_version': openet.disalexi.__version__,
                     'scene_id': scene_id,
-                    'system:time_start': utils.millis(image_dt),
+                    'tool_name': TOOL_NAME,
+                    'tool_version': TOOL_VERSION,
                     'wrs2_tile': wrs2_tile_fmt.format(p, r),
                     # Source properties
-                    'CLOUD_COVER': landsat_img.get('CLOUD_COVER'),
-                    'CLOUD_COVER_LAND': landsat_img.get('CLOUD_COVER_LAND'),
+                    'CLOUD_COVER': output_info['properties']['CLOUD_COVER'],
+                    'CLOUD_COVER_LAND': output_info['properties']['CLOUD_COVER_LAND'],
                     # CGM - Should we use the Landsat time or the ALEXI time?
-                    'system:time_start': landsat_img.get('system:time_start'),
+                    'system:time_start': output_info['properties']['system:time_start'],
                     # 'system:time_start': utils.millis(image_dt),
-                    # Other operties
+                    # Other poperties
                     # 'spacecraft_id': landsat_img.get('SATELLITE'),
                     # 'landsat': landsat,
                     # 'date': image_dt.strftime('%Y-%m-%d'),
@@ -771,31 +826,31 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
                 # # Not using ee_task_start since it doesn't return the task object
                 # utils.ee_task_start(task)
 
-                # # Write the export task info the openet-dri project datastore
-                # if log_tasks:
-                #     logging.debug('    Writing datastore entity')
-                #     try:
-                #         task_obj = datastore.Entity(key=datastore_client.key(
-                #             'Task', task.status()['id']),
-                #             exclude_from_indexes=['properties'])
-                #         for k, v in task.status().items():
-                #             task_obj[k] = v
-                #         # task_obj['date'] = datetime.datetime.today() \
-                #         #     .strftime('%Y-%m-%d')
-                #         task_obj['index'] = properties.pop('wrs2_tile')
-                #         # task_obj['wrs2_tile'] = properties.pop('wrs2_tile')
-                #         task_obj['model_name'] = properties.pop('model_name')
-                #         # task_obj['model_version'] = properties.pop('model_version')
-                #         task_obj['runtime'] = 0
-                #         task_obj['start_timestamp_ms'] = 0
-                #         task_obj['tool_name'] = properties.pop('tool_name')
-                #         task_obj['properties'] = json.dumps(properties)
-                #         datastore_client.put(task_obj)
-                #     except Exception as e:
-                #         # CGM - The message/handling will probably need to be updated
-                #         #   We may want separate try/excepts on the create and the put
-                #         logging.warning('\nDatastore entity was not written')
-                #         logging.warning('{}\n'.format(e))
+                # Write the export task info the openet-dri project datastore
+                if log_tasks:
+                    logging.debug('    Writing datastore entity')
+                    try:
+                        task_obj = datastore.Entity(key=datastore_client.key(
+                            'Task', task.status()['id']),
+                            exclude_from_indexes=['properties'])
+                        for k, v in task.status().items():
+                            task_obj[k] = v
+                        # task_obj['date'] = datetime.datetime.today() \
+                        #     .strftime('%Y-%m-%d')
+                        task_obj['index'] = properties.pop('wrs2_tile')
+                        # task_obj['wrs2_tile'] = properties.pop('wrs2_tile')
+                        task_obj['model_name'] = properties.pop('model_name')
+                        # task_obj['model_version'] = properties.pop('model_version')
+                        task_obj['runtime'] = 0
+                        task_obj['start_timestamp_ms'] = 0
+                        task_obj['tool_name'] = properties.pop('tool_name')
+                        task_obj['properties'] = json.dumps(properties)
+                        datastore_client.put(task_obj)
+                    except Exception as e:
+                        # CGM - The message/handling will probably need to be updated
+                        #   We may want separate try/excepts on the create and the put
+                        logging.warning('\nDatastore entity was not written')
+                        logging.warning('{}\n'.format(e))
 
                 # Pause before starting the next export task
                 utils.delay_task(delay_time, max_ready)
