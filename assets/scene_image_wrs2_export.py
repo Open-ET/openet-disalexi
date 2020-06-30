@@ -66,7 +66,7 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
     # CGM - Which format should we use for the WRS2 tile?
     wrs2_tile_fmt = 'p{:03d}r{:03d}'
     # wrs2_tile_fmt = '{:03d}{:03d}'
-    wrs2_tile_re = re.compile('p?(\d{1,3})r?(\d{1,3})')
+    wrs2_tile_re = re.compile('p?(\\d{1,3})r?(\\d{1,3})')
 
     # List of path/rows to skip
     wrs2_skip_list = [
@@ -75,6 +75,20 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
         'p049r026',  # Vancouver Island
         # 'p041r037', 'p042r037', 'p047r031',  # CA Coast
     ]
+
+    date_skip_list = [
+        '2003-12-15', '2004-12-12', '2004-12-31', '2008-12-31', '2009-03-20',
+        '2009-03-21', '2010-04-10', '2011-04-10', '2012-04-09', '2012-12-31',
+        '2013-04-10', '2016-03-28', '2016-12-31', '2017-08-02', '2017-10-11',
+        '2017-10-12', '2017-12-12', '2017-12-13', '2017-12-14', '2017-12-15',
+        '2017-12-16', '2017-12-17', '2017-12-30', '2017-12-31', '2018-05-25',
+        '2018-05-26', '2018-05-27', '2018-06-30', '2018-07-01', '2018-10-20',
+        '2018-10-21', '2018-10-22', '2018-10-23', '2018-12-22', '2018-12-23',
+        '2018-12-24', '2018-12-25', '2018-12-30', '2018-12-31', '2019-02-23',
+        '2019-02-24', '2019-04-10', '2019-04-11', '2019-04-25', '2019-04-26',
+        '2019-04-27', '2019-10-18', '2019-10-26', '2019-10-27',
+    ]
+    # date_skip_list = []
 
     mgrs_skip_list = []
 
@@ -530,6 +544,10 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
                 logging.debug('    Date: {}'.format(image_date))
                 # logging.debug('    DOY: {}'.format(doy))
 
+                if date_skip_list and image_date in date_skip_list:
+                    logging.info('    Date in skip list, skipping')
+                    continue
+
                 export_id = export_id_fmt.format(
                     model=ini['INPUTS']['et_model'].lower(),
                     index=image_id.lower().replace('/', '_'))
@@ -646,39 +664,23 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
                         .rename(['ta'])
                 elif tair_args['source_coll'] == 'NLDAS':
                     logging.debug('    Tair source: NLDAS')
-                    # TODO - Check if selecting the 0 UTC time is intentional
                     ta_source_coll = ee.ImageCollection('NASA/NLDAS/FORA0125_H002')\
                         .filterDate(image_date, next_date)\
                         .select(['temperature'])
-                    input_image = ee.Image(ta_source_coll.first())\
-                        .add(273.15).subtract(40).floor()
+                    # Pulling maximum air temperature instead of 0 UTC
+                    # input_image = ee.Image(ta_source_coll.first())\
+                    input_image = ee.Image(ta_source_coll.reduce(ee.Reducer.max()))\
+                        .add(273.15).floor()
                     ta_source_img = alexi_mask.add(input_image).rename(['ta'])
                 else:
                     logging.debug('    Tair source: {}'.format(tair_args['source_coll']))
                     ta_source_coll = ee.ImageCollection(tair_args['source_coll'])\
                         .filterMetadata('image_id', 'equals', image_id)
                     if ta_source_coll.size().getInfo() == 0:
-                        logging.info('  No Tair image in source coll, skipping')
+                        logging.info('    No Tair image in source coll, skipping')
                         # input('ENTER')
                         continue
-
-                    # A lot code to figure out the starting Ta value
-                    # This identifies the first Ta that has a positive bias and
-                    #   a bias that is larger than the previous bias
-                    # It then selects the Ta for the previous step
-                    # This should bracket a bias of zero but it is not guaranteed
-                    input_img = ee.Image(ta_source_coll.first())
-                    ta_array = input_img.select('step_\\d+_ta').toArray()
-                    bias_array = input_img.select('step_\\d+_bias').toArray()
-                    diff = bias_array.arraySlice(0, 1)\
-                        .subtract(bias_array.arraySlice(0, 0, -1))
-                    index = diff.gt(0).And(bias_array.arraySlice(0, 1).gt(0))
-                    # Intentionally use 0,0,-1 slice here (instead of 0,1)
-                    #   to get Ta before bias goes positive
-                    ta_source_img = ta_array.arraySlice(0, 0, -1).arrayMask(index)\
-                        .arraySlice(0, 0, 1).arrayFlatten([['array']])\
-                        .rename(['ta'])
-
+                    ta_source_img = ta_min_bias(ee.Image(ta_source_coll.first()))
 
                 # Manually check if the source LAI and TIR images are present
                 # Eventually this should/could be done inside the model instead
@@ -687,16 +689,25 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
                     # Assumptions: string tir_source is an image collection ID
                     tir_coll = ee.ImageCollection(model_args['tir_source']) \
                         .filterMetadata('scene_id', 'equals', scene_id)
-                    if tir_coll.size().getInfo() == 0:
+                    tir_img = ee.Image(tir_coll.first())
+                    tir_info = tir_img.getInfo()
+                    try:
+                        sharpen_version = tir_info['properties']['sharpen_version']
+                    except:
                         logging.info('  No TIR image in source, skipping')
                         input('ENTER')
                         continue
+
                 if ('lai_source' in model_args.keys() and \
                         type(model_args['lai_source']) is str):
                     # Assumptions: string lai_source is an image collection ID
                     lai_coll = ee.ImageCollection(model_args['lai_source']) \
                         .filterMetadata('scene_id', 'equals', scene_id)
-                    if lai_coll.size().getInfo() == 0:
+                    lai_img = ee.Image(lai_coll.first())
+                    lai_info = lai_img.getInfo()
+                    try:
+                        landsat_lai_version = lai_info['properties']['landsat_lai_version']
+                    except:
                         logging.info('  No LAI image in source, skipping')
                         input('ENTER')
                         continue
@@ -718,7 +729,7 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
                 # pprint.pprint(export_img.getInfo())
                 # input('ENTER')
 
-                if tair_args['retile'] and tair_args['retile'] > 0:
+                if tair_args['retile'] and tair_args['retile'] > 1:
                     export_img = export_img.retile(tair_args['retile'])
 
                 properties = {
@@ -727,9 +738,11 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
                     'core_version': openet.core.__version__,
                     'date_ingested': datetime.datetime.today().strftime('%Y-%m-%d'),
                     'image_id': image_id,
+                    'landsat_lai_version': landsat_lai_version,
                     'model_name': model_name,
                     'model_version': openet.disalexi.__version__,
                     'scene_id': scene_id,
+                    'sharpen_version': sharpen_version,
                     'tool_name': TOOL_NAME,
                     'tool_version': TOOL_VERSION,
                     'wrs2_tile': wrs2_tile_fmt.format(p, r),
@@ -973,6 +986,145 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
     #  #     bias_a = bias_a.where(mask2, bias_c)
     #  #
     #  #     export_img = ee.Image([ta_a, bias_a, ta_b, bias_b])
+
+
+# TODO: Move this function into the model code so it can be tested
+def ta_min_bias(input_img):
+    """
+
+    Parameters
+    ----------
+    input_img
+
+    Returns
+    -------
+
+    """
+    input_img = ee.Image(input_img)
+
+    # Reverse the band order so that we can find the last transition
+    #   from decreasing to increasing with a positive bias
+    ta_bands = input_img.select('step_\\d+_ta').bandNames().reverse()
+    bias_bands = input_img.select('step_\\d+_bias').bandNames().reverse()
+    ta_array = input_img.select(ta_bands).toArray()
+    bias_array = input_img.select(bias_bands).toArray()
+
+    # Identify the "last" transition from a negative to positive bias
+    # CGM - Having problems with .ceil() limiting result to the image data range
+    #   Multiplying by a big number seemed to fix the issue but this could still
+    #     be a problem with the bias ranges get really small
+    sign_array = bias_array.multiply(1000).ceil().max(0).min(1).int()
+    transition_array = sign_array.arraySlice(0, 0, -1)\
+        .subtract(sign_array.arraySlice(0, 1))
+    # Insert an extra value at the beginning (of reverse, so actually at end)
+    #   of the transition array so the indexing lines up for all steps
+    transition_array = bias_array.arraySlice(0, 0, 1).multiply(0)\
+        .arrayCat(transition_array, 0)
+    transition_index = transition_array.arrayArgmax().arrayFlatten([['index']])
+    # Get the max transition value in order to know if there was a transition
+    transition_max = transition_array\
+        .arrayReduce(ee.Reducer.max(), [0]).arrayFlatten([['max']])
+
+    # Identify the position of minimum absolute bias
+    min_bias_index = bias_array.abs().multiply(-1).arrayArgmax()\
+        .arrayFlatten([['index']])
+
+    # Identify the "bracketing" Ta and bias values
+    # If there is a transition, use the "last" transition
+    # If there is not a transition, use the minimum absolute bias for both
+    # Note, the index is for the reversed arrays
+    index_b = transition_index.subtract(1).max(0)\
+        .where(transition_max.eq(0), min_bias_index)
+    index_a = transition_index.min(ta_bands.size().subtract(1))\
+        .where(transition_max.eq(0), min_bias_index)
+    ta_b = ta_array.arrayGet(index_b)
+    ta_a = ta_array.arrayGet(index_a)
+    bias_b = bias_array.arrayGet(index_b)
+    bias_a = bias_array.arrayGet(index_a)
+
+    # For now, compute the target Ta as the average of the bracketing Ta values
+    # Eventually Ta could be linearly interpolated or computed
+    #   as some sort of weighted average (based on the biases)
+    ta_source_img = ta_a.add(ta_b).multiply(0.5).rename(['ta'])
+
+    # Mask out Ta cells with all negative biases
+    ta_source_img = ta_source_img\
+        .updateMask(bias_b.lt(0).And(bias_a.lt(0)).Not())
+
+    return ta_source_img
+
+
+import pytest
+import pprint
+import ee
+ee.Initialize()
+@pytest.mark.parametrize(
+    'ta_list, bias_list, expected',
+    [
+        # Normal bias profile, select average of bracketing Ta values
+        [[257, 267, 277, 287, 297, 307, 317, 327, 337, 347, 357],
+         [-0.2, -0.1, 0.1, 0.6, 2.4, 4.6, 5.7, 6.2, 6.5, 6.8, 7.0],
+         272],
+        # Normal bias profile, crossing at top interval
+        [[257, 267, 277, 287, 297, 307, 317, 327, 337, 347, 357],
+         [-1.1, -1.0, -0.9, -0.8, -0.7, -0.6, -0.5, -0.4, -0.3, -0.2, 0.1],
+         352],
+        # Normal bias profile, crossing at bottom interval
+        [[257, 267, 277, 287, 297, 307, 317, 327, 337, 347, 357],
+         [-0.2, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
+         262],
+        # Increasing then decreasing then increasing biases
+        # Last transition should be selected
+        [[257, 267, 277, 287, 297, 307, 317, 327, 337, 347, 357],
+         [-0.2, 0.1, -0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9],
+         282],
+        # Increasing then decreasing all positive biases
+        [[257, 267, 277, 287, 297, 307, 317, 327, 337, 347, 357],
+         [0.2, 0.3, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9],
+         277],
+        # All positive biases, none equal
+        [[257, 267, 277, 287, 297, 307, 317, 327, 337, 347, 357],
+         [0.1, 0.2, 0.3, 0.6, 2.4, 4.6, 5.7, 6.2, 6.5, 6.8, 7.0],
+         257],
+        # All positive biases, first two equal
+        [[257, 267, 277, 287, 297, 307, 317, 327, 337, 347, 357],
+         [0.1, 0.1, 0.3, 0.6, 2.4, 4.6, 5.7, 6.2, 6.5, 6.8, 7.0],
+         267],
+        # All positive biases, first three equal
+        [[257, 267, 277, 287, 297, 307, 317, 327, 337, 347, 357],
+         [0.2, 0.2, 0.2, 0.6, 2.4, 4.6, 5.7, 6.2, 6.5, 6.8, 7.0],
+         277],
+        # All negative biases will return a masked out pixel
+        [[257, 267, 277, 287, 297, 307, 317, 327, 337, 347, 357],
+         [-1.1, -1.0, -0.9, -0.8, -0.7, -0.6, -0.5, -0.4, -0.3, -0.2, -0.1],
+         None],
+        # Normal bias profile, decreasing bias at high end
+        [[257, 267, 277, 287, 297, 307, 317, 327, 337, 347, 357],
+         [-0.2, -0.1, 0.1, 0.6, 2.4, 4.6, 5.7, 6.2, 6.5, 6.8, 6.0],
+         272],
+        # All positive biases, then decreasing bias at high end
+        [[257, 267, 277, 287, 297, 307, 317, 327, 337, 347, 357],
+         [0.1, 0.2, 0.3, 0.6, 2.4, 4.6, 5.7, 6.2, 6.5, 6.8, 6.0],
+         257],
+        # False/early transition with smaller bias than main transition
+        [[257, 267, 277, 287, 297, 307, 317, 327, 337, 347, 357],
+         [-0.1, 0.1, -0.2, -0.3, 0.6, 2.4, 4.6, 5.7, 6.2, 6.5, 6.8],
+         292],
+    ]
+)
+def test_ta_min_bias(ta_list, bias_list, expected, tol=0.0001):
+    ta_image_list = [
+        ee.Image.constant(ta).rename(['step_{:02d}_ta'.format(i+1)])
+        for i, ta in enumerate(ta_list)]
+    bias_image_list = [
+        ee.Image.constant(bias).rename(['step_{:02d}_bias'.format(i+1)])
+        for i, bias in enumerate(bias_list)]
+    input_img = ee.Image(ta_image_list + bias_image_list)
+    output = utils.constant_image_value(ta_min_bias(input_img))['ta']
+    if expected is None:
+        assert output is None
+    else:
+        assert abs(output - expected) <= tol
 
 
 def mgrs_export_tiles(study_area_path, mgrs_coll_id, mgrs_tiles=[],

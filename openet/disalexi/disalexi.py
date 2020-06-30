@@ -58,6 +58,7 @@ class Image(object):
             # et_reference_resample=None,
             lat=None,
             lon=None,
+            et_min=0.01,
             **kwargs
     ):
         """Initialize an image for computing DisALEXI
@@ -105,6 +106,8 @@ class Image(object):
             Latitude [deg].  If not set will default to ee.Image.pixelLonLat().
         lon : ee.Image, optional
             Longitude [deg].  If not set will default to ee.Image.pixelLonLat().
+        et_min : float, optinal
+            Minimum output ET value (the default is 0.01).
         kwargs : dict, optional
             et_reference_source : str, float
                 Reference ET source (the default is None).
@@ -212,6 +215,7 @@ class Image(object):
         self.rs_interp_flag = utils.boolean(rs_interp_flag)
         # self.ta_interp_flag = utils.boolean(ta_interp_flag)
         self.ta_smooth_flag = utils.boolean(ta_smooth_flag)
+        self.et_min = et_min
 
         # Reference ET parameters
         try:
@@ -577,13 +581,17 @@ class Image(object):
             #   String lai_source is an image collection ID
             #   Images are single band and don't need a select()
             #   LAI images always need to be scaled
+            # CGM - This will raise a .get() error if the image doesn't exist
             lai_coll = ee.ImageCollection(self.lai_source) \
                 .filterMetadata('scene_id', 'equals', self.index)
             lai_img = ee.Image(lai_coll.first())
-            lai_img = lai_img.multiply(ee.Number(lai_img.get('scale_factor')))
+            lai_img = lai_img.multiply(ee.Number(lai_img.get('scale_factor'))) \
+                .set({'landsat_lai_version': lai_img.get('landsat_lai_version')})
+            self.landsat_lai_version = lai_img.get('landsat_lai_version')
         else:
             raise ValueError('Unsupported lai_source: {}\n'.format(
                 self.lai_source))
+
         return lai_img.select([0], ['lai'])
 
     @lazy_property
@@ -598,13 +606,17 @@ class Image(object):
             #   String tir_source is an image collection ID
             #   Images are single band and don't need a select()
             #   TIR images always need to be scaled
+            # CGM - This will raise a .get() error if the image doesn't exist
             tir_coll = ee.ImageCollection(self.tir_source) \
                 .filterMetadata('scene_id', 'equals', self.index)
             tir_img = ee.Image(tir_coll.first())
-            tir_img = tir_img.multiply(ee.Number(tir_img.get('scale_factor')))
+            tir_img = tir_img.multiply(ee.Number(tir_img.get('scale_factor'))) \
+                .set({'sharpen_version': tir_img.get('sharpen_version')})
+            self.sharpen_version = tir_img.get('sharpen_version')
         else:
             raise ValueError('Unsupported tir_source: {}\n'.format(
                 self.tir_source))
+
         return tir_img.select([0], ['tir'])
 
     # TODO: Use the LST and emissivity functions in landsat.py
@@ -1250,10 +1262,13 @@ class Image(object):
         Parameters
         ----------
         ta_img : ee.Image
+            Tair values that will be used as the midpoint of the mosaic range.
         step_size : float
             The size of each Ta step.
         step_count : int
-            The number of Ta steps.
+            The total number of Ta steps.  Since this is both the positive and
+            negative steps around the midpoint value, the count must be a
+            multiple of 2.
         threshold : float, optional
 
         Returns
@@ -1280,6 +1295,7 @@ class Image(object):
                 hc_min=self.hc_min, hc_max=self.hc_max,
                 datetime=self.datetime, a_pt_in=1.32,
                 stabil_iter=self.stabil_iter, albedo_iter=self.albedo_iter,
+                et_min=self.et_min,
             )
             # Aggregate the Landsat scale ET up to the ALEXI scale
             et_coarse = ee.Image(et_fine) \
@@ -1293,16 +1309,22 @@ class Image(object):
                 .rename(['ta', 'bias']) \
                 .set({'system:index': ee.Image(ta).get('system:index')})
 
-        # CGM - Adding one extra Ta step and beginning and end to handle
-        #   rounding or reduceResolution/projection error
+        # Assume ta_img is the "middle" value in the range
         ta_coll = ee.ImageCollection([
             ta_img.add(j * step_size).set({'system:index': 'step_{}'.format(i)})
-            for i, j in enumerate(range(-1, step_count + 2))])
+            for i, j in enumerate(range(-step_count // 2, step_count // 2 + 1))])
+        # # This adds one extra Ta step and beginning and end to handle
+        # #   rounding or reduceResolution/projection error
+        # ta_coll = ee.ImageCollection([
+        #     ta_img.add(j * step_size).set({'system:index': 'step_{}'.format(i)})
+        #     for i, j in enumerate(range(-1, step_count + 2))])
+        # # This assumes ta_img is the bottom value in the range
         # ta_coll = ee.ImageCollection([
         #     ta_img.add(i * step_size).set({'system:index': 'step_{}'.format(i)})
         #     for i in range(step_count + 1)])
 
         return ee.ImageCollection(ta_coll.map(ta_func)).toBands()
+
 
     def et_coarse(self, ta_img, threshold=0.5):
         """Compute the Landsat ET summed to the ALEXI grid for the
