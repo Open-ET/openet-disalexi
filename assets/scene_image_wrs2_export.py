@@ -19,7 +19,7 @@ import openet.core
 import openet.core.utils as utils
 
 TOOL_NAME = 'tair_image_wrs2_export'
-TOOL_VERSION = '0.1.5'
+TOOL_VERSION = '0.1.6'
 
 
 def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
@@ -77,16 +77,19 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
     ]
 
     date_skip_list = [
-        '2003-12-15', '2004-12-12', '2004-12-31', '2008-12-31', '2009-03-20',
-        '2009-03-21', '2010-04-10', '2011-04-10', '2012-04-09', '2012-12-31',
-        '2013-04-10', '2016-03-28', '2016-12-31', '2017-08-02', '2017-10-11',
-        '2017-10-12', '2017-12-12', '2017-12-13', '2017-12-14', '2017-12-15',
-        '2017-12-16', '2017-12-17', '2017-12-30', '2017-12-31', '2018-05-25',
-        '2018-05-26', '2018-05-27', '2018-06-30', '2018-07-01', '2018-10-20',
-        '2018-10-21', '2018-10-22', '2018-10-23', '2018-12-22', '2018-12-23',
-        '2018-12-24', '2018-12-25', '2018-12-30', '2018-12-31', '2019-02-23',
-        '2019-02-24', '2019-04-10', '2019-04-11', '2019-04-25', '2019-04-26',
-        '2019-04-27', '2019-10-18', '2019-10-26', '2019-10-27',
+        '2003-12-15', '2004-12-12', '2004-12-31', '2008-12-31',
+        '2009-03-20', '2009-03-21', '2010-04-10', '2011-04-10',
+        '2012-04-09', '2012-12-30', '2012-12-31',
+        '2013-04-10', '2016-03-28', '2016-12-31',
+        '2017-08-02', '2017-10-11', '2017-10-12', '2017-12-12',
+        '2017-12-13', '2017-12-14', '2017-12-15', '2017-12-16',
+        '2017-12-17', '2017-12-30', '2017-12-31',
+        '2018-05-25', '2018-05-26', '2018-05-27', '2018-06-30', '2018-07-01',
+        '2018-10-20', '2018-10-21', '2018-10-22', '2018-10-23', '2018-12-22',
+        '2018-12-23', '2018-12-24', '2018-12-25', '2018-12-30', '2018-12-31',
+        '2019-02-23', '2019-02-24', '2019-04-10', '2019-04-11', '2019-04-25',
+        '2019-04-26', '2019-04-27', '2019-10-17', '2019-10-18',
+        '2019-10-26', '2019-10-27',
     ]
     # date_skip_list = []
 
@@ -108,6 +111,7 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
     #         ini[str(section)][str(k)] = v
 
     # TODO: Move to INI parsing function or module
+    # Required parameters
     try:
         model_name = str(ini['INPUTS']['et_model']).upper()
     except KeyError:
@@ -115,6 +119,13 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
     except Exception as e:
         raise e
     logging.info('  ET Model: {}'.format(model_name))
+
+    try:
+        study_area_coll_id = str(ini['INPUTS']['study_area_coll'])
+    except KeyError:
+        raise ValueError('"study_area_coll" parameter was not set in INI')
+    except Exception as e:
+        raise e
 
     try:
         start_date = str(ini['INPUTS']['start_date'])
@@ -151,6 +162,23 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
         raise e
 
     # Optional parameters
+    try:
+        study_area_property = str(ini['INPUTS']['study_area_property'])
+    except KeyError:
+        study_area_property = None
+        logging.debug('  study_area_property: not set in INI, defaulting to None')
+    except Exception as e:
+        raise e
+
+    try:
+        study_area_features = str(ini['INPUTS']['study_area_features'])
+        study_area_features = sorted([
+            x.strip() for x in study_area_features.split(',')])
+    except KeyError:
+        raise ValueError('"study_area_features" parameter was not set in INI')
+    except Exception as e:
+        raise e
+
     try:
         wrs2_tiles = str(ini['INPUTS']['wrs2_tiles'])
         wrs2_tiles = sorted([x.strip() for x in wrs2_tiles.split(',')])
@@ -386,8 +414,10 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
     # Get list of MGRS tiles that intersect the study area
     logging.debug('\nMGRS Tiles/Zones')
     export_list = mgrs_export_tiles(
-        ini['INPUTS']['study_area_path'],
+        study_area_coll_id=study_area_coll_id,
         mgrs_coll_id=mgrs_ftr_coll_id,
+        study_area_property=study_area_property,
+        study_area_features=study_area_features,
         mgrs_tiles=mgrs_tiles,
         mgrs_skip_list=mgrs_skip_list,
         utm_zones=utm_zones,
@@ -1054,103 +1084,111 @@ def ta_min_bias(input_img):
     return ta_source_img
 
 
-import pytest
-import pprint
-import ee
-ee.Initialize()
-@pytest.mark.parametrize(
-    'ta_list, bias_list, expected',
-    [
-        # Normal bias profile, select average of bracketing Ta values
-        [[257, 267, 277, 287, 297, 307, 317, 327, 337, 347, 357],
-         [-0.2, -0.1, 0.1, 0.6, 2.4, 4.6, 5.7, 6.2, 6.5, 6.8, 7.0],
-         272],
-        # Normal bias profile, crossing at top interval
-        [[257, 267, 277, 287, 297, 307, 317, 327, 337, 347, 357],
-         [-1.1, -1.0, -0.9, -0.8, -0.7, -0.6, -0.5, -0.4, -0.3, -0.2, 0.1],
-         352],
-        # Normal bias profile, crossing at bottom interval
-        [[257, 267, 277, 287, 297, 307, 317, 327, 337, 347, 357],
-         [-0.2, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
-         262],
-        # Increasing then decreasing then increasing biases
-        # Last transition should be selected
-        [[257, 267, 277, 287, 297, 307, 317, 327, 337, 347, 357],
-         [-0.2, 0.1, -0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9],
-         282],
-        # Increasing then decreasing all positive biases
-        [[257, 267, 277, 287, 297, 307, 317, 327, 337, 347, 357],
-         [0.2, 0.3, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9],
-         277],
-        # All positive biases, none equal
-        [[257, 267, 277, 287, 297, 307, 317, 327, 337, 347, 357],
-         [0.1, 0.2, 0.3, 0.6, 2.4, 4.6, 5.7, 6.2, 6.5, 6.8, 7.0],
-         257],
-        # All positive biases, first two equal
-        [[257, 267, 277, 287, 297, 307, 317, 327, 337, 347, 357],
-         [0.1, 0.1, 0.3, 0.6, 2.4, 4.6, 5.7, 6.2, 6.5, 6.8, 7.0],
-         267],
-        # All positive biases, first three equal
-        [[257, 267, 277, 287, 297, 307, 317, 327, 337, 347, 357],
-         [0.2, 0.2, 0.2, 0.6, 2.4, 4.6, 5.7, 6.2, 6.5, 6.8, 7.0],
-         277],
-        # All negative biases will return a masked out pixel
-        [[257, 267, 277, 287, 297, 307, 317, 327, 337, 347, 357],
-         [-1.1, -1.0, -0.9, -0.8, -0.7, -0.6, -0.5, -0.4, -0.3, -0.2, -0.1],
-         None],
-        # Normal bias profile, decreasing bias at high end
-        [[257, 267, 277, 287, 297, 307, 317, 327, 337, 347, 357],
-         [-0.2, -0.1, 0.1, 0.6, 2.4, 4.6, 5.7, 6.2, 6.5, 6.8, 6.0],
-         272],
-        # All positive biases, then decreasing bias at high end
-        [[257, 267, 277, 287, 297, 307, 317, 327, 337, 347, 357],
-         [0.1, 0.2, 0.3, 0.6, 2.4, 4.6, 5.7, 6.2, 6.5, 6.8, 6.0],
-         257],
-        # False/early transition with smaller bias than main transition
-        [[257, 267, 277, 287, 297, 307, 317, 327, 337, 347, 357],
-         [-0.1, 0.1, -0.2, -0.3, 0.6, 2.4, 4.6, 5.7, 6.2, 6.5, 6.8],
-         292],
-    ]
-)
-def test_ta_min_bias(ta_list, bias_list, expected, tol=0.0001):
-    ta_image_list = [
-        ee.Image.constant(ta).rename(['step_{:02d}_ta'.format(i+1)])
-        for i, ta in enumerate(ta_list)]
-    bias_image_list = [
-        ee.Image.constant(bias).rename(['step_{:02d}_bias'.format(i+1)])
-        for i, bias in enumerate(bias_list)]
-    input_img = ee.Image(ta_image_list + bias_image_list)
-    output = utils.constant_image_value(ta_min_bias(input_img))['ta']
-    if expected is None:
-        assert output is None
-    else:
-        assert abs(output - expected) <= tol
+# import pytest
+# import pprint
+# import ee
+# ee.Initialize()
+# @pytest.mark.parametrize(
+#     'ta_list, bias_list, expected',
+#     [
+#         # Normal bias profile, select average of bracketing Ta values
+#         [[257, 267, 277, 287, 297, 307, 317, 327, 337, 347, 357],
+#          [-0.2, -0.1, 0.1, 0.6, 2.4, 4.6, 5.7, 6.2, 6.5, 6.8, 7.0],
+#          272],
+#         # Normal bias profile, crossing at top interval
+#         [[257, 267, 277, 287, 297, 307, 317, 327, 337, 347, 357],
+#          [-1.1, -1.0, -0.9, -0.8, -0.7, -0.6, -0.5, -0.4, -0.3, -0.2, 0.1],
+#          352],
+#         # Normal bias profile, crossing at bottom interval
+#         [[257, 267, 277, 287, 297, 307, 317, 327, 337, 347, 357],
+#          [-0.2, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
+#          262],
+#         # Increasing then decreasing then increasing biases
+#         # Last transition should be selected
+#         [[257, 267, 277, 287, 297, 307, 317, 327, 337, 347, 357],
+#          [-0.2, 0.1, -0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9],
+#          282],
+#         # Increasing then decreasing all positive biases
+#         [[257, 267, 277, 287, 297, 307, 317, 327, 337, 347, 357],
+#          [0.2, 0.3, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9],
+#          277],
+#         # All positive biases, none equal
+#         [[257, 267, 277, 287, 297, 307, 317, 327, 337, 347, 357],
+#          [0.1, 0.2, 0.3, 0.6, 2.4, 4.6, 5.7, 6.2, 6.5, 6.8, 7.0],
+#          257],
+#         # All positive biases, first two equal
+#         [[257, 267, 277, 287, 297, 307, 317, 327, 337, 347, 357],
+#          [0.1, 0.1, 0.3, 0.6, 2.4, 4.6, 5.7, 6.2, 6.5, 6.8, 7.0],
+#          267],
+#         # All positive biases, first three equal
+#         [[257, 267, 277, 287, 297, 307, 317, 327, 337, 347, 357],
+#          [0.2, 0.2, 0.2, 0.6, 2.4, 4.6, 5.7, 6.2, 6.5, 6.8, 7.0],
+#          277],
+#         # All negative biases will return a masked out pixel
+#         [[257, 267, 277, 287, 297, 307, 317, 327, 337, 347, 357],
+#          [-1.1, -1.0, -0.9, -0.8, -0.7, -0.6, -0.5, -0.4, -0.3, -0.2, -0.1],
+#          None],
+#         # Normal bias profile, decreasing bias at high end
+#         [[257, 267, 277, 287, 297, 307, 317, 327, 337, 347, 357],
+#          [-0.2, -0.1, 0.1, 0.6, 2.4, 4.6, 5.7, 6.2, 6.5, 6.8, 6.0],
+#          272],
+#         # All positive biases, then decreasing bias at high end
+#         [[257, 267, 277, 287, 297, 307, 317, 327, 337, 347, 357],
+#          [0.1, 0.2, 0.3, 0.6, 2.4, 4.6, 5.7, 6.2, 6.5, 6.8, 6.0],
+#          257],
+#         # False/early transition with smaller bias than main transition
+#         [[257, 267, 277, 287, 297, 307, 317, 327, 337, 347, 357],
+#          [-0.1, 0.1, -0.2, -0.3, 0.6, 2.4, 4.6, 5.7, 6.2, 6.5, 6.8],
+#          292],
+#     ]
+# )
+# def test_ta_min_bias(ta_list, bias_list, expected, tol=0.0001):
+#     ta_image_list = [
+#         ee.Image.constant(ta).rename(['step_{:02d}_ta'.format(i+1)])
+#         for i, ta in enumerate(ta_list)]
+#     bias_image_list = [
+#         ee.Image.constant(bias).rename(['step_{:02d}_bias'.format(i+1)])
+#         for i, bias in enumerate(bias_list)]
+#     input_img = ee.Image(ta_image_list + bias_image_list)
+#     output = utils.constant_image_value(ta_min_bias(input_img))['ta']
+#     if expected is None:
+#         assert output is None
+#     else:
+#         assert abs(output - expected) <= tol
 
 
-def mgrs_export_tiles(study_area_path, mgrs_coll_id, mgrs_tiles=[],
-                      mgrs_skip_list=[], utm_zones=[], wrs2_tiles=[],
+def mgrs_export_tiles(study_area_coll_id, mgrs_coll_id,
+                      study_area_property=None, study_area_features=[],
+                      mgrs_tiles=[], mgrs_skip_list=[],
+                      utm_zones=[], wrs2_tiles=[],
                       mgrs_property='mgrs', utm_property='utm',
                       wrs2_property='wrs2', simplify_buffer=0):
     """Select MGRS tiles and metadata that intersect the study area geometry
 
     Parameters
     ----------
-    study_area_path : str
-        File path of the study area shapefile.
+    study_area_coll_id : str
+        Study area feature collection asset ID.
     mgrs_coll_id : str
         MGRS feature collection asset ID.
-    mgrs_tiles : list
+    study_area_property : str, optional
+        Property name to use for inList() filter call of study area collection.
+        Filter will only be applied if both 'study_area_property' and
+        'study_area_features' parameters are both set.
+    study_area_features : list, optional
+        List of study area feature property values to filter on.
+    mgrs_tiles : list, optional
         User defined MGRS tile subset.
-    mgrs_skip_list : list
+    mgrs_skip_list : list, optional
         User defined list MGRS tiles to skip.
-    utm_zones : list
+    utm_zones : list, optional
         User defined UTM zone subset.
-    wrs2_tiles : list
+    wrs2_tiles : list, optional
         User defined WRS2 tile subset.
     mgrs_property : str, optional
         MGRS property in the MGRS feature collection (the default is 'mgrs').
     utm_property : str, optional
-        UTM zone property in the MGRS feature collection (the default is 'wrs2').
+        UTM zone property in the MGRS feature collection (the default is 'utm').
     wrs2_property : str, optional
         WRS2 property in the MGRS feature collection (the default is 'wrs2').
     simplify_buffer : float, optional
@@ -1162,50 +1200,35 @@ def mgrs_export_tiles(study_area_path, mgrs_coll_id, mgrs_tiles=[],
     list of dicts: export information
 
     """
-    logging.info('\nReading study area shapefile')
-    logging.info('  {}'.format(study_area_path))
-    study_area_ds = ogr.Open(study_area_path, 0)
-    study_area_lyr = study_area_ds.GetLayer()
-    study_area_osr = study_area_lyr.GetSpatialRef()
-    study_area_crs = str(study_area_osr.ExportToWkt())
-    # study_area_proj4 = study_area_osr.ExportToProj4()
-    logging.debug('  Study area projection: {}'.format(study_area_crs))
+    # Build and filter the study area feature collection
+    logging.debug('Building study area collection')
+    logging.debug('  {}'.format(study_area_coll_id))
+    study_area_coll = ee.FeatureCollection(study_area_coll_id)
+    if (study_area_property == 'STUSPS' and
+            'CONUS' in [x.upper() for x in study_area_features]):
+        # Exclude AK, HI, AS, GU, PR, MP, VI, (but keep DC)
+        study_area_features = [
+            'AL', 'AR', 'AZ', 'CA', 'CO', 'CT', 'DC', 'DE', 'FL', 'GA',
+            'IA', 'ID', 'IL', 'IN', 'KS', 'KY', 'LA', 'MA', 'MD', 'ME',
+            'MI', 'MN', 'MO', 'MS', 'MT', 'NC', 'ND', 'NE', 'NH', 'NJ',
+            'NM', 'NV', 'NY', 'OH', 'OK', 'OR', 'PA', 'RI', 'SC', 'SD',
+            'TN', 'TX', 'UT', 'VA', 'VT', 'WA', 'WI', 'WV', 'WY']
+    # elif (study_area_property == 'STUSPS' and
+    #         'WESTERN11' in [x.upper() for x in study_area_features]):
+    #     study_area_features = [
+    #         'AZ', 'CA', 'CO', 'ID', 'MT', 'NM', 'NV', 'OR', 'UT', 'WA', 'WY']
+    study_area_features = sorted(list(set(study_area_features)))
 
-    # Get the dissolved/unioned geometry of the study area
-    output_geom = ogr.Geometry(ogr.wkbMultiPolygon)
-    for study_area_ftr in study_area_lyr:
-        output_geom = output_geom.Union(study_area_ftr.GetGeometryRef())
-    study_area_ds = None
-
-    # # Project the study area geometry to the EPSG:3857
-    # #   so units will be meters for buffering and simplifying
-    # temp_crs = 'EPSG:3857'
-    # temp_osr = osr.SpatialReference()
-    # temp_osr.ImportFromEPSG(3857)
-    # output_tx = osr.CoordinateTransformation(study_area_osr, temp_osr)
-    # output_geom.Transform(output_tx)
-
-    if simplify_buffer:
-        output_geom = output_geom.SimplifyPreserveTopology(simplify_buffer) \
-            .buffer(simplify_buffer)
-    elif study_area_osr.IsGeographic():
-        tol = 0.0000001
-        logging.debug('  Simplifying study area geometry (tol={})'.format(tol))
-        output_geom = output_geom.SimplifyPreserveTopology(tol)
-        # output_geom = output_geom.SimplifyPreserveTopology(tol).buffer(tol)
-    # else:
-    # Added flatten call to change clockwise geometries to counter cw
-    output_geom.FlattenTo2D()
-
-    logging.debug('  Building GeoJSON')
-    output_geojson = json.loads(output_geom.ExportToJson())
-
-    logging.debug('  Building EE geometry')
-    output_ee_geom = ee.Geometry(output_geojson, study_area_crs, False)
+    if study_area_property and study_area_features:
+        logging.debug('  Filtering study area collection')
+        logging.debug('  Property: {}'.format(study_area_property))
+        logging.debug('  Features: {}'.format(','.join(study_area_features)))
+        study_area_coll = study_area_coll.filter(
+            ee.Filter.inList(study_area_property, study_area_features))
 
     logging.info('Building MGRS tile list')
     tiles_coll = ee.FeatureCollection(mgrs_coll_id) \
-        .filterBounds(output_ee_geom)
+        .filterBounds(study_area_coll.geometry())
 
     # Filter collection by user defined lists
     if utm_zones:
