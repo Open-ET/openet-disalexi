@@ -175,7 +175,8 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
         study_area_features = sorted([
             x.strip() for x in study_area_features.split(',')])
     except KeyError:
-        raise ValueError('"study_area_features" parameter was not set in INI')
+        study_area_features = []
+        logging.debug('  study_area_features: not set in INI, defaulting to []')
     except Exception as e:
         raise e
 
