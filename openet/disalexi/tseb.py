@@ -18,7 +18,7 @@ def tseb_pt(t_air, t_rad, e_air, u, p, z, rs_1, rs24, vza,
             aleafv, aleafn, aleafl, adeadv, adeadn, adeadl,
             albedo, ndvi, lai, clump, leaf_width, hc_min, hc_max,
             datetime, lon=None, lat=None, a_pt_in=1.32,
-            stabil_iter=36, albedo_iter=10):
+            stabil_iter=36, albedo_iter=10, et_min=0.01):
     """Priestley-Taylor TSEB
 
     Calculates the Priestley Taylor TSEB fluxes using a single observation of
@@ -67,9 +67,9 @@ def tseb_pt(t_air, t_rad, e_air, u, p, z, rs_1, rs24, vza,
     leaf_width : ee.Image
         Average/effective leaf width [m].
     hc_min : ee.Image
-        Canopy height [m].
+        Minimum canopy height [m].
     hc_max : ee.Image
-        Canopy height [m].
+        Maximum canopy height [m].
     datetime : ee.Date
         Image datetime.
     lat : ee.Image
@@ -84,6 +84,8 @@ def tseb_pt(t_air, t_rad, e_air, u, p, z, rs_1, rs24, vza,
     albedo_iter: int, optional
         Number of iterations of albedo separation calculation
         (the default is 10).
+    et_min : float, optinal
+        Minimum output ET value (the default is 0.01).
 
     Returns
     -------
@@ -534,7 +536,7 @@ def tseb_pt(t_air, t_rad, e_air, u, p, z, rs_1, rs24, vza,
             '((LE_c + LE_s) / rs_1) * (rs24 / 2.45) * scaling',
             {'LE_c': LE_c, 'LE_s': LE_s, 'rs_1': rs_1,
              'rs24': rs24.multiply(0.0864 / 24.0), 'scaling': 1}) \
-        .max(0.01) \
+        .max(et_min)
 
     # # DEADBEEF
     # print('\nAfter Checking EBC')

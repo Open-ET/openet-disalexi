@@ -25,6 +25,8 @@ dist/
 # Earth Engine keys
 privatekey.json
 privatekey.b64
+*-datastore.json
+*-gee.json
 
 # Miscellaneous files
 notes.txt

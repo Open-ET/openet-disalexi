@@ -12,12 +12,14 @@ import re
 import time
 
 import ee
-# from google.cloud import datastore
 from osgeo import ogr, osr
 
 import openet.disalexi
 import openet.core
 import openet.core.utils as utils
+
+TOOL_NAME = 'tair_image_wrs2_export'
+TOOL_VERSION = '0.1.6'
 
 
 def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
@@ -64,7 +66,7 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
     # CGM - Which format should we use for the WRS2 tile?
     wrs2_tile_fmt = 'p{:03d}r{:03d}'
     # wrs2_tile_fmt = '{:03d}{:03d}'
-    wrs2_tile_re = re.compile('p?(\d{1,3})r?(\d{1,3})')
+    wrs2_tile_re = re.compile('p?(\\d{1,3})r?(\\d{1,3})')
 
     # List of path/rows to skip
     wrs2_skip_list = [
@@ -73,6 +75,23 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
         'p049r026',  # Vancouver Island
         # 'p041r037', 'p042r037', 'p047r031',  # CA Coast
     ]
+
+    date_skip_list = [
+        '2003-12-15', '2004-12-12', '2004-12-31', '2008-12-31',
+        '2009-03-20', '2009-03-21', '2010-04-10', '2011-04-10',
+        '2012-04-09', '2012-12-30', '2012-12-31',
+        '2013-04-10', '2016-03-28', '2016-12-31',
+        '2017-08-02', '2017-10-11', '2017-10-12', '2017-12-12',
+        '2017-12-13', '2017-12-14', '2017-12-15', '2017-12-16',
+        '2017-12-17', '2017-12-30', '2017-12-31',
+        '2018-05-25', '2018-05-26', '2018-05-27', '2018-06-30', '2018-07-01',
+        '2018-10-20', '2018-10-21', '2018-10-22', '2018-10-23', '2018-12-22',
+        '2018-12-23', '2018-12-24', '2018-12-25', '2018-12-30', '2018-12-31',
+        '2019-02-23', '2019-02-24', '2019-04-10', '2019-04-11', '2019-04-25',
+        '2019-04-26', '2019-04-27', '2019-10-17', '2019-10-18',
+        '2019-10-26', '2019-10-27',
+    ]
+    # date_skip_list = []
 
     mgrs_skip_list = []
 
@@ -92,6 +111,7 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
     #         ini[str(section)][str(k)] = v
 
     # TODO: Move to INI parsing function or module
+    # Required parameters
     try:
         model_name = str(ini['INPUTS']['et_model']).upper()
     except KeyError:
@@ -99,6 +119,13 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
     except Exception as e:
         raise e
     logging.info('  ET Model: {}'.format(model_name))
+
+    try:
+        study_area_coll_id = str(ini['INPUTS']['study_area_coll'])
+    except KeyError:
+        raise ValueError('"study_area_coll" parameter was not set in INI')
+    except Exception as e:
+        raise e
 
     try:
         start_date = str(ini['INPUTS']['start_date'])
@@ -135,6 +162,24 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
         raise e
 
     # Optional parameters
+    try:
+        study_area_property = str(ini['INPUTS']['study_area_property'])
+    except KeyError:
+        study_area_property = None
+        logging.debug('  study_area_property: not set in INI, defaulting to None')
+    except Exception as e:
+        raise e
+
+    try:
+        study_area_features = str(ini['INPUTS']['study_area_features'])
+        study_area_features = sorted([
+            x.strip() for x in study_area_features.split(',')])
+    except KeyError:
+        study_area_features = []
+        logging.debug('  study_area_features: not set in INI, defaulting to []')
+    except Exception as e:
+        raise e
+
     try:
         wrs2_tiles = str(ini['INPUTS']['wrs2_tiles'])
         wrs2_tiles = sorted([x.strip() for x in wrs2_tiles.split(',')])
@@ -302,20 +347,22 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
         ee.Initialize()
 
 
-    # # TODO: set datastore key file as a parameter?
-    # datastore_key_file = 'openet-dri-datastore.json'
-    # if log_tasks and not os.path.isfile(datastore_key_file):
-    #     logging.info('Task logging disabled, datastore key does not exist')
-    #     log_tasks = False
-    #     # input('ENTER')
-    # if log_tasks:
-    #     logging.info('\nInitializing task datastore client')
-    #     try:
-    #         datastore_client = datastore.Client.from_service_account_json(
-    #             datastore_key_file)
-    #     except Exception as e:
-    #         logging.error('{}'.format(e))
-    #         return False
+    # TODO: set datastore key file as a parameter?
+    datastore_key_file = 'openet-dri-datastore.json'
+    if log_tasks and not os.path.isfile(datastore_key_file):
+        logging.info('Task logging disabled, datastore key does not exist')
+        log_tasks = False
+        # input('ENTER')
+    if log_tasks:
+        logging.info('\nInitializing task datastore client')
+        # TODO: Move to top and add to requirements.txt and environment.yaml
+        from google.cloud import datastore
+        try:
+            datastore_client = datastore.Client.from_service_account_json(
+                datastore_key_file)
+        except Exception as e:
+            logging.error('{}'.format(e))
+            return False
 
 
     # Get current running tasks
@@ -368,8 +415,10 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
     # Get list of MGRS tiles that intersect the study area
     logging.debug('\nMGRS Tiles/Zones')
     export_list = mgrs_export_tiles(
-        ini['INPUTS']['study_area_path'],
+        study_area_coll_id=study_area_coll_id,
         mgrs_coll_id=mgrs_ftr_coll_id,
+        study_area_property=study_area_property,
+        study_area_features=study_area_features,
         mgrs_tiles=mgrs_tiles,
         mgrs_skip_list=mgrs_skip_list,
         utm_zones=utm_zones,
@@ -483,8 +532,9 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
             image_id_list = sorted(list(set(
                 landsat_coll.aggregate_array('system:id').getInfo())))
             if not image_id_list:
-                logging.debug('  Empty image ID list, exiting')
-                return False
+                logging.info('  Empty image ID list, skipping tile')
+                # logging.debug('  Empty image ID list, exiting')
+                # return False
 
             # Get list of existing images for the target tile
             logging.debug('  Getting GEE asset list')
@@ -525,6 +575,10 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
                 logging.debug('    Date: {}'.format(image_date))
                 # logging.debug('    DOY: {}'.format(doy))
 
+                if date_skip_list and image_date in date_skip_list:
+                    logging.info('    Date in skip list, skipping')
+                    continue
+
                 export_id = export_id_fmt.format(
                     model=ini['INPUTS']['et_model'].lower(),
                     index=image_id.lower().replace('/', '_'))
@@ -564,6 +618,23 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
                             except:
                                 logging.info('    Error removing asset, skipping')
                                 continue
+                        elif (asset_props[asset_id]['alexi_source'] <
+                              model_args['alexi_source']):
+                            logging.info('    ALEXI source is old, removing')
+                            # input('ENTER')
+                            try:
+                                ee.data.deleteAsset(asset_id)
+                            except:
+                                logging.info('    Error removing asset, skipping')
+                                continue
+                        # elif (asset_props[asset_id]['date_ingested'] <= '2020-04-27'):
+                        #     logging.info('    date_ingested is old, removing')
+                        #     # input('ENTER')
+                        #     try:
+                        #         ee.data.deleteAsset(asset_id)
+                        #     except:
+                        #         logging.info('    Error removing asset, skipping')
+                        #         continue
                         # elif ((('T1_RT_TOA' in asset_props[asset_id]['coll_id']) and
                         #        ('T1_RT_TOA' not in image_id)) or
                         #       (('T1_RT' in asset_props[asset_id]['coll_id']) and
@@ -613,9 +684,10 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
                     if export_id in tasks.keys():
                         logging.info('    Task already submitted, skipping')
                         continue
-                    if asset_props and asset_id in asset_props.keys():
+                    elif asset_props and asset_id in asset_props.keys():
                         logging.info('    Asset already exists, skipping')
                         continue
+
 
                 if tair_args['source_coll'] is None:
                     logging.debug('    Tair source: {}'.format(tair_args['ta_start']))
@@ -623,40 +695,61 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
                         .rename(['ta'])
                 elif tair_args['source_coll'] == 'NLDAS':
                     logging.debug('    Tair source: NLDAS')
-                    # TODO - Check if selecting the 0 UTC time is intentional
                     ta_source_coll = ee.ImageCollection('NASA/NLDAS/FORA0125_H002')\
-                        .select(['temperature'])\
-                        .filterDate(image_date, next_date)
-                    input_image = ee.Image(ta_source_coll.first())\
-                        .add(273.15).subtract(40).floor()
+                        .filterDate(image_date, next_date)\
+                        .select(['temperature'])
+                    # Pulling maximum air temperature instead of 0 UTC
+                    # input_image = ee.Image(ta_source_coll.first())\
+                    input_image = ee.Image(ta_source_coll.reduce(ee.Reducer.max()))\
+                        .add(273.15).floor()
                     ta_source_img = alexi_mask.add(input_image).rename(['ta'])
                 else:
                     logging.debug('    Tair source: {}'.format(tair_args['source_coll']))
                     ta_source_coll = ee.ImageCollection(tair_args['source_coll'])\
                         .filterMetadata('image_id', 'equals', image_id)
                     if ta_source_coll.size().getInfo() == 0:
-                        logging.info('  No images in Ta source coll, skipping')
+                        logging.info('    No Tair image in source coll, skipping')
                         # input('ENTER')
                         continue
+                    ta_source_img = ta_min_bias(ee.Image(ta_source_coll.first()))
 
-                    # A lot code to figure out the starting Ta value
-                    # This identifies the first Ta that has a positive bias and
-                    #   a bias that is larger than the previous bias
-                    # It then selects the Ta for the previous step
-                    # This should bracket a bias of zero but it is not guaranteed
-                    input_img = ee.Image(ta_source_coll.first())
-                    ta_array = input_img.select('step_\\d+_ta').toArray()
-                    bias_array = input_img.select('step_\\d+_bias').toArray()
-                    diff = bias_array.arraySlice(0, 1)\
-                        .subtract(bias_array.arraySlice(0, 0, -1))
-                    index = diff.gt(0).And(bias_array.arraySlice(0, 1).gt(0))
-                    # Intentionally use 0,0,-1 slice here (instead of 0,1)
-                    #   to get Ta before bias goes positive
-                    ta_source_img = ta_array.arraySlice(0, 0, -1).arrayMask(index)\
-                        .arraySlice(0, 0, 1).arrayFlatten([['array']])\
-                        .rename(['ta'])
+                # Manually check if the source LAI and TIR images are present
+                # Eventually this should/could be done inside the model instead
+                if ('tir_source' in model_args.keys() and \
+                        type(model_args['tir_source']) is str):
+                    # Assumptions: string tir_source is an image collection ID
+                    tir_coll = ee.ImageCollection(model_args['tir_source']) \
+                        .filterMetadata('scene_id', 'equals', scene_id)
+                    tir_img = ee.Image(tir_coll.first())
+                    tir_info = tir_img.getInfo()
+                    try:
+                        sharpen_version = tir_info['properties']['sharpen_version']
+                    except:
+                        logging.info('  No TIR image in source, skipping')
+                        input('ENTER')
+                        continue
+
+                if ('lai_source' in model_args.keys() and \
+                        type(model_args['lai_source']) is str):
+                    # Assumptions: string lai_source is an image collection ID
+                    lai_coll = ee.ImageCollection(model_args['lai_source']) \
+                        .filterMetadata('scene_id', 'equals', scene_id)
+                    lai_img = ee.Image(lai_coll.first())
+                    lai_info = lai_img.getInfo()
+                    try:
+                        landsat_lai_version = lai_info['properties']['landsat_lai_version']
+                    except:
+                        logging.info('  No LAI image in source, skipping')
+                        input('ENTER')
+                        continue
+
 
                 landsat_img = ee.Image(image_id)
+                # CGM: We could pre-compute (or compute once and then save)
+                #   the crs, transform, and shape since they should (will?) be
+                #   the same for each wrs2 tile
+                output_info = utils.get_info(landsat_img.select(['B2']))
+
                 d_obj = openet.disalexi.Image(
                     openet.disalexi.LandsatSR(landsat_img).prep(), **model_args)
                 export_img = d_obj.ta_mosaic(
@@ -664,7 +757,10 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
                     step_size=tair_args['step_size'],
                     step_count=tair_args['step_count'])
 
-                if tair_args['retile'] and tair_args['retile'] > 0:
+                # pprint.pprint(export_img.getInfo())
+                # input('ENTER')
+
+                if tair_args['retile'] and tair_args['retile'] > 1:
                     export_img = export_img.retile(tair_args['retile'])
 
                 properties = {
@@ -673,18 +769,21 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
                     'core_version': openet.core.__version__,
                     'date_ingested': datetime.datetime.today().strftime('%Y-%m-%d'),
                     'image_id': image_id,
+                    'landsat_lai_version': landsat_lai_version,
                     'model_name': model_name,
                     'model_version': openet.disalexi.__version__,
                     'scene_id': scene_id,
-                    'system:time_start': utils.millis(image_dt),
+                    'sharpen_version': sharpen_version,
+                    'tool_name': TOOL_NAME,
+                    'tool_version': TOOL_VERSION,
                     'wrs2_tile': wrs2_tile_fmt.format(p, r),
                     # Source properties
-                    'CLOUD_COVER': landsat_img.get('CLOUD_COVER'),
-                    'CLOUD_COVER_LAND': landsat_img.get('CLOUD_COVER_LAND'),
+                    'CLOUD_COVER': output_info['properties']['CLOUD_COVER'],
+                    'CLOUD_COVER_LAND': output_info['properties']['CLOUD_COVER_LAND'],
                     # CGM - Should we use the Landsat time or the ALEXI time?
-                    'system:time_start': landsat_img.get('system:time_start'),
+                    'system:time_start': output_info['properties']['system:time_start'],
                     # 'system:time_start': utils.millis(image_dt),
-                    # Other operties
+                    # Other poperties
                     # 'spacecraft_id': landsat_img.get('SATELLITE'),
                     # 'landsat': landsat,
                     # 'date': image_dt.strftime('%Y-%m-%d'),
@@ -771,31 +870,31 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
                 # # Not using ee_task_start since it doesn't return the task object
                 # utils.ee_task_start(task)
 
-                # # Write the export task info the openet-dri project datastore
-                # if log_tasks:
-                #     logging.debug('    Writing datastore entity')
-                #     try:
-                #         task_obj = datastore.Entity(key=datastore_client.key(
-                #             'Task', task.status()['id']),
-                #             exclude_from_indexes=['properties'])
-                #         for k, v in task.status().items():
-                #             task_obj[k] = v
-                #         # task_obj['date'] = datetime.datetime.today() \
-                #         #     .strftime('%Y-%m-%d')
-                #         task_obj['index'] = properties.pop('wrs2_tile')
-                #         # task_obj['wrs2_tile'] = properties.pop('wrs2_tile')
-                #         task_obj['model_name'] = properties.pop('model_name')
-                #         # task_obj['model_version'] = properties.pop('model_version')
-                #         task_obj['runtime'] = 0
-                #         task_obj['start_timestamp_ms'] = 0
-                #         task_obj['tool_name'] = properties.pop('tool_name')
-                #         task_obj['properties'] = json.dumps(properties)
-                #         datastore_client.put(task_obj)
-                #     except Exception as e:
-                #         # CGM - The message/handling will probably need to be updated
-                #         #   We may want separate try/excepts on the create and the put
-                #         logging.warning('\nDatastore entity was not written')
-                #         logging.warning('{}\n'.format(e))
+                # Write the export task info the openet-dri project datastore
+                if log_tasks:
+                    logging.debug('    Writing datastore entity')
+                    try:
+                        task_obj = datastore.Entity(key=datastore_client.key(
+                            'Task', task.status()['id']),
+                            exclude_from_indexes=['properties'])
+                        for k, v in task.status().items():
+                            task_obj[k] = v
+                        # task_obj['date'] = datetime.datetime.today() \
+                        #     .strftime('%Y-%m-%d')
+                        task_obj['index'] = properties.pop('wrs2_tile')
+                        # task_obj['wrs2_tile'] = properties.pop('wrs2_tile')
+                        task_obj['model_name'] = properties.pop('model_name')
+                        # task_obj['model_version'] = properties.pop('model_version')
+                        task_obj['runtime'] = 0
+                        task_obj['start_timestamp_ms'] = 0
+                        task_obj['tool_name'] = properties.pop('tool_name')
+                        task_obj['properties'] = json.dumps(properties)
+                        datastore_client.put(task_obj)
+                    except Exception as e:
+                        # CGM - The message/handling will probably need to be updated
+                        #   We may want separate try/excepts on the create and the put
+                        logging.warning('\nDatastore entity was not written')
+                        logging.warning('{}\n'.format(e))
 
                 # Pause before starting the next export task
                 utils.delay_task(delay_time, max_ready)
@@ -920,30 +1019,177 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
     #  #     export_img = ee.Image([ta_a, bias_a, ta_b, bias_b])
 
 
-def mgrs_export_tiles(study_area_path, mgrs_coll_id, mgrs_tiles=[],
-                      mgrs_skip_list=[], utm_zones=[], wrs2_tiles=[],
+# TODO: Move this function into the model code so it can be tested
+def ta_min_bias(input_img):
+    """
+
+    Parameters
+    ----------
+    input_img
+
+    Returns
+    -------
+
+    """
+    input_img = ee.Image(input_img)
+
+    # Reverse the band order so that we can find the last transition
+    #   from decreasing to increasing with a positive bias
+    ta_bands = input_img.select('step_\\d+_ta').bandNames().reverse()
+    bias_bands = input_img.select('step_\\d+_bias').bandNames().reverse()
+    ta_array = input_img.select(ta_bands).toArray()
+    bias_array = input_img.select(bias_bands).toArray()
+
+    # Identify the "last" transition from a negative to positive bias
+    # CGM - Having problems with .ceil() limiting result to the image data range
+    #   Multiplying by a big number seemed to fix the issue but this could still
+    #     be a problem with the bias ranges get really small
+    sign_array = bias_array.multiply(1000).ceil().max(0).min(1).int()
+    transition_array = sign_array.arraySlice(0, 0, -1)\
+        .subtract(sign_array.arraySlice(0, 1))
+    # Insert an extra value at the beginning (of reverse, so actually at end)
+    #   of the transition array so the indexing lines up for all steps
+    transition_array = bias_array.arraySlice(0, 0, 1).multiply(0)\
+        .arrayCat(transition_array, 0)
+    transition_index = transition_array.arrayArgmax().arrayFlatten([['index']])
+    # Get the max transition value in order to know if there was a transition
+    transition_max = transition_array\
+        .arrayReduce(ee.Reducer.max(), [0]).arrayFlatten([['max']])
+
+    # Identify the position of minimum absolute bias
+    min_bias_index = bias_array.abs().multiply(-1).arrayArgmax()\
+        .arrayFlatten([['index']])
+
+    # Identify the "bracketing" Ta and bias values
+    # If there is a transition, use the "last" transition
+    # If there is not a transition, use the minimum absolute bias for both
+    # Note, the index is for the reversed arrays
+    index_b = transition_index.subtract(1).max(0)\
+        .where(transition_max.eq(0), min_bias_index)
+    index_a = transition_index.min(ta_bands.size().subtract(1))\
+        .where(transition_max.eq(0), min_bias_index)
+    ta_b = ta_array.arrayGet(index_b)
+    ta_a = ta_array.arrayGet(index_a)
+    bias_b = bias_array.arrayGet(index_b)
+    bias_a = bias_array.arrayGet(index_a)
+
+    # For now, compute the target Ta as the average of the bracketing Ta values
+    # Eventually Ta could be linearly interpolated or computed
+    #   as some sort of weighted average (based on the biases)
+    ta_source_img = ta_a.add(ta_b).multiply(0.5).rename(['ta'])
+
+    # Mask out Ta cells with all negative biases
+    ta_source_img = ta_source_img\
+        .updateMask(bias_b.lt(0).And(bias_a.lt(0)).Not())
+
+    return ta_source_img
+
+
+# import pytest
+# import pprint
+# import ee
+# ee.Initialize()
+# @pytest.mark.parametrize(
+#     'ta_list, bias_list, expected',
+#     [
+#         # Normal bias profile, select average of bracketing Ta values
+#         [[257, 267, 277, 287, 297, 307, 317, 327, 337, 347, 357],
+#          [-0.2, -0.1, 0.1, 0.6, 2.4, 4.6, 5.7, 6.2, 6.5, 6.8, 7.0],
+#          272],
+#         # Normal bias profile, crossing at top interval
+#         [[257, 267, 277, 287, 297, 307, 317, 327, 337, 347, 357],
+#          [-1.1, -1.0, -0.9, -0.8, -0.7, -0.6, -0.5, -0.4, -0.3, -0.2, 0.1],
+#          352],
+#         # Normal bias profile, crossing at bottom interval
+#         [[257, 267, 277, 287, 297, 307, 317, 327, 337, 347, 357],
+#          [-0.2, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
+#          262],
+#         # Increasing then decreasing then increasing biases
+#         # Last transition should be selected
+#         [[257, 267, 277, 287, 297, 307, 317, 327, 337, 347, 357],
+#          [-0.2, 0.1, -0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9],
+#          282],
+#         # Increasing then decreasing all positive biases
+#         [[257, 267, 277, 287, 297, 307, 317, 327, 337, 347, 357],
+#          [0.2, 0.3, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9],
+#          277],
+#         # All positive biases, none equal
+#         [[257, 267, 277, 287, 297, 307, 317, 327, 337, 347, 357],
+#          [0.1, 0.2, 0.3, 0.6, 2.4, 4.6, 5.7, 6.2, 6.5, 6.8, 7.0],
+#          257],
+#         # All positive biases, first two equal
+#         [[257, 267, 277, 287, 297, 307, 317, 327, 337, 347, 357],
+#          [0.1, 0.1, 0.3, 0.6, 2.4, 4.6, 5.7, 6.2, 6.5, 6.8, 7.0],
+#          267],
+#         # All positive biases, first three equal
+#         [[257, 267, 277, 287, 297, 307, 317, 327, 337, 347, 357],
+#          [0.2, 0.2, 0.2, 0.6, 2.4, 4.6, 5.7, 6.2, 6.5, 6.8, 7.0],
+#          277],
+#         # All negative biases will return a masked out pixel
+#         [[257, 267, 277, 287, 297, 307, 317, 327, 337, 347, 357],
+#          [-1.1, -1.0, -0.9, -0.8, -0.7, -0.6, -0.5, -0.4, -0.3, -0.2, -0.1],
+#          None],
+#         # Normal bias profile, decreasing bias at high end
+#         [[257, 267, 277, 287, 297, 307, 317, 327, 337, 347, 357],
+#          [-0.2, -0.1, 0.1, 0.6, 2.4, 4.6, 5.7, 6.2, 6.5, 6.8, 6.0],
+#          272],
+#         # All positive biases, then decreasing bias at high end
+#         [[257, 267, 277, 287, 297, 307, 317, 327, 337, 347, 357],
+#          [0.1, 0.2, 0.3, 0.6, 2.4, 4.6, 5.7, 6.2, 6.5, 6.8, 6.0],
+#          257],
+#         # False/early transition with smaller bias than main transition
+#         [[257, 267, 277, 287, 297, 307, 317, 327, 337, 347, 357],
+#          [-0.1, 0.1, -0.2, -0.3, 0.6, 2.4, 4.6, 5.7, 6.2, 6.5, 6.8],
+#          292],
+#     ]
+# )
+# def test_ta_min_bias(ta_list, bias_list, expected, tol=0.0001):
+#     ta_image_list = [
+#         ee.Image.constant(ta).rename(['step_{:02d}_ta'.format(i+1)])
+#         for i, ta in enumerate(ta_list)]
+#     bias_image_list = [
+#         ee.Image.constant(bias).rename(['step_{:02d}_bias'.format(i+1)])
+#         for i, bias in enumerate(bias_list)]
+#     input_img = ee.Image(ta_image_list + bias_image_list)
+#     output = utils.constant_image_value(ta_min_bias(input_img))['ta']
+#     if expected is None:
+#         assert output is None
+#     else:
+#         assert abs(output - expected) <= tol
+
+
+def mgrs_export_tiles(study_area_coll_id, mgrs_coll_id,
+                      study_area_property=None, study_area_features=[],
+                      mgrs_tiles=[], mgrs_skip_list=[],
+                      utm_zones=[], wrs2_tiles=[],
                       mgrs_property='mgrs', utm_property='utm',
                       wrs2_property='wrs2', simplify_buffer=0):
     """Select MGRS tiles and metadata that intersect the study area geometry
 
     Parameters
     ----------
-    study_area_path : str
-        File path of the study area shapefile.
+    study_area_coll_id : str
+        Study area feature collection asset ID.
     mgrs_coll_id : str
         MGRS feature collection asset ID.
-    mgrs_tiles : list
+    study_area_property : str, optional
+        Property name to use for inList() filter call of study area collection.
+        Filter will only be applied if both 'study_area_property' and
+        'study_area_features' parameters are both set.
+    study_area_features : list, optional
+        List of study area feature property values to filter on.
+    mgrs_tiles : list, optional
         User defined MGRS tile subset.
-    mgrs_skip_list : list
+    mgrs_skip_list : list, optional
         User defined list MGRS tiles to skip.
-    utm_zones : list
+    utm_zones : list, optional
         User defined UTM zone subset.
-    wrs2_tiles : list
+    wrs2_tiles : list, optional
         User defined WRS2 tile subset.
     mgrs_property : str, optional
         MGRS property in the MGRS feature collection (the default is 'mgrs').
     utm_property : str, optional
-        UTM zone property in the MGRS feature collection (the default is 'wrs2').
+        UTM zone property in the MGRS feature collection (the default is 'utm').
     wrs2_property : str, optional
         WRS2 property in the MGRS feature collection (the default is 'wrs2').
     simplify_buffer : float, optional
@@ -955,50 +1201,35 @@ def mgrs_export_tiles(study_area_path, mgrs_coll_id, mgrs_tiles=[],
     list of dicts: export information
 
     """
-    logging.info('\nReading study area shapefile')
-    logging.info('  {}'.format(study_area_path))
-    study_area_ds = ogr.Open(study_area_path, 0)
-    study_area_lyr = study_area_ds.GetLayer()
-    study_area_osr = study_area_lyr.GetSpatialRef()
-    study_area_crs = str(study_area_osr.ExportToWkt())
-    # study_area_proj4 = study_area_osr.ExportToProj4()
-    logging.debug('  Study area projection: {}'.format(study_area_crs))
+    # Build and filter the study area feature collection
+    logging.debug('Building study area collection')
+    logging.debug('  {}'.format(study_area_coll_id))
+    study_area_coll = ee.FeatureCollection(study_area_coll_id)
+    if (study_area_property == 'STUSPS' and
+            'CONUS' in [x.upper() for x in study_area_features]):
+        # Exclude AK, HI, AS, GU, PR, MP, VI, (but keep DC)
+        study_area_features = [
+            'AL', 'AR', 'AZ', 'CA', 'CO', 'CT', 'DC', 'DE', 'FL', 'GA',
+            'IA', 'ID', 'IL', 'IN', 'KS', 'KY', 'LA', 'MA', 'MD', 'ME',
+            'MI', 'MN', 'MO', 'MS', 'MT', 'NC', 'ND', 'NE', 'NH', 'NJ',
+            'NM', 'NV', 'NY', 'OH', 'OK', 'OR', 'PA', 'RI', 'SC', 'SD',
+            'TN', 'TX', 'UT', 'VA', 'VT', 'WA', 'WI', 'WV', 'WY']
+    # elif (study_area_property == 'STUSPS' and
+    #         'WESTERN11' in [x.upper() for x in study_area_features]):
+    #     study_area_features = [
+    #         'AZ', 'CA', 'CO', 'ID', 'MT', 'NM', 'NV', 'OR', 'UT', 'WA', 'WY']
+    study_area_features = sorted(list(set(study_area_features)))
 
-    # Get the dissolved/unioned geometry of the study area
-    output_geom = ogr.Geometry(ogr.wkbMultiPolygon)
-    for study_area_ftr in study_area_lyr:
-        output_geom = output_geom.Union(study_area_ftr.GetGeometryRef())
-    study_area_ds = None
-
-    # # Project the study area geometry to the EPSG:3857
-    # #   so units will be meters for buffering and simplifying
-    # temp_crs = 'EPSG:3857'
-    # temp_osr = osr.SpatialReference()
-    # temp_osr.ImportFromEPSG(3857)
-    # output_tx = osr.CoordinateTransformation(study_area_osr, temp_osr)
-    # output_geom.Transform(output_tx)
-
-    if simplify_buffer:
-        output_geom = output_geom.SimplifyPreserveTopology(simplify_buffer) \
-            .buffer(simplify_buffer)
-    elif study_area_osr.IsGeographic():
-        tol = 0.0000001
-        logging.debug('  Simplifying study area geometry (tol={})'.format(tol))
-        output_geom = output_geom.SimplifyPreserveTopology(tol)
-        # output_geom = output_geom.SimplifyPreserveTopology(tol).buffer(tol)
-    # else:
-    # Added flatten call to change clockwise geometries to counter cw
-    output_geom.FlattenTo2D()
-
-    logging.debug('  Building GeoJSON')
-    output_geojson = json.loads(output_geom.ExportToJson())
-
-    logging.debug('  Building EE geometry')
-    output_ee_geom = ee.Geometry(output_geojson, study_area_crs, False)
+    if study_area_property and study_area_features:
+        logging.debug('  Filtering study area collection')
+        logging.debug('  Property: {}'.format(study_area_property))
+        logging.debug('  Features: {}'.format(','.join(study_area_features)))
+        study_area_coll = study_area_coll.filter(
+            ee.Filter.inList(study_area_property, study_area_features))
 
     logging.info('Building MGRS tile list')
     tiles_coll = ee.FeatureCollection(mgrs_coll_id) \
-        .filterBounds(output_ee_geom)
+        .filterBounds(study_area_coll.geometry())
 
     # Filter collection by user defined lists
     if utm_zones:
