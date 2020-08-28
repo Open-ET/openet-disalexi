@@ -190,15 +190,6 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
     except Exception as e:
         raise e
 
-    # try:
-    #     simplify_buffer = float(ini['INPUTS']['simplify_buffer'])
-    # except KeyError:
-    #     simplify_buffer = 0
-    #     logging.debug('  simplify_buffer: not set in INI, '
-    #                   'defaulting to {}'.format(simplify_buffer))
-    # except Exception as e:
-    #     raise e
-
     try:
         mgrs_tiles = str(ini['EXPORT']['mgrs_tiles'])
         mgrs_tiles = sorted([x.strip() for x in mgrs_tiles.split(',')])
@@ -350,7 +341,7 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
     # TODO: set datastore key file as a parameter?
     datastore_key_file = 'openet-dri-datastore.json'
     if log_tasks and not os.path.isfile(datastore_key_file):
-        logging.info('Task logging disabled, datastore key does not exist')
+        logging.info('\nTask logging disabled, datastore key does not exist')
         log_tasks = False
         # input('ENTER')
     if log_tasks:
@@ -423,7 +414,6 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
         mgrs_skip_list=mgrs_skip_list,
         utm_zones=utm_zones,
         wrs2_tiles=wrs2_tiles,
-        # simplify_buffer=simplify_buffer,
     )
     if not export_list:
         logging.error('\nEmpty export list, exiting')
@@ -1163,7 +1153,7 @@ def mgrs_export_tiles(study_area_coll_id, mgrs_coll_id,
                       mgrs_tiles=[], mgrs_skip_list=[],
                       utm_zones=[], wrs2_tiles=[],
                       mgrs_property='mgrs', utm_property='utm',
-                      wrs2_property='wrs2', simplify_buffer=0):
+                      wrs2_property='wrs2'):
     """Select MGRS tiles and metadata that intersect the study area geometry
 
     Parameters
@@ -1192,9 +1182,6 @@ def mgrs_export_tiles(study_area_coll_id, mgrs_coll_id,
         UTM zone property in the MGRS feature collection (the default is 'utm').
     wrs2_property : str, optional
         WRS2 property in the MGRS feature collection (the default is 'wrs2').
-    simplify_buffer : float, optional
-        Study area simplify tolerance (the default is 0).
-        Note, this distance is in the units of the study area shapefile.
 
     Returns
     ------
@@ -1361,10 +1348,10 @@ def arg_parse():
         '--update', default=False, action='store_true',
         help='Update images with older model version numbers')
     parser.add_argument(
-        '-s', '--start', type=utils.arg_valid_date, metavar='DATE', default=None,
+        '--start', type=utils.arg_valid_date, metavar='DATE', default=None,
         help='Start date (format YYYY-MM-DD)')
     parser.add_argument(
-        '-e', '--end', type=utils.arg_valid_date, metavar='DATE', default=None,
+        '--end', type=utils.arg_valid_date, metavar='DATE', default=None,
         help='End date (format YYYY-MM-DD)')
     args = parser.parse_args()
 
