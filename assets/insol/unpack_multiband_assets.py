@@ -60,7 +60,7 @@ def main(overwrite_flag=False, gee_key_file=None, reverse_flag=False,
         end_date = end_dt.strftime('%Y-%m-%d')
     else:
         logging.info('\nDefault date range')
-        start_date = '2013-01-01'
+        start_date = '2001-01-01'
         end_date = '2019-11-01'
         # start_date = '2001-01-01'
         # end_date = '2019-11-01'
@@ -114,18 +114,19 @@ def main(overwrite_flag=False, gee_key_file=None, reverse_flag=False,
 
 
     if daily_flag:
-        logging.debug('Getting daily asset list')
+        logging.debug('\nGetting daily asset list')
         asset_coll = ee.ImageCollection(daily_coll_id)\
             .filterDate(start_date, end_date)
         asset_props = {
             f'{daily_coll_id}/{x["properties"]["system:index"]}': x['properties']
             for x in utils.get_info(asset_coll)['features']}
 
+        logging.debug('\nExporting daily assets')
         for input_id in sorted(input_id_list, reverse=reverse_flag):
             logging.info(f'{input_id}')
             input_img_id = f'{input_coll_id}/{input_id}'
             input_img = ee.Image(input_img_id)
-            logging.debug(f'  {input_id}')
+            logging.debug(f'  {input_img_id}')
 
             export_dt = datetime.datetime.strptime(input_id, '%Y%j')
             logging.debug(f'  {export_dt}')
@@ -191,18 +192,19 @@ def main(overwrite_flag=False, gee_key_file=None, reverse_flag=False,
 
 
     if hourly_flag:
-        logging.debug('Getting hourly asset list')
+        logging.debug('\nGetting hourly asset list')
         asset_coll = ee.ImageCollection(hourly_coll_id)\
             .filterDate(start_date, end_date)
         asset_props = {
             f'{hourly_coll_id}/{x["properties"]["system:index"]}': x['properties']
             for x in utils.get_info(asset_coll)['features']}
 
+        logging.debug('\nExporting hourly assets')
         for input_id in sorted(input_id_list, reverse=reverse_flag):
             logging.info(f'{input_id}')
             input_img_id = f'{input_coll_id}/{input_id}'
             input_img = ee.Image(input_img_id)
-            logging.debug(f'  {input_id}')
+            logging.debug(f'  {input_img_id}')
 
             input_dt = datetime.datetime.strptime(input_id, '%Y%j')
             logging.debug(f'  {input_dt}')
