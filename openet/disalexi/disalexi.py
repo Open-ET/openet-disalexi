@@ -584,7 +584,7 @@ class Image(object):
             # CGM - This will raise a .get() error if the image doesn't exist
             lai_coll = ee.ImageCollection(self.lai_source) \
                 .filterMetadata('scene_id', 'equals', self.index)
-            lai_img = ee.Image(lai_coll.first())
+            lai_img = ee.Image(lai_coll.first()).select(['LAI'])
             lai_img = lai_img.multiply(ee.Number(lai_img.get('scale_factor'))) \
                 .set({'landsat_lai_version': lai_img.get('landsat_lai_version')})
             self.landsat_lai_version = lai_img.get('landsat_lai_version')
