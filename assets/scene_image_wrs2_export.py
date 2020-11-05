@@ -70,28 +70,38 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
 
     # List of path/rows to skip
     wrs2_skip_list = [
-        'p038r038', 'p039r038', 'p040r038',  # Mexico
+        'p038r038', 'p039r038', 'p040r038',  # Mexico (by CA)
         'p042r037',  # San Nicholas Island
         'p049r026',  # Vancouver Island
         # 'p041r037', 'p042r037', 'p047r031',  # CA Coast
+        'p033r039', 'p032r040', # Mexico (by TX)
+        'p029r041', 'p028r042', 'p027r043', 'p026r043',  # Mexico (by TX)
+        # 'p019r040', # Florida west
+        # 'p016r043', 'p015r043', # Florida south
+        # 'p014r041', 'p014r042', 'p014r043', # Florida east
+        # 'p013r035', 'p013r036', # NC Outer Banks
+        # 'p011r032', # RI
+        # 'p013r026', 'p012r026', # Canada (by ME)
     ]
+    wrs2_path_skip_list = [9, 49]
+    wrs2_row_skip_list = [25, 24, 43]
 
-    date_skip_list = [
-        '2003-12-15', '2004-12-12', '2004-12-31', '2008-12-31',
-        '2009-03-20', '2009-03-21', '2010-04-10', '2011-04-10',
-        '2012-04-09', '2012-12-30', '2012-12-31',
-        '2013-04-10', '2016-03-28', '2016-12-31',
-        '2017-08-02', '2017-10-11', '2017-10-12', '2017-12-12',
-        '2017-12-13', '2017-12-14', '2017-12-15', '2017-12-16',
-        '2017-12-17', '2017-12-30', '2017-12-31',
-        '2018-05-25', '2018-05-26', '2018-05-27', '2018-06-30', '2018-07-01',
-        '2018-10-20', '2018-10-21', '2018-10-22', '2018-10-23', '2018-12-22',
-        '2018-12-23', '2018-12-24', '2018-12-25', '2018-12-30', '2018-12-31',
-        '2019-02-23', '2019-02-24', '2019-04-10', '2019-04-11', '2019-04-25',
-        '2019-04-26', '2019-04-27', '2019-10-17', '2019-10-18',
-        '2019-10-26', '2019-10-27',
-    ]
-    # date_skip_list = []
+    # date_skip_list = [
+    #     '2003-12-15', '2004-12-12', '2004-12-31', '2008-12-31',
+    #     '2009-03-20', '2009-03-21', '2010-04-10', '2011-04-10',
+    #     '2012-04-09', '2012-12-30', '2012-12-31',
+    #     '2013-04-10', '2016-03-28', '2016-12-31',
+    #     '2017-08-02', '2017-10-11', '2017-10-12', '2017-12-12',
+    #     '2017-12-13', '2017-12-14', '2017-12-15', '2017-12-16',
+    #     '2017-12-17', '2017-12-30', '2017-12-31',
+    #     '2018-05-25', '2018-05-26', '2018-05-27', '2018-06-30', '2018-07-01',
+    #     '2018-10-20', '2018-10-21', '2018-10-22', '2018-10-23', '2018-12-22',
+    #     '2018-12-23', '2018-12-24', '2018-12-25', '2018-12-30', '2018-12-31',
+    #     '2019-02-23', '2019-02-24', '2019-04-10', '2019-04-11', '2019-04-25',
+    #     '2019-04-26', '2019-04-27', '2019-10-17', '2019-10-18',
+    #     '2019-10-26', '2019-10-27',
+    # ]
+    date_skip_list = []
 
     mgrs_skip_list = []
 
@@ -357,6 +367,7 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
 
 
     # Get current running tasks
+    # tasks = {}
     tasks = utils.get_ee_tasks()
     if logging.getLogger().getEffectiveLevel() == logging.DEBUG:
         logging.debug('  Tasks: {}'.format(len(tasks)))
@@ -441,6 +452,14 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
                 continue
             elif wrs2_skip_list and wrs2_tile in wrs2_skip_list:
                 logging.info('{} {} ({}/{}) - in wrs2 skip list'.format(
+                    export_info['index'], wrs2_tile, export_n + 1, tile_count))
+                continue
+            elif wrs2_row_skip_list and row in wrs2_row_skip_list:
+                logging.info('{} {} ({}/{}) - in wrs2 row skip list'.format(
+                    export_info['index'], wrs2_tile, export_n + 1, tile_count))
+                continue
+            elif wrs2_path_skip_list and path in wrs2_path_skip_list:
+                logging.info('{} {} ({}/{}) - in wrs2 path skip list'.format(
                     export_info['index'], wrs2_tile, export_n + 1, tile_count))
                 continue
             else:
@@ -739,6 +758,8 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
                 #   the crs, transform, and shape since they should (will?) be
                 #   the same for each wrs2 tile
                 output_info = utils.get_info(landsat_img.select(['B2']))
+                # pprint.pprint(output_info)
+                # input('ENTER')
 
                 d_obj = openet.disalexi.Image(
                     openet.disalexi.LandsatSR(landsat_img).prep(), **model_args)
@@ -746,7 +767,6 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
                     ta_img=ta_source_img,
                     step_size=tair_args['step_size'],
                     step_count=tair_args['step_count'])
-
                 # pprint.pprint(export_img.getInfo())
                 # input('ENTER')
 
@@ -1214,7 +1234,7 @@ def mgrs_export_tiles(study_area_coll_id, mgrs_coll_id,
         study_area_coll = study_area_coll.filter(
             ee.Filter.inList(study_area_property, study_area_features))
 
-    logging.info('Building MGRS tile list')
+    logging.debug('Building MGRS tile list')
     tiles_coll = ee.FeatureCollection(mgrs_coll_id) \
         .filterBounds(study_area_coll.geometry())
 
