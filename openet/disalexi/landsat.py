@@ -306,16 +306,16 @@ class LandsatTOA(Landsat):
         fill_mask = getQABits(bqa_image, 0, 0, 'designated_fill')
         cloud_mask = getQABits(bqa_image, 5, 6, 'cloud_confidence').gte(2)
         shadow_mask = getQABits(bqa_image, 7, 8, 'shadow_confidence').gte(3)
-        snow_mask = getQABits(bqa_image, 9, 10, 'snow_confidence').gte(3)
+        snow_mask = getQABits(bqa_image, 9, 10, 'snow_confidence').gte(2)
         # Landsat 8 only
-        # cirrus_mask = getQABits(bqa_image, 11, 12, 'cirrus_confidence').gte(3)
+        #cirrus_mask = getQABits(bqa_image, 11, 12, 'cirrus_confidence').gte(3)
 
         # Convert masks to old style Fmask values
         # 0 - Clear land
         # 1 - Clear water
         # 2 - Cloud shadow
         # 3 - Snow
-        # 4 - Cloud
+        # 4 - Cloud  #yun added cirrus
         return fill_mask \
             .add(shadow_mask.multiply(2)) \
             .add(snow_mask.multiply(3)) \
@@ -334,7 +334,8 @@ class LandsatSR(Landsat):
             (i.e. from the "LANDSAT/X/C01/T1_XX" collection)
 
         """
-        scalars = [0.0001, 0.0001, 0.0001, 0.0001, 0.0001, 0.0001, 0.1, 1]
+        scalars_multi = [0.0000275, 0.0000275, 0.0000275, 0.0000275, 0.0000275, 0.0000275, 0.00341802, 1]
+        scalars_add = [-0.2, -0.2, -0.2, -0.2, -0.2, -0.2, 149.0, 1]
 
         self.raw_image = ee.Image(raw_image)
         self._id = self.raw_image.get('system:id')
@@ -342,14 +343,13 @@ class LandsatSR(Landsat):
         self._time_start = self.raw_image.get('system:time_start')
 
         # Use the SATELLITE property to identify each Landsat type
-        self._spacecraft_id = ee.String(self.raw_image.get('SATELLITE'))
+        self._spacecraft_id = ee.String(self.raw_image.get('SPACECRAFT_ID'))
 
         input_bands = ee.Dictionary({
             # 'LANDSAT_4': ['B1', 'B2', 'B3', 'B4', 'B5', 'B7', 'B6', 'pixel_qa'],
-            'LANDSAT_5': ['B1', 'B2', 'B3', 'B4', 'B5', 'B7', 'B6', 'pixel_qa'],
-            'LANDSAT_7': ['B1', 'B2', 'B3', 'B4', 'B5', 'B7', 'B6',
-                          'pixel_qa'],
-            'LANDSAT_8': ['B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B10', 'pixel_qa']})
+            'LANDSAT_5': ['SR_B1', 'SR_B2', 'SR_B3', 'SR_B4', 'SR_B5', 'SR_B7', 'ST_B6', 'QA_PIXEL'],
+            'LANDSAT_7': ['SR_B1', 'SR_B2', 'SR_B3', 'SR_B4', 'SR_B5', 'SR_B7', 'ST_B6', 'QA_PIXEL'],
+            'LANDSAT_8': ['SR_B2', 'SR_B3', 'SR_B4', 'SR_B5', 'SR_B6', 'SR_B7', 'ST_B10', 'QA_PIXEL']})
         # Rename bands to generic names
         output_bands = [
             'blue', 'green', 'red', 'nir', 'swir1', 'swir2', 'tir', 'pixel_qa']
@@ -370,7 +370,8 @@ class LandsatSR(Landsat):
 
         self.input_image = ee.Image(self.raw_image) \
             .select(input_bands.get(self._spacecraft_id), output_bands) \
-            .multiply(scalars) \
+            .multiply(scalars_multi) \
+            .add(scalars_add)\
             .set({
                 'system:time_start': self._time_start,
                 'system:index': self._index,
@@ -404,9 +405,9 @@ class LandsatSR(Landsat):
         # DEADBEEF - TIR/LST is being read from a source image collection
         self.prep_image = ee.Image([
             self._albedo,
-            self._cfmask,
-            # self._lai,
-            self._lst,
+            self._c2_cfmask,
+            #self._lai,
+            #self._lst,
             self._ndvi,
         ])
 
@@ -466,7 +467,10 @@ class LandsatSR(Landsat):
 
         # Extract the various masks from the QA band
         fill_mask = getQABits(bqa_image, 0, 0, 'fill')
-        cloud_mask = getQABits(bqa_image, 6, 7, 'cloud_confidence').gte(2)
+        #cloud_mask = getQABits(bqa_image, 6, 7, 'cloud_confidence').gte(2)
+        #Yun modified the cloud mask. Instead of using the confidence level, directly using cloud bit.
+        #This is a relatively stricter cloud mask, but matching with our inhouse standard.
+        cloud_mask = getQABits(bqa_image, 5, 5,'cloud_confidence')
         shadow_mask = getQABits(bqa_image, 3, 3, 'shadow')
         snow_mask = getQABits(bqa_image, 4, 4, 'snow')
         # Landsat 8 only
@@ -483,6 +487,94 @@ class LandsatSR(Landsat):
             .add(snow_mask.multiply(3)) \
             .add(cloud_mask.multiply(4)) \
             .rename(['cfmask'])
+
+    @lazy_property
+    def _c2_cfmask(self, cirrus_flag=False, dilate_flag=False,
+                                 shadow_flag=True, snow_flag=False,
+                                 ):
+        """Extract cloud mask from the Landsat Collection 2 SR QA_PIXEL band
+        Parameters
+        ----------
+        img : ee.Image
+            Image from a Landsat Collection 2 SR image collection with a QA_PIXEL
+            band (e.g. LANDSAT/LC08/C02/T1_L2).
+        cirrus_flag : bool
+            If true, mask cirrus pixels (the default is False).
+            Note, cirrus bits are only set for Landsat 8 (OLI) images.
+        dilate_flag : bool
+            If true, mask dilated cloud pixels (the default is False).
+        shadow_flag : bool
+            If true, mask shadow pixels (the default is True).
+        snow_flag : bool
+            If true, mask snow pixels (the default is False).
+        Returns
+        -------
+        ee.Image
+        Notes
+        -----
+        Output image is structured to be applied directly with updateMask()
+            i.e. 0 is cloud/masked, 1 is clear/unmasked
+        Assuming Cloud must be set to check Cloud Confidence
+        Bits
+            0: Fill
+                0 for image data
+                1 for fill data
+            1: Dilated Cloud
+                0 for cloud is not dilated or no cloud
+                1 for cloud dilation
+            2: Cirrus
+                0 for no confidence level set or low confidence
+                1 for high confidence cirrus
+            3: Cloud
+                0 for cloud confidence is not high
+                1 for high confidence cloud
+            4: Cloud Shadow
+                0 for Cloud Shadow Confidence is not high
+                1 for high confidence cloud shadow
+            5: Snow
+                0 for Snow/Ice Confidence is not high
+                1 for high confidence snow cover
+            6: Clear
+                0 if Cloud or Dilated Cloud bits are set
+                1 if Cloud and Dilated Cloud bits are not set
+            7: Water
+                0 for land or cloud
+                1 for water
+            8-9: Cloud Confidence
+            10-11: Cloud Shadow Confidence
+            12-13: Snow/Ice Confidence
+            14-15: Cirrus Confidence
+        Confidence values
+            00: "No confidence level set"
+            01: "Low confidence"
+            10: "Medium confidence" (for Cloud Confidence only, otherwise "Reserved")
+            11: "High confidence"
+        References
+        ----------
+        https://prd-wret.s3.us-west-2.amazonaws.com/assets/palladium/production/atoms/files/LSDS-1328_Landsat8-9-OLI-TIRS-C2-L2-DFCB-v6.pdf
+        """
+        qa_img = ee.Image(self.input_image).select(['pixel_qa'])
+        cloud_mask = qa_img.rightShift(3).bitwiseAnd(1).neq(0).multiply(4)
+        #     .And(qa_img.rightShift(6).bitwiseAnd(3).gte(cloud_confidence))
+        if cirrus_flag:
+            cirrus_mask = qa_img.rightShift(2).bitwiseAnd(1).neq(0)
+            cloud_mask = cloud_mask \
+                .add(cirrus_mask.multiply(5))
+        if dilate_flag:
+            dilate_mask = qa_img.rightShift(1).bitwiseAnd(1).neq(0)
+            cloud_mask = cloud_mask \
+                .add(dilate_mask.multiply(6))
+        if shadow_flag:
+            shadow_mask = qa_img.rightShift(4).bitwiseAnd(1).neq(0)
+            cloud_mask = cloud_mask \
+                .add(shadow_mask.multiply(2))
+        if snow_flag:
+            snow_mask = qa_img.rightShift(5).bitwiseAnd(1).neq(0)
+            cloud_mask = cloud_mask \
+                .add(snow_mask.multiply(3))
+
+        # Flip to set cloudy pixels to 0 and clear to 1
+        return cloud_mask.rename(['cfmask'])
 
     @lazy_property
     def _lst(self):

@@ -149,6 +149,12 @@ class Collection():
             'LANDSAT/LT05/C01/T1_SR',
             'LANDSAT/LT04/C01/T1_SR',
         ]
+        self._landsat_c2_sr_collections = [
+            'LANDSAT/LC08/C02/T1_L2',
+            'LANDSAT/LE07/C02/T1_L2',
+            'LANDSAT/LT05/C02/T1_L2',
+            'LANDSAT/LT04/C02/T1_L2',
+        ]
         # DEADBEEF - DisALEXI doesn't support TOA or realtime TOA collections
         # self._landsat_c1_toa_collections = [
         #     'LANDSAT/LC08/C01/T1_RT_TOA',
@@ -167,7 +173,8 @@ class Collection():
         for coll_id in self.collections:
             # if (coll_id not in self._landsat_c1_toa_collections and
             #         coll_id not in self._landsat_c1_sr_collections):
-            if coll_id not in self._landsat_c1_sr_collections:
+            if (coll_id not in self._landsat_c1_sr_collections and
+                    coll_id not in self._landsat_c2_sr_collections):
                 raise ValueError('unsupported collection: {}'.format(coll_id))
 
         # Check that collections don't have "duplicates"
@@ -256,13 +263,46 @@ class Collection():
         variable_coll = ee.ImageCollection([])
         for coll_id in self.collections:
             # DEADBEEF - Move to separate methods/functions for each type
-            if coll_id in self._landsat_c1_sr_collections:
+            if coll_id in self._landsat_c2_sr_collections:
                 input_coll = ee.ImageCollection(coll_id) \
                     .filterDate(start_date, end_date) \
                     .filterBounds(self.geometry) \
                     .filterMetadata('CLOUD_COVER_LAND', 'less_than',
                                     self.cloud_cover_max)
 
+                # TODO: Need to come up with a system for applying
+                #   generic filter arguments to the collections
+                if coll_id in self.filter_args.keys():
+                    for f in copy.deepcopy(self.filter_args[coll_id]):
+                        try:
+                            filter_type = f.pop('type')
+                        except KeyError:
+                            continue
+                        if filter_type.lower() == 'equals':
+                            input_coll = input_coll.filter(ee.Filter.equals(**f))
+
+                # Time filters are to remove bad (L5) and pre-op (L8) images
+                if 'LT05' in coll_id:
+                    input_coll = input_coll.filter(ee.Filter.lt(
+                        'system:time_start', ee.Date('2011-12-31').millis()))
+                elif 'LC08' in coll_id:
+                    input_coll = input_coll.filter(ee.Filter.gt(
+                        'system:time_start', ee.Date('2013-03-24').millis()))
+
+                def compute_lsr(image):
+                    model_obj = Image.from_landsat_c2_l2(
+                        sr_image=ee.Image(image), **self.model_args)
+                    return model_obj.calculate(variables)
+
+                variable_coll = variable_coll.merge(
+                    ee.ImageCollection(input_coll.map(compute_lsr)))
+
+            elif coll_id in self._landsat_c1_sr_collections:
+                input_coll = ee.ImageCollection(coll_id) \
+                    .filterDate(start_date, end_date) \
+                    .filterBounds(self.geometry) \
+                    .filterMetadata('CLOUD_COVER_LAND', 'less_than',
+                                    self.cloud_cover_max)
                 # TODO: Need to come up with a system for applying
                 #   generic filter arguments to the collections
                 if coll_id in self.filter_args.keys():

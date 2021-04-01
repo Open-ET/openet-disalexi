@@ -10,6 +10,7 @@ import pprint
 # import random
 import re
 import time
+import urllib.request
 
 import ee
 from osgeo import ogr, osr
@@ -70,28 +71,41 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
 
     # List of path/rows to skip
     wrs2_skip_list = [
-        'p038r038', 'p039r038', 'p040r038',  # Mexico
-        'p042r037',  # San Nicholas Island
-        'p049r026',  # Vancouver Island
-        # 'p041r037', 'p042r037', 'p047r031',  # CA Coast
+        'p049r026',  # Vancouver Island, Canada
+        # 'p047r031', # North California coast
+        'p042r037',  # San Nicholas Island, California
+        # 'p041r037', # South California coast
+        'p040r038', 'p039r038', 'p038r038',  # Mexico (by California)
+        'p037r039', 'p036r039', 'p035r039',  # Mexico (by Arizona)
+        'p034r039', 'p033r039',  # Mexico (by New Mexico)
+        'p032r040',  # Mexico (West Texas)
+        'p029r041', 'p028r042', 'p027r043', 'p026r043',  # Mexico (South Texas)
+        'p019r040',  # West Florida coast
+        'p016r043', 'p015r043',  # South Florida coast
+        'p014r041', 'p014r042', 'p014r043',  # East Florida coast
+        'p013r035', 'p013r036',  # North Carolina Outer Banks
+        'p013r026', 'p012r026',  # Canada (by Maine)
+        'p011r032',  # Rhode Island coast
     ]
+    wrs2_path_skip_list = [9, 49]
+    wrs2_row_skip_list = [25, 24, 43]
 
-    date_skip_list = [
-        '2003-12-15', '2004-12-12', '2004-12-31', '2008-12-31',
-        '2009-03-20', '2009-03-21', '2010-04-10', '2011-04-10',
-        '2012-04-09', '2012-12-30', '2012-12-31',
-        '2013-04-10', '2016-03-28', '2016-12-31',
-        '2017-08-02', '2017-10-11', '2017-10-12', '2017-12-12',
-        '2017-12-13', '2017-12-14', '2017-12-15', '2017-12-16',
-        '2017-12-17', '2017-12-30', '2017-12-31',
-        '2018-05-25', '2018-05-26', '2018-05-27', '2018-06-30', '2018-07-01',
-        '2018-10-20', '2018-10-21', '2018-10-22', '2018-10-23', '2018-12-22',
-        '2018-12-23', '2018-12-24', '2018-12-25', '2018-12-30', '2018-12-31',
-        '2019-02-23', '2019-02-24', '2019-04-10', '2019-04-11', '2019-04-25',
-        '2019-04-26', '2019-04-27', '2019-10-17', '2019-10-18',
-        '2019-10-26', '2019-10-27',
-    ]
-    # date_skip_list = []
+    #date_skip_list = [
+    #    '2003-12-15', '2004-12-12', '2004-12-31', '2008-12-31',
+    #    '2009-03-20', '2009-03-21', '2010-04-10', '2011-04-10',
+    #    '2012-04-09', '2012-12-30', '2012-12-31',
+    #    '2013-04-10', '2016-03-28', '2016-12-31',
+    #    '2017-08-02', '2017-10-11', '2017-10-12', '2017-12-12',
+    #    '2017-12-13', '2017-12-14', '2017-12-15', '2017-12-16',
+    #    '2017-12-17', '2017-12-30', '2017-12-31',
+    #    '2018-05-25', '2018-05-26', '2018-05-27', '2018-06-30', '2018-07-01',
+    #    '2018-10-20', '2018-10-21', '2018-10-22', '2018-10-23', '2018-12-22',
+    #    '2018-12-23', '2018-12-24', '2018-12-25', '2018-12-30', '2018-12-31',
+    #    '2019-02-23', '2019-02-24', '2019-04-10', '2019-04-11', '2019-04-25',
+    #    '2019-04-26', '2019-04-27', '2019-10-17', '2019-10-18',
+    #    '2019-10-26', '2019-10-27',
+    #]
+    date_skip_list = []
 
     mgrs_skip_list = []
 
@@ -146,9 +160,10 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
         collections = sorted([x.strip() for x in collections.split(',')])
     except KeyError:
         logging.info('\nINPUTS collections parameter was net set, '
-                        'default to Landsat 5/7/8 C01 SR collections')
-        collections = ['LANDSAT/LC08/C01/T1_SR', 'LANDSAT/LE07/C01/T1_SR',
-                       'LANDSAT/LT05/C01/T1_SR']
+                        'default to Landsat 5/7/8 C02 L2 and C01 SR collections')
+        collections = ['LANDSAT/LC08/C02/T1_L2', 'LANDSAT/LE07/C02/T1_L2',
+                       'LANDSAT/LT05/C02/T1_L2', 'LANDSAT/LC08/C01/T1_SR',
+                       'LANDSAT/LE07/C01/T1_SR', 'LANDSAT/LT05/C01/T1_SR']
     except Exception as e:
         raise e
 
@@ -190,14 +205,6 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
     except Exception as e:
         raise e
 
-    # try:
-    #     simplify_buffer = float(ini['INPUTS']['simplify_buffer'])
-    # except KeyError:
-    #     simplify_buffer = 0
-    #     logging.debug('  simplify_buffer: not set in INI, '
-    #                   'defaulting to {}'.format(simplify_buffer))
-    # except Exception as e:
-    #     raise e
 
     try:
         mgrs_tiles = str(ini['EXPORT']['mgrs_tiles'])
@@ -350,7 +357,7 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
     # TODO: set datastore key file as a parameter?
     datastore_key_file = 'openet-dri-datastore.json'
     if log_tasks and not os.path.isfile(datastore_key_file):
-        logging.info('Task logging disabled, datastore key does not exist')
+        logging.info('\nTask logging disabled, datastore key does not exist')
         log_tasks = False
         # input('ENTER')
     if log_tasks:
@@ -393,11 +400,11 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
         alexi_mask = ee.Image('projects/earthengine-legacy/assets/'
                               'projects/disalexi/alexi/conus_v002_mask')\
             .double().multiply(0)
-    elif alexi_coll_id.upper() == 'CONUS_V001':
+    elif alexi_coll_id.upper() == 'CONUS_V003':
         alexi_coll_id = 'projects/earthengine-legacy/assets/' \
-                        'projects/disalexi/alexi/CONUS_V001'
+                        'projects/disalexi/alexi/CONUS_V003'
         alexi_mask = ee.Image('projects/earthengine-legacy/assets/'
-                              'projects/disalexi/alexi/conus_v001_mask')\
+                              'projects/disalexi/alexi/conus_v002_mask')\
             .double().multiply(0)
     else:
         raise ValueError(f'unsupported ALEXI source: {alexi_coll_id}')
@@ -423,7 +430,6 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
         mgrs_skip_list=mgrs_skip_list,
         utm_zones=utm_zones,
         wrs2_tiles=wrs2_tiles,
-        # simplify_buffer=simplify_buffer,
     )
     if not export_list:
         logging.error('\nEmpty export list, exiting')
@@ -453,6 +459,14 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
                 logging.info('{} {} ({}/{}) - in wrs2 skip list'.format(
                     export_info['index'], wrs2_tile, export_n + 1, tile_count))
                 continue
+            elif wrs2_row_skip_list and row in wrs2_row_skip_list:
+                logging.info('{} {} ({}/{}) - in wrs2 row skip list'.format(
+                    export_info['index'], wrs2_tile, export_n + 1, tile_count))
+                continue
+            elif wrs2_path_skip_list and path in wrs2_path_skip_list:
+                logging.info('{} {} ({}/{}) - in wrs2 path skip list'.format(
+                    export_info['index'], wrs2_tile, export_n + 1, tile_count))
+                continue
             else:
                 logging.info('{} {} ({}/{})'.format(
                     export_info['index'], wrs2_tile, export_n + 1, tile_count))
@@ -477,6 +491,60 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
             # TODO: Switch to call to openet.disalexi.Collection()
             landsat_coll = ee.ImageCollection([])
             export_geom = ee.Geometry.Point(openet.core.wrs2.centroids[wrs2_tile])
+            if ('LANDSAT/LC08/C02/T1_L2' in collections or
+                    'LANDSAT/LE07/C02/T1_L2' in collections or
+                    'LANDSAT/LT05/C02/T1_L2' in collections or
+                    'LANDSAT/LT04/C02/T1_L2' in collections ):
+                if ('LANDSAT/LC08/C02/T1_L2' in collections and
+                        iter_end_dt.strftime('%Y-%m-%d') > '2013-03-24'):
+                    l8_coll = ee.ImageCollection('LANDSAT/LC08/C02/T1_L2') \
+                        .filterDate(iter_start_dt.strftime('%Y-%m-%d'),
+                                    iter_end_dt.strftime('%Y-%m-%d')) \
+                        .filterMetadata('WRS_PATH', 'equals', path) \
+                        .filterMetadata('WRS_ROW', 'equals', row) \
+                        .filter(ee.Filter.gt('system:time_start',
+                                            ee.Date('2013-03-24').millis())) \
+                        .filterMetadata('CLOUD_COVER_LAND', 'less_than',
+                                        float(ini['INPUTS']['cloud_cover'])) \
+                        .filterBounds(export_geom)
+                    landsat_coll = ee.ImageCollection(landsat_coll.merge(l8_coll))
+
+                if ('LANDSAT/LE07/C02/T1_L2' in collections and
+                        iter_end_dt.strftime('%Y-%m-%d') >= '1999-01-01'):
+                    l7_coll = ee.ImageCollection('LANDSAT/LE07/C02/T1_L2') \
+                        .filterDate(iter_start_dt.strftime('%Y-%m-%d'),
+                                    iter_end_dt.strftime('%Y-%m-%d')) \
+                        .filterMetadata('WRS_PATH', 'equals', path) \
+                        .filterMetadata('WRS_ROW', 'equals', row) \
+                        .filterMetadata('CLOUD_COVER_LAND', 'less_than',
+                                        float(ini['INPUTS']['cloud_cover'])) \
+                        .filterBounds(export_geom)
+                    landsat_coll = ee.ImageCollection(landsat_coll.merge(l7_coll))
+                if ('LANDSAT/LT05/C02/T1_L2' in collections and
+                        iter_start_dt.strftime('%Y-%m-%d') <= '2011-12-31'):
+                    l5_coll = ee.ImageCollection('LANDSAT/LT05/C02/T1_L2') \
+                        .filterDate(iter_start_dt.strftime('%Y-%m-%d'),
+                                    iter_end_dt.strftime('%Y-%m-%d')) \
+                        .filterMetadata('WRS_PATH', 'equals', path) \
+                        .filterMetadata('WRS_ROW', 'equals', row) \
+                        .filter(ee.Filter.lt('system:time_start',
+                                            ee.Date('2011-12-31').millis())) \
+                        .filterMetadata('CLOUD_COVER_LAND', 'less_than',
+                                        float(ini['INPUTS']['cloud_cover'])) \
+                        .filterBounds(export_geom)
+                    landsat_coll = ee.ImageCollection(landsat_coll.merge(l5_coll))
+                if ('LANDSAT/LT04/C02/T1_L2' in collections and
+                        iter_start_dt.strftime('%Y-%m-%d') <= '1993-12-01'):
+                    l4_coll = ee.ImageCollection('LANDSAT/LT04/C02/T1_L2') \
+                        .filterDate(iter_start_dt.strftime('%Y-%m-%d'),
+                                    iter_end_dt.strftime('%Y-%m-%d')) \
+                        .filterMetadata('WRS_PATH', 'equals', path) \
+                        .filterMetadata('WRS_ROW', 'equals', row) \
+                        .filterMetadata('CLOUD_COVER_LAND', 'less_than',
+                                        float(ini['INPUTS']['cloud_cover'])) \
+                        .filterBounds(export_geom)
+                    landsat_coll = ee.ImageCollection(landsat_coll.merge(l4_coll))
+
             if ('LANDSAT/LC08/C01/T1_SR' in collections and
                     iter_end_dt.strftime('%Y-%m-%d') > '2013-03-24'):
                 l8_coll = ee.ImageCollection('LANDSAT/LC08/C01/T1_SR')\
@@ -531,6 +599,7 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
 
             image_id_list = sorted(list(set(
                 landsat_coll.aggregate_array('system:id').getInfo())))
+
             if not image_id_list:
                 logging.info('  Empty image ID list, skipping tile')
                 # logging.debug('  Empty image ID list, exiting')
@@ -568,6 +637,7 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
                 logging.info('  {}'.format(image_id))
                 coll_id, scene_id = image_id.rsplit('/', 1)
                 l, p, r, year, month, day = parse_landsat_id(scene_id)
+                print('sensor is:',l)
                 image_dt = datetime.datetime.strptime(
                     '{:04d}{:02d}{:02d}'.format(year, month, day), '%Y%m%d')
                 image_date = image_dt.strftime('%Y-%m-%d')
@@ -738,18 +808,26 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
                     lai_info = lai_img.getInfo()
                     try:
                         landsat_lai_version = lai_info['properties']['landsat_lai_version']
+
                     except:
                         logging.info('  No LAI image in source, skipping')
                         input('ENTER')
                         continue
 
-
                 landsat_img = ee.Image(image_id)
                 # CGM: We could pre-compute (or compute once and then save)
                 #   the crs, transform, and shape since they should (will?) be
                 #   the same for each wrs2 tile
-                output_info = utils.get_info(landsat_img.select(['B2']))
-
+                if ('LANDSAT/LC08/C02/T1_L2' in collections or
+                        'LANDSAT/LE07/C02/T1_L2' in collections or
+                        'LANDSAT/LT05/C02/T1_L2' in collections or
+                        'LANDSAT/LT04/C02/T1_L2' in collections):
+                    output_info = utils.get_info(landsat_img.select(['SR_B2']))
+                if ('LANDSAT/LC08/C01/T1_SR' in collections or
+                        'LANDSAT/LE07/C01/T1_SR' in collections or
+                        'LANDSAT/LT05/C01/T1_SR' in collections or
+                        'LANDSAT/LT04/C01/T1_SR' in collections):
+                    output_info = utils.get_info(landsat_img.select(['B2']))
                 d_obj = openet.disalexi.Image(
                     openet.disalexi.LandsatSR(landsat_img).prep(), **model_args)
                 export_img = d_obj.ta_mosaic(
@@ -840,6 +918,7 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
                     crsTransform='[' + ','.join(list(map(str, export_geo))) + ']',
                     dimensions='{0}x{1}'.format(*export_shape),
                 )
+                print(asset_id)
                 #     # except ee.ee_exception.EEException as e:
                 #     except Exception as e:
                 #         if ('Earth Engine memory capacity exceeded' in str(e) or
@@ -1163,7 +1242,7 @@ def mgrs_export_tiles(study_area_coll_id, mgrs_coll_id,
                       mgrs_tiles=[], mgrs_skip_list=[],
                       utm_zones=[], wrs2_tiles=[],
                       mgrs_property='mgrs', utm_property='utm',
-                      wrs2_property='wrs2', simplify_buffer=0):
+                      wrs2_property='wrs2'):
     """Select MGRS tiles and metadata that intersect the study area geometry
 
     Parameters
@@ -1192,9 +1271,7 @@ def mgrs_export_tiles(study_area_coll_id, mgrs_coll_id,
         UTM zone property in the MGRS feature collection (the default is 'utm').
     wrs2_property : str, optional
         WRS2 property in the MGRS feature collection (the default is 'wrs2').
-    simplify_buffer : float, optional
-        Study area simplify tolerance (the default is 0).
-        Note, this distance is in the units of the study area shapefile.
+
 
     Returns
     ------
@@ -1227,7 +1304,7 @@ def mgrs_export_tiles(study_area_coll_id, mgrs_coll_id,
         study_area_coll = study_area_coll.filter(
             ee.Filter.inList(study_area_property, study_area_features))
 
-    logging.info('Building MGRS tile list')
+    logging.debug('Building MGRS tile list')
     tiles_coll = ee.FeatureCollection(mgrs_coll_id) \
         .filterBounds(study_area_coll.geometry())
 
@@ -1361,10 +1438,10 @@ def arg_parse():
         '--update', default=False, action='store_true',
         help='Update images with older model version numbers')
     parser.add_argument(
-        '-s', '--start', type=utils.arg_valid_date, metavar='DATE', default=None,
+        '--start', type=utils.arg_valid_date, metavar='DATE', default=None,
         help='Start date (format YYYY-MM-DD)')
     parser.add_argument(
-        '-e', '--end', type=utils.arg_valid_date, metavar='DATE', default=None,
+        '--end', type=utils.arg_valid_date, metavar='DATE', default=None,
         help='End date (format YYYY-MM-DD)')
     args = parser.parse_args()
 

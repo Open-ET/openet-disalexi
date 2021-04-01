@@ -13,8 +13,8 @@ def debug(x_var, x_str, xy=test_xy, scale=1):
     print('{:12s} {:>20.14}'.format(x_str+':', float(utils.point_image_value(
         x_var.rename(['test']), xy=xy, scale=scale)['test'])))
 
-
-def tseb_pt(t_air, t_rad, e_air, u, p, z, rs_1, rs24, vza,
+# added t_air0, which is the air temperature from CFSR (or other METO data)
+def tseb_pt(t_air0, t_air, t_rad, e_air, u, p, z, rs_1, rs24, vza,
             aleafv, aleafn, aleafl, adeadv, adeadn, adeadl,
             albedo, ndvi, lai, clump, leaf_width, hc_min, hc_max,
             datetime, lon=None, lat=None, a_pt_in=1.32,
@@ -26,6 +26,8 @@ def tseb_pt(t_air, t_rad, e_air, u, p, z, rs_1, rs24, vza,
 
     Parameters
     ----------
+    t_air0:ee.Image
+        measured Air Temperature [K]
     t_air : ee.Image
         Air temperature [K].
     t_rad : ee.Image
@@ -67,9 +69,9 @@ def tseb_pt(t_air, t_rad, e_air, u, p, z, rs_1, rs24, vza,
     leaf_width : ee.Image
         Average/effective leaf width [m].
     hc_min : ee.Image
-        Minimum canopy height [m].
+        Canopy height [m].
     hc_max : ee.Image
-        Maximum canopy height [m].
+        Canopy height [m].
     datetime : ee.Date
         Image datetime.
     lat : ee.Image
@@ -84,8 +86,6 @@ def tseb_pt(t_air, t_rad, e_air, u, p, z, rs_1, rs24, vza,
     albedo_iter: int, optional
         Number of iterations of albedo separation calculation
         (the default is 10).
-    et_min : float, optinal
-        Minimum output ET value (the default is 0.01).
 
     Returns
     -------
@@ -206,8 +206,8 @@ def tseb_pt(t_air, t_rad, e_air, u, p, z, rs_1, rs24, vza,
     # DEADBEEF
     # z_u = ee.Number(50.0)
     # z_t = ee.Number(50.0)
-    z_u = ee.Image.constant(50.0)
-    z_t = ee.Image.constant(50.0)
+    z_u = ee.Image.constant(30.0)
+    z_t = ee.Image.constant(30.0)
     # z_u = lai.multiply(0).add(50)
     # z_t = lai.multiply(0).add(50)
 
@@ -228,10 +228,17 @@ def tseb_pt(t_air, t_rad, e_air, u, p, z, rs_1, rs24, vza,
     # ************************************************************************
     # Atmospheric Parameters
     # Saturation vapour pressure [kPa] (FAO56 3-8)
+    #Yun modified to use METEO air temperature
+    e_s0=t_air0.expression(
+        '0.6108 * exp((17.27 * (t_air - 273.16)) / ((t_air - 273.16) + 237.3))',
+        {'t_air': t_air0}
+    )
+    vpd = e_s0.subtract(e_air)
+    #saturation vapor pressure [kpa] using iterated air temperature
     e_s = t_air.expression(
         '0.6108 * exp((17.27 * (t_air - 273.16)) / ((t_air - 273.16) + 237.3))',
         {'t_air': t_air})
-    vpd = e_s.subtract(e_air)
+
     # Slope of the saturation vapor pressure [kPa] (FAO56 3-9)
     Ss = t_air.expression(
         '4098. * e_s / (((t_air - 273.16) + 237.3) ** 2)',
@@ -245,18 +252,27 @@ def tseb_pt(t_air, t_rad, e_air, u, p, z, rs_1, rs24, vza,
 
     # ************************************************************************
     # Initialization of
-    a_pt = albedo.multiply(0).add(a_pt_in)
+    a_pt = albedo.multiply(0).add(a_pt_in).rename('a_pt')
     vpd1 = ee.Number(2.0)
     dvpd = ee.Number(0.4)
     a_pt_temp = a_pt.expression(
         '(a_pt + (vpd - vpd1) * dvpd)',
-        {'a_pt': a_pt, 'vpd': vpd, 'vpd1': vpd1, 'dvpd': dvpd})
+        {'a_pt': a_pt, 'vpd': vpd, 'vpd1': vpd1, 'dvpd': dvpd}).rename('a_pt')
     a_pt = a_pt.where(vpd.gte(vpd1), a_pt_temp)
     pt_lim = ee.Number(2.5)
     ind = a_pt.gt(pt_lim)
     a_pt = a_pt.where(ind, 2.5)
     # a_pt = ee.Image.constant(a_pt_in)
     # a_pt = mask.multiply(a_pt)
+    transform = ee.List(ee.Dictionary(
+        ee.Algorithms.Describe(vpd.projection())).get('transform'))
+    a_pt_max = a_pt.reduceRegion(
+        reducer=ee.Reducer.max(),scale = 4000,maxPixels=1E10).get('a_pt')
+
+    stabil_iter = ee.Number(a_pt_max).divide(0.05).ceil()
+    stabil_iter = ee.Algorithms.If(stabil_iter.gt(40),40,stabil_iter)
+    stabil_iter=ee.Number(stabil_iter)
+    stabil_iter = ee.Algorithms.If(stabil_iter.lt(25),25, stabil_iter)
 
     # CGM - This was also being computed inside albedo_separation function below
     # Commented out from here for now.
@@ -517,16 +533,17 @@ def tseb_pt(t_air, t_rad, e_air, u, p, z, rs_1, rs24, vza,
 
     ind = LE_s.gt(Rn_s)
     LE_s = LE_s.where(ind,  Rn_s)
-    H_s = H_s.where(ind,  Rn_s.subtract(G).subtract(LE_s))
-
+    #H_s = H_s.where(ind,  Rn_s.subtract(G).subtract(LE_s))
+    H_s = Rn_s.subtract(G).subtract(LE_s)
     # CGM - Check order of operations
     ind = LE_c.gt(Rn_c.add(100))
     # CGM - Not used below since LE_c is recomputed
-    # LE_c = LE_c.where(ind, Rn_c.add(100))
-    H_c = H_c.where(ind, -100)
+    LE_c = LE_c.where(ind, Rn_c.add(100))
+    #H_c = H_c.where(ind, -100)
+    H_c = Rn_c.subtract(LE_c)
 
-    LE_s = Rn_s.subtract(G).subtract(H_s)
-    LE_c = Rn_c.subtract(H_c)
+    #LE_s = Rn_s.subtract(G).subtract(H_s)
+    #LE_c = Rn_c.subtract(H_c)
 
     # The latent heat of vaporization is 2.45 MJ kg-1
     # Assume rs24 is still in W m-2 day-1 and convert to MJ kg-1
@@ -536,7 +553,7 @@ def tseb_pt(t_air, t_rad, e_air, u, p, z, rs_1, rs24, vza,
             '((LE_c + LE_s) / rs_1) * (rs24 / 2.45) * scaling',
             {'LE_c': LE_c, 'LE_s': LE_s, 'rs_1': rs_1,
              'rs24': rs24.multiply(0.0864 / 24.0), 'scaling': 1}) \
-        .max(et_min)
+        .max(0.01) \
 
     # # DEADBEEF
     # print('\nAfter Checking EBC')
