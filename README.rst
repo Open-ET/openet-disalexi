@@ -105,9 +105,13 @@ References
 .. [Anderson2004] Anderson, M. C., J. M. Norman, J. R. Mecikalski, R. D. Torn, W. P. Kustas, J. B. Basara (2004), A multiscale remote sensing model for disaggregating regional fluxes to micrometeorological scales, J. Hydrometeorol. 5, 343-363. `https://doi.org/10.1175/1525-7541(2004)005<0343:AMRSMF>2.0.CO;2 <https://doi.org/10.1175/1525-7541(2004)005%3C0343:AMRSMF%3E2.0.CO;2>`__
 .. [Anderson2012b] Anderson, M. C., W.P. Kustas, J. G. Alfieri, F. Gao, C. Hain, J. H. Prueger, S. Evett, P. Colaizzi, T. Howell, J. L. Chavez (2012b), Mapping daily evapotranspiration at Landsat spatial scales during the BEAREX'08 field campaign (2012b), Adv. Water Resour, 50, 162-177. `https://doi.org/10.1016/j.advwatres.2012.06.005 <https://doi.org/10.1016/j.advwatres.2012.06.005>`__
 ..[Cammalleri2014] Cammalleri, C., M.C. Anderson, F. Gao, C.R. Hain, W.P. Kustas, Mapping daily evapotranspiration at field scales over rainfed and irrigated agricultural areas using remote sensing data fusion, Agricultural and Forest Meteorology, Volume 186, 2014, Pages 1-11, ISSN 0168-1923, https://doi.org/10.1016/j.agrformet.2013.11.001.
+
 .. [Semmens2016] Semmens, K. A., M. C. Anderson, W. P. Kustas, F. Gao, J. G. Alfieri, L. McKee, J. H. Prueger, C. R. Hain, C. Cammalleri, Y. Yang and T. Xia (2016), Monitoring daily evapotranspiration over two California vineyards using Landsat 8 in a multi-sensor data fusion approach, Remote Sens. Environ., 185, 155–170.
+
 .. [Yang2017] Yang, Y., M. C. Anderson, F. Gao, C. R. Hain, K. A. Semmens, W. P. Kustas, A. Noormets, R. H. Wynne, V. A. Thomas, and G. Sun (2017), Daily Landsat-scale evapotranspiration estimation over a forested landscape in North Carolina, USA using multi-satellite data fusion, Hydrol. Earth Syst. Sci., 21, 1017–1037.  `doi:doi:10.5194/hess-21-1017-2017 <doi:doi:10.5194/hess-21-1017-2017>`__
+
 .. [Anderson2018] Anderson, M., G. Diak, F. Gao, K. Knipper, C. Hain, E. Eichelmann, K.S. Hemes, D. Baldocchi, W. Kustas, Y. Yang (2018), Impact of Insolation Data Source on Remote Sensing Retrievals of Evapotranspiration over the California Delta, Remote Sensing, 11(3): 216, doi: 10.3390/rs11030216
+
 .. [Yang2020] Yang, Y., M. Anderson, F. Gao, C. Hain, A. Noormets, G. Sun, R. Wynne and V. Thomas (2020), Investigating impacts of drought and disturbance on evapotranspiration over a forested landscape in North Carolina, USA using high spatiotemporal resolution remotely sensed data, Remote Sensing of Environment, 238, p. 111018
 
 
