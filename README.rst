@@ -105,6 +105,10 @@ References
 .. [Anderson2004] Anderson, M. C., J. M. Norman, J. R. Mecikalski, R. D. Torn, W. P. Kustas, J. B. Basara (2004), A multiscale remote sensing model for disaggregating regional fluxes to micrometeorological scales, J. Hydrometeorol. 5, 343-363. `https://doi.org/10.1175/1525-7541(2004)005<0343:AMRSMF>2.0.CO;2 <https://doi.org/10.1175/1525-7541(2004)005%3C0343:AMRSMF%3E2.0.CO;2>`__
 .. [Anderson2012b] Anderson, M. C., W.P. Kustas, J. G. Alfieri, F. Gao, C. Hain, J. H. Prueger, S. Evett, P. Colaizzi, T. Howell, J. L. Chavez (2012b), Mapping daily evapotranspiration at Landsat spatial scales during the BEAREX'08 field campaign (2012b), Adv. Water Resour, 50, 162-177. `https://doi.org/10.1016/j.advwatres.2012.06.005 <https://doi.org/10.1016/j.advwatres.2012.06.005>`__
 
+.. [Semmens2016] Semmens, K. A., M. C. Anderson, W. P. Kustas, F. Gao, J. G. Alfieri, L. McKee, J. H. Prueger, C. R. Hain, C. Cammalleri, Y. Yang and T. Xia (2016), Monitoring daily evapotranspiration over two California vineyards using Landsat 8 in a multi-sensor data fusion approach, Remote Sens. Environ., 185, 155–170.
+
+.. [Yang2017] 20.	Yang, Y., M. C. Anderson, F. Gao, C. R. Hain, K. A. Semmens, W. P. Kustas, A. Noormets, R. H. Wynne, V. A. Thomas, and G. Sun (2017), Daily Landsat-scale evapotranspiration estimation over a forested landscape in North Carolina, USA using multi-satellite data fusion, Hydrol. Earth Syst. Sci., 21, 1017–1037.  `doi:doi:10.5194/hess-21-1017-2017 <doi:doi:10.5194/hess-21-1017-2017>`__
+
 .. |build| image:: https://travis-ci.org/Open-ET/openet-disalexi-beta.svg?branch=master
    :alt: Build status
    :target: https://travis-ci.org/Open-ET/openet-disalexi-beta
