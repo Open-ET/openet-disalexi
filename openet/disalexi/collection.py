@@ -290,7 +290,7 @@ class Collection():
                         'system:time_start', ee.Date('2013-03-24').millis()))
 
                 def compute_lsr(image):
-                    model_obj = Image.from_landsat_c2_l2(
+                    model_obj = Image.from_landsat_c2_sr(
                         sr_image=ee.Image(image), **self.model_args)
                     return model_obj.calculate(variables)
 

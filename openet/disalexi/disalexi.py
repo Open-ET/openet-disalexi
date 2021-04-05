@@ -115,7 +115,7 @@ class Image(object):
         et_min: float, optional
             Minimum output ET value (the default is 0.01)
         kwargs: dict, optional
-           et_reference_source : str, float
+            et_reference_source : str, float
                 Reference ET source (the default is None).
                 Parameter is required if computing 'et_fraction' or 'et_reference'.
             et_reference_band : str
@@ -352,13 +352,14 @@ class Image(object):
         # DEADBEEF - Should the supported image collection IDs and helper
         # function mappings be set in a property or method of the Image class?
         collection_methods = {
-            'LANDSAT/LC08/C02/T1_L2': 'from_landsat_c2_l2',
-            'LANDSAT/LE07/C02/T1_L2': 'from_landsat_c2_l2',
-            'LANDSAT/LT05/C02/T1_L2': 'from_landsat_c2_l2',
-            #'LANDSAT/LT04/C0/T1_SR': 'from_landsat_c1_sr',
+            'LANDSAT/LC08/C02/T1_L2': 'from_landsat_c2_sr',
+            'LANDSAT/LE07/C02/T1_L2': 'from_landsat_c2_sr',
+            'LANDSAT/LT05/C02/T1_L2': 'from_landsat_c2_sr',
+            'LANDSAT/LT04/C02/T1_L2': 'from_landsat_c2_sr',
             'LANDSAT/LC08/C01/T1_SR': 'from_landsat_c1_sr',
             'LANDSAT/LE07/C01/T1_SR': 'from_landsat_c1_sr',
             'LANDSAT/LT05/C01/T1_SR': 'from_landsat_c1_sr',
+            'LANDSAT/LT04/C01/T1_SR': 'from_landsat_c1_sr',
             # 'LANDSAT/LE07/C01/T1_TOA': 'from_landsat_c1_toa',
             # 'LANDSAT/LT05/C01/T1_TOA': 'from_landsat_c1_toa',
             # # 'LANDSAT/LT04/C01/T1_TOA': 'from_landsat_c1_toa',
@@ -376,7 +377,7 @@ class Image(object):
         return method(ee.Image(image_id), **kwargs)
 
     @classmethod
-    def from_landsat_c2_l2(cls, sr_image, **kwargs):
+    def from_landsat_c1_sr(cls, sr_image, **kwargs):
         """Returns a DisALEXI Image instance from a Landsat Collection 1 SR image
 
         Parameters
@@ -393,7 +394,27 @@ class Image(object):
         Instance of Image class
 
         """
-        return cls(landsat.LandsatSR(sr_image).prep(), **kwargs)
+        return cls(landsat.Landsat_C01_SR(sr_image).prep(), **kwargs)
+
+    @classmethod
+    def from_landsat_c2_sr(cls, sr_image, **kwargs):
+        """Returns a DisALEXI Image instance from a Landsat Collection 2 SR image
+
+        Parameters
+        ----------
+        sr_image : ee.Image
+            A raw Landsat Collection 2 SR image.
+        cloudmask_args : dict
+            Keyword arguments to pass through to cloud mask function.
+        kwargs : dict
+            Keyword arguments to pass through to Image init function.
+
+        Returns
+        -------
+        Instance of Image class
+
+        """
+        return cls(landsat.Landsat_C02_SR(sr_image).prep(), **kwargs)
 
     # @classmethod
     # def from_landsat_c1_toa(cls, toa_image, **kwargs):
@@ -555,17 +576,17 @@ class Image(object):
 
     @lazy_property
     def lai(self):
-    #     """Leaf Area Index (LAI)"""
+        """Leaf Area Index (LAI)"""
         if utils.is_number(self.lai_source):
              lai_img = ee.Image.constant(float(self.lai_source))
-    #     # elif isinstance(self.lai_source, ee.computedobject.ComputedObject):
-    #     #     lai_img = self.lai_source
+        # elif isinstance(self.lai_source, ee.computedobject.ComputedObject):
+        #     lai_img = self.lai_source
         elif type(self.lai_source) is str:
-    #         # Assumptions (for now)
-    #         #   String lai_source is an image collection ID
-    #         #   Images are single band and don't need a select()
-    #         #   LAI images always need to be scaled
-    #         # CGM - This will raise a .get() error if the image doesn't exist
+             # Assumptions (for now)
+             #   String lai_source is an image collection ID
+             #   Images are single band and don't need a select()
+             #   LAI images always need to be scaled
+             # CGM - This will raise a .get() error if the image doesn't exist
              lai_coll = ee.ImageCollection(self.lai_source) \
                 .filterMetadata('scene_id', 'equals', self.index)  # yun modified
              lai_img = ee.Image(lai_coll.first())
@@ -574,9 +595,10 @@ class Image(object):
 
              self.landsat_lai_version = lai_img.get('landsat_lai_version')
         else:
-             raise valueerror('unsupported lai_source: {}\n'.format(
+             raise ValueError('unsupported lai_source: {}\n'.format(
                      self.lai_source))
-         #lai_img = ee.image('users/tulipyangyun/lai_2016209')
+
+        # lai_img = ee.image('users/tulipyangyun/lai_2016209')
         return lai_img.select([0], ['lai'])
 
     @lazy_property
@@ -601,7 +623,8 @@ class Image(object):
         else:
             raise ValueError('Unsupported tir_source: {}\n'.format(
                 self.tir_source))
-        #tir_img = ee.Image('users/tulipyangyun/LST_20162091720').add(273.16)
+
+        # tir_img = ee.Image('users/tulipyangyun/LST_20162091720').add(273.16)
         return tir_img.select([0], ['tir'])
 
     # TODO: Use the LST and emissivity functions in landsat.py
