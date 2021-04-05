@@ -176,7 +176,7 @@ def test_Landsat_C02_SR_init(img_id):
     input_img = landsat.Landsat_C02_SR(ee.Image(img_id)).input_image
     input_info = ee.Image(input_img).getInfo()
     assert set([b['id'] for b in input_info['bands']]) == set([
-        'blue', 'green', 'red', 'nir', 'swir1', 'swir2', 'tir', 'QA_PIXEL'])
+        'blue', 'green', 'red', 'nir', 'swir1', 'swir2', 'lst', 'QA_PIXEL'])
     assert input_info['properties']['system:time_start'] == l_info['system:time_start']
     assert input_info['properties']['system:index'] == img_id.split('/')[-1]
 

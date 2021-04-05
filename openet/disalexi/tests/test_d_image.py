@@ -63,15 +63,12 @@ def default_image(albedo=0.125, cfmask=0, lai=4.7, lst=306, ndvi=0.875):
         })
 
 def default_image_args(albedo=0.125, cfmask=0, lai=4.7, lst=306, ndvi=0.875,
-                       stabil_iterations=36, albedo_iterations=10,
                        et_reference_source=10, et_reference_band=None,
                        et_reference_factor=1.0, et_reference_resample='nearest',
                        ):
     return {
         'image': default_image(albedo=albedo, cfmask=cfmask, lai=lai, lst=lst,
                                ndvi=ndvi),
-        'stabil_iterations': stabil_iterations,
-        'albedo_iterations': albedo_iterations,
         'et_reference_source': et_reference_source,
         'et_reference_band': et_reference_band,
         'et_reference_factor': et_reference_factor,
@@ -79,13 +76,11 @@ def default_image_args(albedo=0.125, cfmask=0, lai=4.7, lst=306, ndvi=0.875,
     }
 
 def default_image_obj(albedo=0.125, cfmask=0, lai=4.7, lst=306, ndvi=0.875,
-                      stabil_iterations=36, albedo_iterations=10,
                       et_reference_source=10, et_reference_band=None,
                       et_reference_factor=1.0, et_reference_resample='nearest',
                       ):
     return disalexi.Image(**default_image_args(
         albedo=albedo, cfmask=cfmask, lai=lai, lst=lst, ndvi=ndvi,
-        stabil_iterations=stabil_iterations, albedo_iterations=albedo_iterations,
         et_reference_source=et_reference_source,
         et_reference_band=et_reference_band,
         et_reference_factor=et_reference_factor,

@@ -138,12 +138,24 @@ def test_from_scene_et_actual_daily_values(tol=0.0001):
 
     TEST_POINT = (-121.5265, 38.7399)
     output = utils.point_coll_value(output_coll, TEST_POINT, scale=10)
-    # CGM - The ET values should all be 5 and the fraction should be 0.6
+    assert abs(output['et_fraction']['2017-07-01'] - 0.6024096012115479) <= tol
+    assert abs(output['et_fraction']['2017-07-08'] - 0.6024096012115479) <= tol
     assert abs(output['et_fraction']['2017-07-10'] - 0.6042462587356567) <= tol
-    assert abs(output['et_reference']['2017-07-10'] - 8) <= tol
-    assert abs(output['et']['2017-07-10'] - 4.833970069885254) <= tol
+    assert abs(output['et_fraction']['2017-07-16'] - 0.6097561120986938) <= tol
+    assert abs(output['et_fraction']['2017-07-24'] - 0.6666666865348816) <= tol
+    assert abs(output['et_fraction']['2017-07-31'] - 0.6666666865348816) <= tol
+    assert abs(output['et_reference']['2017-07-01'] - 6.6) <= tol
+    assert abs(output['et_reference']['2017-07-08'] - 8.3) <= tol
+    assert abs(output['et_reference']['2017-07-10'] - 8.0) <= tol
+    assert abs(output['et_reference']['2017-07-16'] - 8.2) <= tol
+    assert abs(output['et_reference']['2017-07-24'] - 7.5) <= tol
+    assert abs(output['et_reference']['2017-07-31'] - 7.5) <= tol
     assert abs(output['et']['2017-07-01'] - 3.9759035110473633) <= tol
-    assert abs(output['et']['2017-07-31'] - 5) <= tol
+    assert abs(output['et']['2017-07-08'] - 5.0) <= tol
+    assert abs(output['et']['2017-07-10'] - 4.833970069885254) <= tol
+    assert abs(output['et']['2017-07-16'] - 5.0) <= tol
+    assert abs(output['et']['2017-07-24'] - 5.0) <= tol
+    assert abs(output['et']['2017-07-31'] - 5.0) <= tol
     assert '2017-08-01' not in output['et'].keys()
     # assert output['count']['2017-07-01'] == 3
 
