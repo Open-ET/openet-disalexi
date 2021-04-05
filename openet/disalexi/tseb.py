@@ -86,6 +86,8 @@ def tseb_pt(t_air0, t_air, t_rad, e_air, u, p, z, rs_1, rs24, vza,
     albedo_iter: int, optional
         Number of iterations of albedo separation calculation
         (the default is 10).
+    et_min : float, optinal
+        Minimum output ET value (the default is 0.01).
 
     Returns
     -------
@@ -269,6 +271,7 @@ def tseb_pt(t_air0, t_air, t_rad, e_air, u, p, z, rs_1, rs24, vza,
     a_pt_max = a_pt.reduceRegion(
         reducer=ee.Reducer.max(), scale=4000, maxPixels=1E10).get('a_pt')
 
+    # CGM - This should have been done with a clamp() or a .min().max() call
     stabil_iter = ee.Number(a_pt_max).divide(0.05).ceil()
     stabil_iter = ee.Algorithms.If(stabil_iter.gt(40), 40, stabil_iter)
     stabil_iter = ee.Number(stabil_iter)
@@ -553,7 +556,7 @@ def tseb_pt(t_air0, t_air, t_rad, e_air, u, p, z, rs_1, rs24, vza,
             '((LE_c + LE_s) / rs_1) * (rs24 / 2.45) * scaling',
             {'LE_c': LE_c, 'LE_s': LE_s, 'rs_1': rs_1,
              'rs24': rs24.multiply(0.0864 / 24.0), 'scaling': 1}) \
-        .max(0.01) \
+        .max(et_min) \
 
     # # DEADBEEF
     # print('\nAfter Checking EBC')

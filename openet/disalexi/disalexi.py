@@ -49,7 +49,7 @@ class Image(object):
             stabil_iterations=36,
             albedo_iterations=10,
             rs_interp_flag=True,
-            ta_interp_flag=True,
+            # ta_interp_flag=True,
             ta_smooth_flag=True,
             lat=None,
             lon=None,
@@ -468,6 +468,7 @@ class Image(object):
             hc_min=self.hc_min, hc_max=self.hc_max,
             datetime=self.datetime, lat=self.lat, lon=self.lon,
             stabil_iter=self.stabil_iter, albedo_iter=self.albedo_iter,
+            et_min=self.et_min,
         )
         return et.rename(['et']).set(self.properties)
         #     .set({'ta_step_size': self.ta.get('ta_step_size')})
