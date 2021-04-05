@@ -563,58 +563,6 @@ def test_Image_calculate_variables_valueerror():
         utils.getinfo(default_image_obj().calculate(['FOO']))
 
 
-# # How should these @classmethods be tested?
-# def test_Image_from_landsat_c1_toa_default_image():
-#     """Test that the classmethod is returning a class object"""
-#     output = disalexi.Image.from_landsat_c1_toa(ee.Image(COLL_ID + SCENE_ID))
-#     assert type(output) == type(default_image_obj())
-#
-#
-# @pytest.mark.parametrize(
-#     'image_id',
-#     [
-#         'LANDSAT/LC08/C01/T1_RT_TOA/LC08_044033_20170716',
-#         'LANDSAT/LC08/C01/T1_TOA/LC08_044033_20170716',
-#         'LANDSAT/LE07/C01/T1_RT_TOA/LE07_044033_20170708',
-#         'LANDSAT/LE07/C01/T1_TOA/LE07_044033_20170708',
-#         'LANDSAT/LT05/C01/T1_TOA/LT05_044033_20110716',
-#     ]
-# )
-# def test_Image_from_landsat_c1_toa_image_id(image_id):
-#     """Test instantiating the class from a Landsat image ID"""
-#     output = utils.getinfo(disalexi.Image.from_landsat_c1_toa(image_id).ndvi)
-#     assert output['properties']['system:index'] == image_id.split('/')[-1]
-#
-#
-# def test_Image_from_landsat_c1_toa_image():
-#     """Test instantiating the class from a Landsat ee.Image"""
-#     image_id = 'LANDSAT/LC08/C01/T1_TOA/LC08_044033_20170716'
-#     output = utils.getinfo(
-#         disalexi.Image.from_landsat_c1_toa(ee.Image(image_id)).ndvi)
-#     assert output['properties']['system:index'] == image_id.split('/')[-1]
-#
-#
-# def test_Image_from_landsat_c1_toa_et_fraction():
-#     """Test if ET fraction can be built for a Landsat images"""
-#     image_id = 'LANDSAT/LC08/C01/T1_TOA/LC08_044033_20170716'
-#     output = utils.getinfo(disalexi.Image.from_landsat_c1_toa(image_id).et_fraction)
-#     assert output['properties']['system:index'] == image_id.split('/')[-1]
-#
-#
-# def test_Image_from_landsat_c1_toa_et():
-#     """Test if ET can be built for a Landsat images"""
-#     image_id = 'LANDSAT/LC08/C01/T1_TOA/LC08_044033_20170716'
-#     output = utils.getinfo(disalexi.Image.from_landsat_c1_toa(
-#         image_id, et_reference_source='IDAHO_EPSCOR/GRIDMET',
-#         et_reference_band='etr').et)
-#     assert output['properties']['system:index'] == image_id.split('/')[-1]
-#
-#
-# def test_Image_from_landsat_c1_toa_exception():
-#     with pytest.raises(Exception):
-#         utils.getinfo(disalexi.Image.from_landsat_c1_toa(ee.Image('FOO')).ndvi)
-
-
 # Landsat Collection 1 SR
 def test_Image_from_landsat_c1_sr_default_image():
     """Test that the classmethod is returning a class object"""

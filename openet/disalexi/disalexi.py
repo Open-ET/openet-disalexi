@@ -360,9 +360,6 @@ class Image(object):
             'LANDSAT/LE07/C01/T1_SR': 'from_landsat_c1_sr',
             'LANDSAT/LT05/C01/T1_SR': 'from_landsat_c1_sr',
             'LANDSAT/LT04/C01/T1_SR': 'from_landsat_c1_sr',
-            # 'LANDSAT/LE07/C01/T1_TOA': 'from_landsat_c1_toa',
-            # 'LANDSAT/LT05/C01/T1_TOA': 'from_landsat_c1_toa',
-            # # 'LANDSAT/LT04/C01/T1_TOA': 'from_landsat_c1_toa',
         }
 
         try:
@@ -415,24 +412,6 @@ class Image(object):
 
         """
         return cls(landsat.Landsat_C02_SR(sr_image).prep(), **kwargs)
-
-    # @classmethod
-    # def from_landsat_c1_toa(cls, toa_image, **kwargs):
-    #     """Returns a DisALEXI Image instance from a Landsat Collection 1 TOA image
-    #
-    #     Parameters
-    #     ----------
-    #     toa_image : ee.Image
-    #         A raw Landsat Collection 1 TOA image.
-    #     kwargs : dict
-    #         Keyword arguments to pass through to Image init function.
-    #
-    #     Returns
-    #     -------
-    #     Instance of Image class
-    #
-    #     """
-    #     return cls(landsat.LandsatTOA(toa_image).prep(), **kwargs)
 
     def calculate(self, variables=['et']):
         """Return a multiband image of calculated variables

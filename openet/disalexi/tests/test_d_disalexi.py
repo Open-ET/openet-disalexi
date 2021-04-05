@@ -502,7 +502,7 @@ def test_Image_set_landcover_vars_set_asset(tol=1E-6):
 #
 #     # Initialize the Landsat collection (with a single image)
 #     landsat_coll = ee.ImageCollection(
-#         ee.Image('LANDSAT/LC08/C01/T1_TOA/LC08_043033_20150805'))
+#         ee.Image('LANDSAT/LC08/C01/T1_SR/LC08_043033_20150805'))
 #
 #     # Prep each image in the Landsat collection
 #     def run_prep(img):

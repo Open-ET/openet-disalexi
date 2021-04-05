@@ -82,8 +82,6 @@ def test_Collection_init_cloud_cover_max_str():
 @pytest.mark.parametrize(
     'coll_id, start_date, end_date',
     [
-        # ['LANDSAT/LT04/C01/T1_TOA', '1981-01-01', '1982-01-01'],
-        # ['LANDSAT/LT04/C01/T1_TOA', '1994-01-01', '1995-01-01'],
         ['LANDSAT/LT05/C01/T1_SR', '1983-01-01', '1984-01-01'],
         ['LANDSAT/LT05/C01/T1_SR', '2012-01-01', '2013-01-01'],
         ['LANDSAT/LE07/C01/T1_SR', '1998-01-01', '1999-01-01'],
@@ -119,17 +117,6 @@ def test_Collection_init_invalid_collections_exception():
     """Test if Exception is raised for an invalid collection ID"""
     with pytest.raises(ValueError):
         default_coll_obj(collections=['FOO'])
-
-
-# DEADBEEF - DisALEXI doesn't support TOA or realtime TOA collections
-# def test_Collection_init_duplicate_collections_exception():
-#     """Test if Exception is raised for duplicate Landsat types"""
-#     with pytest.raises(ValueError):
-#         default_coll_obj(collections=['LANDSAT/LC08/C01/T1_RT_TOA',
-#                                       'LANDSAT/LC08/C01/T1_TOA'])
-#     with pytest.raises(ValueError):
-#         default_coll_obj(collections=['LANDSAT/LC08/C01/T1_SR',
-#                                       'LANDSAT/LC08/C01/T1_TOA'])
 
 
 def test_Collection_init_cloud_cover_exception():
@@ -178,16 +165,6 @@ def test_Collection_build_dates():
     output = utils.getinfo(coll_obj._build(
         start_date='2017-07-16', end_date='2017-07-17'))
     assert parse_scene_id(output) == ['LC08_044033_20170716']
-
-
-# DEADBEEF - DisALEXI doesn't support TOA or realtime TOA collections
-# def test_Collection_build_landsat_toa():
-#     """Test if the Landsat TOA (non RT) collections can be built"""
-#     coll_obj = default_coll_obj(
-#         collections=['LANDSAT/LC08/C01/T1_TOA', 'LANDSAT/LE07/C01/T1_TOA'])
-#     output = utils.getinfo(coll_obj._build())
-#     assert parse_scene_id(output) == SCENE_ID_LIST
-#     assert {y['id'] for x in output['features'] for y in x['bands']} == VARIABLES
 
 
 def test_Collection_build_landsat_sr():

@@ -68,7 +68,6 @@ class Collection():
             Output variables can also be specified in the method calls.
         cloud_cover_max : float, str
             Maximum cloud cover percentage (the default is 70%).
-                - Landsat TOA: CLOUD_COVER_LAND
                 - Landsat SR: CLOUD_COVER_LAND
         filter_args : dict
             Image collection filter keyword arguments (the default is None).
@@ -155,15 +154,6 @@ class Collection():
             'LANDSAT/LT05/C02/T1_L2',
             'LANDSAT/LT04/C02/T1_L2',
         ]
-        # DEADBEEF - DisALEXI doesn't support TOA or realtime TOA collections
-        # self._landsat_c1_toa_collections = [
-        #     'LANDSAT/LC08/C01/T1_RT_TOA',
-        #     'LANDSAT/LE07/C01/T1_RT_TOA',
-        #     'LANDSAT/LC08/C01/T1_TOA',
-        #     'LANDSAT/LE07/C01/T1_TOA',
-        #     'LANDSAT/LT05/C01/T1_TOA',
-        #     'LANDSAT/LT04/C01/T1_TOA',
-        # ]
 
         # If collections is a string, place in a list
         if type(self.collections) is str:
