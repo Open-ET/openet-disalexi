@@ -281,7 +281,7 @@ class Landsat_C02_SR(Landsat):
                           'ST_B10', 'QA_PIXEL']})
         # Rename bands to generic names
         output_bands = [
-            'blue', 'green', 'red', 'nir', 'swir1', 'swir2', 'tir', 'QA_PIXEL']
+            'blue', 'green', 'red', 'nir', 'swir1', 'swir2', 'lst', 'QA_PIXEL']
 
         self.input_image = ee.Image(self.raw_image) \
             .select(input_bands.get(self._spacecraft_id), output_bands) \

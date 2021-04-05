@@ -37,10 +37,10 @@ class Image(object):
             image,
             ta_source='CONUS_V003',
             alexi_source='CONUS_V003',
-            lai_source='projects/earthengine-legacy/assets/projects/openet/lai/landsat/scene',
-            tir_source='projects/earthengine-legacy/assets/projects/openet/tir/landsat/scene',
+            lai_source='projects/earthengine-legacy/assets/projects/openet/lai/landsat/c02',
+            tir_source='projects/earthengine-legacy/assets/projects/openet/tir/landsat/c02',
             elevation_source='USGS/SRTMGL1_003',
-            landcover_source='NLCD2011',
+            landcover_source='USGS/NLCD/NLCD2016',
             rs_daily_source='CFSR',
             rs_hourly_source='CFSR',
             windspeed_source='CFSR',
@@ -51,9 +51,6 @@ class Image(object):
             rs_interp_flag=True,
             ta_interp_flag=True,
             ta_smooth_flag=True,
-            # etr_source=None,
-            # etr_band=None,
-            # etr_factor=1.0,
             lat=None,
             lon=None,
             et_min=0.01,
@@ -65,11 +62,11 @@ class Image(object):
         ----------
         image : ee.Image
             Prepped image
-        ta_source : {'CONUS_V001'}
-            ALEXI scale air temperature image collection ID (the default is
-            'CONUS_V001').
-        alexi_source : {'CONUS_V001'}
-            ALEXI ET image collection ID (the default is 'CONUS_V001').
+        ta_source : {'CONUS_V003'}
+            ALEXI scale air temperature image collection ID.
+            The default is 'CONUS_V003'.
+        alexi_source : {'CONUS_V003'}
+            ALEXI ET image collection ID (the default is 'CONUS_V003').
         lai_source : string
             LAI image collection ID.
         tir_source : string
@@ -77,8 +74,8 @@ class Image(object):
         elevation_source: str, ee.Image
             Elevation source keyword or asset (the default is USGS/SRTMGL1_003).
             Units must be in meters.
-        landcover_source : {'NLCD2011', 'NLCD2006', 'GLOBELAND30'}
-            Land cover source keyword (the default is 'NLCD2011').
+        landcover_source : {'NLCD2016', 'NLCD2011', 'NLCD2006', 'GLOBELAND30'}
+            Land cover source keyword (the default is 'NLCD2016').
         rs_daily_source : {'MERRA2','CFSR'}
             Daily solar insolation source keyword (the default is 'CFSR').
         rs_hourly_source : {'MERRA2','CFSR'}
@@ -100,14 +97,6 @@ class Image(object):
             Ta interpolation is not implemented.
         ta_smooth_flag : bool, optional
             If True, smooth and resample Ta image.
-        etr_source : str, float, optional
-            Reference ET source (the default is None).
-            Parameter is required if computing 'etf' or 'etr'.
-        etr_band : str, optional
-            Reference ET band name (the default is None).
-            Parameter is required if computing 'etf' or 'etr'.
-        etr_factor : float, optional
-            Reference ET scaling factor (the default is 1.0).
         lat : ee.Image, optional
             Latitude [deg].  If not set will default to ee.Image.pixelLonLat().
         lon : ee.Image, optional
@@ -127,6 +116,7 @@ class Image(object):
             et_reference_resample : {'nearest', 'bilinear', 'bicubic', None}
                 Reference ET resampling.  The default is None which is
                 equivalent to nearest neighbor resampling.
+
         Notes
         -----
         For now defaulting all inputs to the CONUS based inputs.
@@ -194,11 +184,11 @@ class Image(object):
 
         # Get input bands from the image
         self.albedo = input_image.select('albedo')
-        # lai and lst are being read from source image collections
-        #self.lai = input_image.select('lai')
+        self.ndvi = input_image.select('ndvi')
+        # LAT and LST are being read from source image collections
+        # self.lai = input_image.select('lai')
         # self.lai = self.lai.where(lai.mask(), 0.01)
         # self.lst = input_image.select('lst')
-        self.ndvi = input_image.select('ndvi')
 
         # Set input parameters
         self.ta_source = ta_source
@@ -509,6 +499,12 @@ class Image(object):
             .multiply(self.et_reference_factor) \
             .rename(['et_reference']).set(self.properties)
 
+    # @lazy_property
+    # def et_fraction(self):
+    #     """Compute ET fraction as actual ET divided by the reference ET"""
+    #     return self.et.divide(self.et_reference) \
+    #         .rename(['et_fraction']).set(self.properties)
+
     @lazy_property
     def et_alexi(self):
         """Extract ALEXI ET image for the target image time
@@ -568,7 +564,7 @@ class Image(object):
              # CGM - This will raise a .get() error if the image doesn't exist
              lai_coll = ee.ImageCollection(self.lai_source) \
                 .filterMetadata('scene_id', 'equals', self.index)  # yun modified
-             lai_img = ee.Image(lai_coll.first())
+             lai_img = ee.Image(lai_coll.first()).select(['LAI'])
              lai_img = lai_img.multiply(ee.Number(lai_img.get('scale_factor'))) \
                  .set({'landsat_lai_version': lai_img.get('landsat_lai_version')})
 
@@ -577,9 +573,9 @@ class Image(object):
              raise ValueError('unsupported lai_source: {}\n'.format(
                      self.lai_source))
 
-        # lai_img = ee.image('users/tulipyangyun/lai_2016209')
         return lai_img.select([0], ['lai'])
 
+    # TODO: Rename "tir" to "lst" once Collection 2 is fully loaded
     @lazy_property
     def tir(self):
         """Sharpened thermal infrared (TIR)"""
@@ -606,42 +602,43 @@ class Image(object):
         # tir_img = ee.Image('users/tulipyangyun/LST_20162091720').add(273.16)
         return tir_img.select([0], ['tir'])
 
-    # TODO: Use the LST and emissivity functions in landsat.py
-    @lazy_property
-    def lst(self):
-        """Return land surface temperature (LST) image"""
-        emissivity = self.lai.divide(300).add(0.97) \
-            .where(self.ndvi.lte(0), 0.99) \
-            .where(self.ndvi.gt(0).And(self.lai.gt(3)), 0.98)
-
-        # Get properties from image
-        k1 = ee.Number(ee.Image(self.image).get('k1_constant'))
-        k2 = ee.Number(ee.Image(self.image).get('k2_constant'))
-
-        # First back out radiance from brightness temperature
-        # Then recalculate emissivity corrected Ts
-        thermal_rad_toa = self.tir.expression(
-            'k1 / (exp(k2 / ts_brightness) - 1)',
-            {'ts_brightness': self.tir, 'k1': k1, 'k2': k2},
-        )
-
-        tnb = 0.866  # narrow band transmissivity of air
-        rp = 0.91  # path radiance
-        rsky = 1.32  # narrow band clear sky downward thermal radiation
-        rc = thermal_rad_toa.expression(
-            '((thermal_rad_toa - rp) / tnb) - ((1. - emiss) * rsky)',
-            {
-                'thermal_rad_toa': thermal_rad_toa,
-                'emiss': emissivity,
-                'rp': rp, 'tnb': tnb, 'rsky': rsky
-            },
-        )
-        lst = rc.expression(
-            'k2 / log(emiss * k1 / rc + 1)',
-            {'emiss': emissivity, 'rc': rc, 'k1': k1, 'k2': k2},
-        )
-
-        return lst.set(self.properties).rename(['lst'])
+    # CGM - This is not being called but maybe should be applied to just the
+    #   Collection 1 TIR image (since it is not LST)
+    # @lazy_property
+    # def lst(self):
+    #     """Return land surface temperature (LST) image"""
+    #     emissivity = self.lai.divide(300).add(0.97) \
+    #         .where(self.ndvi.lte(0), 0.99) \
+    #         .where(self.ndvi.gt(0).And(self.lai.gt(3)), 0.98)
+    #
+    #     # Get properties from image
+    #     k1 = ee.Number(ee.Image(self.image).get('k1_constant'))
+    #     k2 = ee.Number(ee.Image(self.image).get('k2_constant'))
+    #
+    #     # First back out radiance from brightness temperature
+    #     # Then recalculate emissivity corrected Ts
+    #     thermal_rad_toa = self.tir.expression(
+    #         'k1 / (exp(k2 / ts_brightness) - 1)',
+    #         {'ts_brightness': self.tir, 'k1': k1, 'k2': k2},
+    #     )
+    #
+    #     tnb = 0.866  # narrow band transmissivity of air
+    #     rp = 0.91  # path radiance
+    #     rsky = 1.32  # narrow band clear sky downward thermal radiation
+    #     rc = thermal_rad_toa.expression(
+    #         '((thermal_rad_toa - rp) / tnb) - ((1. - emiss) * rsky)',
+    #         {
+    #             'thermal_rad_toa': thermal_rad_toa,
+    #             'emiss': emissivity,
+    #             'rp': rp, 'tnb': tnb, 'rsky': rsky
+    #         },
+    #     )
+    #     lst = rc.expression(
+    #         'k2 / log(emiss * k1 / rc + 1)',
+    #         {'emiss': emissivity, 'rc': rc, 'k1': k1, 'k2': k2},
+    #     )
+    #
+    #     return lst.set(self.properties).rename(['lst'])
 
     @lazy_property
     def mask(self):
@@ -768,10 +765,10 @@ class Image(object):
 
             if self.rs_interp_flag:
                 interp_dt = self.datetime.advance(-0.5, 'hour')
-                rs_a_img = ee.Image(rs_coll \
-                                    .filterDate(interp_dt.advance(-1, 'hour'), interp_dt).first())
-                rs_b_img = ee.Image(rs_coll \
-                                    .filterDate(inteys_nerp_dt, interp_dt.advance(1, 'hour')).first())
+                rs_a_img = ee.Image(rs_coll.filterDate(
+                    interp_dt.advance(-1, 'hour'), interp_dt).first())
+                rs_b_img = ee.Image(rs_coll.filterDate(
+                    interp_dt, interp_dt.advance(1, 'hour')).first())
                 t_a = ee.Number(rs_a_img.get('system:time_start'))
                 t_b = ee.Number(rs_b_img.get('system:time_start'))
                 rs1_img = rs_b_img.subtract(rs_a_img) \
@@ -812,8 +809,8 @@ class Image(object):
             rs1_img = ee.Algorithms.If(
                 self.hour_int.gt(0) and self.hour_int.lt(24),
                 rs1_b_img.subtract(rs1_a_img) \
-                .multiply(self.hour.subtract(t_a).divide(t_b.subtract(t_a))) \
-                .add(rs1_a_img),
+                    .multiply(self.hour.subtract(t_a).divide(t_b.subtract(t_a))) \
+                    .add(rs1_a_img),
                 rs1_a_img)
             rs1_img = ee.Algorithms.If(
                 self.hour_int.gte(24), rs1_img_temp1, rs1_img)
@@ -966,10 +963,7 @@ class Image(object):
                 .add(ta_img)
             ta_img = ta_img_interp
         elif self.ta_source.upper() == 'CONUS_V003':
-            #ta_coll_id = 'projects/disalexi/ta/CONUS_V003_1K_smoothtest_c2_stability'
-            #ta_coll_id = 'projects/disalexi/ta/CONUS_V003_focalmean_1K_stability_35'
-            ta_coll_id ='projects/disalexi/ta/CONUS_V003_1K'
-            #ta_coll_id = 'users/tulipyangyun/Ta_20152221720_allinhouse'
+            ta_coll_id = 'projects/disalexi/ta/CONUS_V003_1K'
             ta_coll = ee.ImageCollection(ta_coll_id) \
                 .filterMetadata('image_id', 'equals', self.id) \
                 .limit(1, 'step_size', False)

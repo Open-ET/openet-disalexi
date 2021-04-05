@@ -29,11 +29,10 @@ img_time = 17 + 5.0 / 60
 test_img = ee.Image([
     ee.Image(asset_ws + 'albedo'),
     ee.Image(asset_ws + 'cfmask'),
-    ee.Image(asset_ws + 'lst'),
     ee.Image(asset_ws + 'ndvi')
 ])
 test_img = ee.Image(test_img \
-    .rename(['albedo', 'cfmask', 'lst', 'ndvi']) \
+    .rename(['albedo', 'cfmask', 'ndvi']) \
     .set({'system:time_start': img_time_start,
           'system:index': 'LC08_028031_20140708',
           'system:id': 'LC08_028031_20140708'}))

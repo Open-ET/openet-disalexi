@@ -13,7 +13,7 @@ ne3_xy = [-96.43968912903934, 41.17964494123755]
 
 
 @pytest.mark.parametrize(
-    'T_air, T_rad, e_air, u,'
+    'T_air0, T_air, T_rad, e_air, u,'
     'p, z, Rs_1, '
     'Rs24, vza,'
     'aleafv, aleafn, aleafl, adeadv, adeadn, adeadl,'
@@ -47,7 +47,7 @@ ne3_xy = [-96.43968912903934, 41.17964494123755]
         #  36, 10, 6.69752524158102 / 0.408, 1E-8],
 
         # High NDVI site in LC08_044033_20170716
-        [300.0, 305.92253850611, 0.84104, 3.2665367230039,
+        [300.0, 300.0, 305.92253850611, 0.84104, 3.2665367230039,
          101.264543111959, 3.0, 946.69066527778,
          8603.212890625, 0,
          0.83, 0.35, 0.95, 0.49, 0.13, 0.95,
@@ -55,7 +55,7 @@ ne3_xy = [-96.43968912903934, 41.17964494123755]
          0.0, 0.6, 0.05, 1500230731090, -121.5265, 38.7399, 1.32,
          36, 10, 6.8747, 1E-3],
         # Low NDVI site in LC08_044033_20170716
-        [300.0, 323.59893135545, 0.84104, 3.2665367230039,
+        [300.0, 300.0, 323.59893135545, 0.84104, 3.2665367230039,
          101.252726383124, 4.0, 946.69066527778,
          8603.212890625, 0,
          0.83, 0.35, 0.95, 0.49, 0.13, 0.95,
@@ -64,11 +64,16 @@ ne3_xy = [-96.43968912903934, 41.17964494123755]
          36, 10, 3.5585, 1E-3],
     ]
 )
-def test_tseb_pt(T_air, T_rad, e_air, u, p, z, Rs_1, Rs24, vza, aleafv, aleafn,
-                 aleafl, adeadv, adeadn, adeadl, albedo, ndvi, lai, clump,
+def test_tseb_pt(T_air0, T_air, T_rad, e_air, u, p, z, Rs_1, Rs24, vza,
+                 aleafv, aleafn, aleafl, adeadv, adeadn, adeadl,
+                 albedo, ndvi, lai, clump,
                  hc_min, hc_max, leaf_width, datetime, lon, lat, a_PT_in,
                  stabil_iter, albedo_iter, expected, tol):
+    # mask = ee.Image('LANDSAT/LC08/C02/T1_L2/LC08_044033_20170716')
+    #     .select(['SR_B3']).float().multiply(0)
+    #   albedo=mask.add(albedo)
     output_image = tseb.tseb_pt(
+        t_air0=ee.Image.constant(T_air),
         t_air=ee.Image.constant(T_air), t_rad=ee.Image.constant(T_rad),
         e_air=ee.Image.constant(e_air), u=ee.Image.constant(u),
         p=ee.Image.constant(p), z=ee.Image.constant(z),
@@ -85,7 +90,7 @@ def test_tseb_pt(T_air, T_rad, e_air, u, p, z, Rs_1, Rs24, vza, aleafv, aleafn,
         datetime=ee.Date(datetime), a_pt_in=ee.Image.constant(a_PT_in),
         stabil_iter=stabil_iter, albedo_iter=albedo_iter)
 
-    output = list(utils.constant_image_value(output_image).values())[0]
+    output = list(utils.point_image_value(output_image, [lon, lat], 30).values())[0]
     logging.debug('\n  Target values: {}'.format(expected))
     logging.debug('  Output values: {}'.format(output))
     assert abs(output - expected) <= tol

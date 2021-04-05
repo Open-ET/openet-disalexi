@@ -264,15 +264,15 @@ def tseb_pt(t_air0, t_air, t_rad, e_air, u, p, z, rs_1, rs24, vza,
     a_pt = a_pt.where(ind, 2.5)
     # a_pt = ee.Image.constant(a_pt_in)
     # a_pt = mask.multiply(a_pt)
-    transform = ee.List(ee.Dictionary(
-        ee.Algorithms.Describe(vpd.projection())).get('transform'))
+    # transform = ee.List(ee.Dictionary(
+    #     ee.Algorithms.Describe(vpd.projection())).get('transform'))
     a_pt_max = a_pt.reduceRegion(
-        reducer=ee.Reducer.max(),scale = 4000,maxPixels=1E10).get('a_pt')
+        reducer=ee.Reducer.max(), scale=4000, maxPixels=1E10).get('a_pt')
 
     stabil_iter = ee.Number(a_pt_max).divide(0.05).ceil()
-    stabil_iter = ee.Algorithms.If(stabil_iter.gt(40),40,stabil_iter)
-    stabil_iter=ee.Number(stabil_iter)
-    stabil_iter = ee.Algorithms.If(stabil_iter.lt(25),25, stabil_iter)
+    stabil_iter = ee.Algorithms.If(stabil_iter.gt(40), 40, stabil_iter)
+    stabil_iter = ee.Number(stabil_iter)
+    stabil_iter = ee.Algorithms.If(stabil_iter.lt(25), 25, stabil_iter)
 
     # CGM - This was also being computed inside albedo_separation function below
     # Commented out from here for now.
