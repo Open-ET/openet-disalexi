@@ -7,13 +7,10 @@ import logging
 import math
 import os
 import pprint
-# import random
 import re
 import time
-import urllib.request
 
 import ee
-from osgeo import ogr, osr
 
 import openet.disalexi
 import openet.core
@@ -159,11 +156,16 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
         collections = str(ini['INPUTS']['collections'])
         collections = sorted([x.strip() for x in collections.split(',')])
     except KeyError:
+        # CGM - I don't think we want to mix the collections here
         logging.info('\nINPUTS collections parameter was net set, '
-                        'default to Landsat 5/7/8 C02 L2 and C01 SR collections')
+                        'default to Landsat 5/7/8 C02 L2 collections')
         collections = ['LANDSAT/LC08/C02/T1_L2', 'LANDSAT/LE07/C02/T1_L2',
-                       'LANDSAT/LT05/C02/T1_L2', 'LANDSAT/LC08/C01/T1_SR',
-                       'LANDSAT/LE07/C01/T1_SR', 'LANDSAT/LT05/C01/T1_SR']
+                       'LANDSAT/LT05/C02/T1_L2']
+        # logging.info('\nINPUTS collections parameter was net set, '
+        #                 'default to Landsat 5/7/8 C02 L2 and C01 SR collections')
+        # collections = ['LANDSAT/LC08/C02/T1_L2', 'LANDSAT/LE07/C02/T1_L2',
+        #                'LANDSAT/LT05/C02/T1_L2', 'LANDSAT/LC08/C01/T1_SR',
+        #                'LANDSAT/LE07/C01/T1_SR', 'LANDSAT/LT05/C01/T1_SR']
     except Exception as e:
         raise e
 
@@ -204,7 +206,6 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
         wrs2_tiles = []
     except Exception as e:
         raise e
-
 
     try:
         mgrs_tiles = str(ini['EXPORT']['mgrs_tiles'])
@@ -354,22 +355,23 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
         ee.Initialize()
 
 
-    # TODO: set datastore key file as a parameter?
-    datastore_key_file = 'openet-dri-datastore.json'
-    if log_tasks and not os.path.isfile(datastore_key_file):
-        logging.info('\nTask logging disabled, datastore key does not exist')
-        log_tasks = False
-        # input('ENTER')
-    if log_tasks:
-        logging.info('\nInitializing task datastore client')
-        # TODO: Move to top and add to requirements.txt and environment.yaml
-        from google.cloud import datastore
-        try:
-            datastore_client = datastore.Client.from_service_account_json(
-                datastore_key_file)
-        except Exception as e:
-            logging.error('{}'.format(e))
-            return False
+    # # DEADBEEF
+    # # TODO: set datastore key file as a parameter?
+    # datastore_key_file = 'openet-dri-datastore.json'
+    # if log_tasks and not os.path.isfile(datastore_key_file):
+    #     logging.info('\nTask logging disabled, datastore key does not exist')
+    #     log_tasks = False
+    #     # input('ENTER')
+    # if log_tasks:
+    #     logging.info('\nInitializing task datastore client')
+    #     # TODO: Move to top and add to requirements.txt and environment.yaml
+    #     from google.cloud import datastore
+    #     try:
+    #         datastore_client = datastore.Client.from_service_account_json(
+    #             datastore_key_file)
+    #     except Exception as e:
+    #         logging.error('{}'.format(e))
+    #         return False
 
 
     # Get current running tasks
@@ -481,124 +483,26 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
             # logging.debug('  Extent:    {}'.format(export_info['extent']))
             # logging.debug('  MaxPixels: {}'.format(export_info['maxpixels']))
 
-            # filter_args = {}
-            # for coll_id in collections:
-            #     filter_args[coll_id] = [
-            #         {'type': 'equals', 'leftField': 'WRS_PATH', 'rightValue': path},
-            #         {'type': 'equals', 'leftField': 'WRS_ROW', 'rightValue': row}]
-            # # logging.debug('  Filter Args: {}'.format(filter_args))
+            filter_args = {}
+            for coll_id in collections:
+                filter_args[coll_id] = [
+                    {'type': 'equals', 'leftField': 'WRS_PATH', 'rightValue': path},
+                    {'type': 'equals', 'leftField': 'WRS_ROW', 'rightValue': row}]
+            logging.debug(f'  Filter Args: {filter_args}')
 
-            # TODO: Switch to call to openet.disalexi.Collection()
-            landsat_coll = ee.ImageCollection([])
-            export_geom = ee.Geometry.Point(openet.core.wrs2.centroids[wrs2_tile])
-            if ('LANDSAT/LC08/C02/T1_L2' in collections or
-                    'LANDSAT/LE07/C02/T1_L2' in collections or
-                    'LANDSAT/LT05/C02/T1_L2' in collections or
-                    'LANDSAT/LT04/C02/T1_L2' in collections ):
-                if ('LANDSAT/LC08/C02/T1_L2' in collections and
-                        iter_end_dt.strftime('%Y-%m-%d') > '2013-03-24'):
-                    l8_coll = ee.ImageCollection('LANDSAT/LC08/C02/T1_L2') \
-                        .filterDate(iter_start_dt.strftime('%Y-%m-%d'),
-                                    iter_end_dt.strftime('%Y-%m-%d')) \
-                        .filterMetadata('WRS_PATH', 'equals', path) \
-                        .filterMetadata('WRS_ROW', 'equals', row) \
-                        .filter(ee.Filter.gt('system:time_start',
-                                            ee.Date('2013-03-24').millis())) \
-                        .filterMetadata('CLOUD_COVER_LAND', 'less_than',
-                                        float(ini['INPUTS']['cloud_cover'])) \
-                        .filterBounds(export_geom)
-                    landsat_coll = ee.ImageCollection(landsat_coll.merge(l8_coll))
-
-                if ('LANDSAT/LE07/C02/T1_L2' in collections and
-                        iter_end_dt.strftime('%Y-%m-%d') >= '1999-01-01'):
-                    l7_coll = ee.ImageCollection('LANDSAT/LE07/C02/T1_L2') \
-                        .filterDate(iter_start_dt.strftime('%Y-%m-%d'),
-                                    iter_end_dt.strftime('%Y-%m-%d')) \
-                        .filterMetadata('WRS_PATH', 'equals', path) \
-                        .filterMetadata('WRS_ROW', 'equals', row) \
-                        .filterMetadata('CLOUD_COVER_LAND', 'less_than',
-                                        float(ini['INPUTS']['cloud_cover'])) \
-                        .filterBounds(export_geom)
-                    landsat_coll = ee.ImageCollection(landsat_coll.merge(l7_coll))
-                if ('LANDSAT/LT05/C02/T1_L2' in collections and
-                        iter_start_dt.strftime('%Y-%m-%d') <= '2011-12-31'):
-                    l5_coll = ee.ImageCollection('LANDSAT/LT05/C02/T1_L2') \
-                        .filterDate(iter_start_dt.strftime('%Y-%m-%d'),
-                                    iter_end_dt.strftime('%Y-%m-%d')) \
-                        .filterMetadata('WRS_PATH', 'equals', path) \
-                        .filterMetadata('WRS_ROW', 'equals', row) \
-                        .filter(ee.Filter.lt('system:time_start',
-                                            ee.Date('2011-12-31').millis())) \
-                        .filterMetadata('CLOUD_COVER_LAND', 'less_than',
-                                        float(ini['INPUTS']['cloud_cover'])) \
-                        .filterBounds(export_geom)
-                    landsat_coll = ee.ImageCollection(landsat_coll.merge(l5_coll))
-                if ('LANDSAT/LT04/C02/T1_L2' in collections and
-                        iter_start_dt.strftime('%Y-%m-%d') <= '1993-12-01'):
-                    l4_coll = ee.ImageCollection('LANDSAT/LT04/C02/T1_L2') \
-                        .filterDate(iter_start_dt.strftime('%Y-%m-%d'),
-                                    iter_end_dt.strftime('%Y-%m-%d')) \
-                        .filterMetadata('WRS_PATH', 'equals', path) \
-                        .filterMetadata('WRS_ROW', 'equals', row) \
-                        .filterMetadata('CLOUD_COVER_LAND', 'less_than',
-                                        float(ini['INPUTS']['cloud_cover'])) \
-                        .filterBounds(export_geom)
-                    landsat_coll = ee.ImageCollection(landsat_coll.merge(l4_coll))
-
-            if ('LANDSAT/LC08/C01/T1_SR' in collections and
-                    iter_end_dt.strftime('%Y-%m-%d') > '2013-03-24'):
-                l8_coll = ee.ImageCollection('LANDSAT/LC08/C01/T1_SR')\
-                    .filterDate(iter_start_dt.strftime('%Y-%m-%d'),
-                                iter_end_dt.strftime('%Y-%m-%d'))\
-                    .filterMetadata('WRS_PATH', 'equals', path)\
-                    .filterMetadata('WRS_ROW', 'equals', row)\
-                    .filter(ee.Filter.gt('system:time_start',
-                                         ee.Date('2013-03-24').millis()))\
-                    .filterMetadata('CLOUD_COVER_LAND', 'less_than',
-                                    float(ini['INPUTS']['cloud_cover']))\
-                    .filterBounds(export_geom)
-                landsat_coll = ee.ImageCollection(landsat_coll.merge(l8_coll))
-            if ('LANDSAT/LE07/C01/T1_SR' in collections and
-                    iter_end_dt.strftime('%Y-%m-%d') >= '1999-01-01'):
-                l7_coll = ee.ImageCollection('LANDSAT/LE07/C01/T1_SR')\
-                    .filterDate(iter_start_dt.strftime('%Y-%m-%d'),
-                                iter_end_dt.strftime('%Y-%m-%d'))\
-                    .filterMetadata('WRS_PATH', 'equals', path)\
-                    .filterMetadata('WRS_ROW', 'equals', row)\
-                    .filterMetadata('CLOUD_COVER_LAND', 'less_than',
-                                    float(ini['INPUTS']['cloud_cover']))\
-                    .filterBounds(export_geom)
-                landsat_coll = ee.ImageCollection(landsat_coll.merge(l7_coll))
-            if ('LANDSAT/LT05/C01/T1_SR' in collections and
-                    iter_start_dt.strftime('%Y-%m-%d') <= '2011-12-31'):
-                l5_coll = ee.ImageCollection('LANDSAT/LT05/C01/T1_SR')\
-                    .filterDate(iter_start_dt.strftime('%Y-%m-%d'),
-                                iter_end_dt.strftime('%Y-%m-%d'))\
-                    .filterMetadata('WRS_PATH', 'equals', path)\
-                    .filterMetadata('WRS_ROW', 'equals', row)\
-                    .filter(ee.Filter.lt('system:time_start',
-                                         ee.Date('2011-12-31').millis()))\
-                    .filterMetadata('CLOUD_COVER_LAND', 'less_than',
-                                    float(ini['INPUTS']['cloud_cover']))\
-                    .filterBounds(export_geom)
-                landsat_coll = ee.ImageCollection(landsat_coll.merge(l5_coll))
-            if ('LANDSAT/LT04/C01/T1_SR' in collections and
-                    iter_start_dt.strftime('%Y-%m-%d') <= '1993-12-01'):
-                l4_coll = ee.ImageCollection('LANDSAT/LT04/C01/T1_SR')\
-                    .filterDate(iter_start_dt.strftime('%Y-%m-%d'),
-                                iter_end_dt.strftime('%Y-%m-%d'))\
-                    .filterMetadata('WRS_PATH', 'equals', path)\
-                    .filterMetadata('WRS_ROW', 'equals', row)\
-                    .filterMetadata('CLOUD_COVER_LAND', 'less_than',
-                                    float(ini['INPUTS']['cloud_cover']))\
-                    .filterBounds(export_geom)
-                landsat_coll = ee.ImageCollection(landsat_coll.merge(l4_coll))
-            # DATA_TYPE filter only needed if using TOA collections
-            #     .filterMetadata('DATA_TYPE', 'equals', 'L1TP')
-
-
-            image_id_list = sorted(list(set(
-                landsat_coll.aggregate_array('system:id').getInfo())))
+            # Get the full Landsat collection
+            # Collection end date is exclusive
+            model_obj = openet.disalexi.Collection(
+                collections=collections,
+                cloud_cover_max=float(ini['INPUTS']['cloud_cover']),
+                start_date=iter_start_dt.strftime('%Y-%m-%d'),
+                end_date=iter_end_dt.strftime('%Y-%m-%d'),
+                geometry=ee.Geometry.Point(openet.core.wrs2.centroids[wrs2_tile]),
+                model_args=model_args,
+                filter_args=filter_args,
+            )
+            image_id_list = utils.get_info(ee.List(model_obj.overpass(
+                variables=['ndvi']).aggregate_array('image_id')), max_retries=10)
 
             if not image_id_list:
                 logging.info('  Empty image ID list, skipping tile')
@@ -758,7 +662,6 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
                         logging.info('    Asset already exists, skipping')
                         continue
 
-
                 if tair_args['source_coll'] is None:
                     logging.debug('    Tair source: {}'.format(tair_args['ta_start']))
                     ta_source_img = alexi_mask.add(float(tair_args['ta_start']))\
@@ -785,7 +688,7 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
 
                 # Manually check if the source LAI and TIR images are present
                 # Eventually this should/could be done inside the model instead
-                if ('tir_source' in model_args.keys() and \
+                if ('tir_source' in model_args.keys() and
                         type(model_args['tir_source']) is str):
                     # Assumptions: string tir_source is an image collection ID
                     tir_coll = ee.ImageCollection(model_args['tir_source']) \
@@ -795,11 +698,11 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
                     try:
                         sharpen_version = tir_info['properties']['sharpen_version']
                     except:
-                        logging.info('  No TIR image in source, skipping')
+                        logging.info('    No TIR image in source, skipping')
                         input('ENTER')
                         continue
 
-                if ('lai_source' in model_args.keys() and \
+                if ('lai_source' in model_args.keys() and
                         type(model_args['lai_source']) is str):
                     # Assumptions: string lai_source is an image collection ID
                     lai_coll = ee.ImageCollection(model_args['lai_source']) \
@@ -808,33 +711,25 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
                     lai_info = lai_img.getInfo()
                     try:
                         landsat_lai_version = lai_info['properties']['landsat_lai_version']
-
                     except:
-                        logging.info('  No LAI image in source, skipping')
+                        logging.info('    No LAI image in source, skipping')
                         input('ENTER')
                         continue
 
-                landsat_img = ee.Image(image_id)
                 # CGM: We could pre-compute (or compute once and then save)
                 #   the crs, transform, and shape since they should (will?) be
                 #   the same for each wrs2 tile
-                if ('LANDSAT/LC08/C02/T1_L2' in collections or
-                        'LANDSAT/LE07/C02/T1_L2' in collections or
-                        'LANDSAT/LT05/C02/T1_L2' in collections or
-                        'LANDSAT/LT04/C02/T1_L2' in collections):
-                    output_info = utils.get_info(landsat_img.select(['SR_B2']))
-                if ('LANDSAT/LC08/C01/T1_SR' in collections or
-                        'LANDSAT/LE07/C01/T1_SR' in collections or
-                        'LANDSAT/LT05/C01/T1_SR' in collections or
-                        'LANDSAT/LT04/C01/T1_SR' in collections):
-                    output_info = utils.get_info(landsat_img.select(['B2']))
+                landsat_img = ee.Image(image_id)
+                output_info = utils.get_info(landsat_img.select([1]))
+                # output_info = utils.get_info(landsat_img.select(['SR_B2']))
+
                 d_obj = openet.disalexi.Image(
-                    openet.disalexi.LandsatSR(landsat_img).prep(), **model_args)
+                    openet.disalexi.Image.from_image_id(image_id),
+                    **model_args)
                 export_img = d_obj.ta_mosaic(
                     ta_img=ta_source_img,
                     step_size=tair_args['step_size'],
                     step_count=tair_args['step_count'])
-
                 # pprint.pprint(export_img.getInfo())
                 # input('ENTER')
 
@@ -903,6 +798,7 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
                 logging.debug('    Extent: {}'.format(export_extent))
                 logging.debug('    Geo: {}'.format(export_geo))
                 logging.debug('    Shape: {}'.format(export_shape))
+                input('ENTER')
 
                 # Build export tasks
                 max_retries = 4
@@ -918,7 +814,6 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
                     crsTransform='[' + ','.join(list(map(str, export_geo))) + ']',
                     dimensions='{0}x{1}'.format(*export_shape),
                 )
-                print(asset_id)
                 #     # except ee.ee_exception.EEException as e:
                 #     except Exception as e:
                 #         if ('Earth Engine memory capacity exceeded' in str(e) or
@@ -949,31 +844,32 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
                 # # Not using ee_task_start since it doesn't return the task object
                 # utils.ee_task_start(task)
 
-                # Write the export task info the openet-dri project datastore
-                if log_tasks:
-                    logging.debug('    Writing datastore entity')
-                    try:
-                        task_obj = datastore.Entity(key=datastore_client.key(
-                            'Task', task.status()['id']),
-                            exclude_from_indexes=['properties'])
-                        for k, v in task.status().items():
-                            task_obj[k] = v
-                        # task_obj['date'] = datetime.datetime.today() \
-                        #     .strftime('%Y-%m-%d')
-                        task_obj['index'] = properties.pop('wrs2_tile')
-                        # task_obj['wrs2_tile'] = properties.pop('wrs2_tile')
-                        task_obj['model_name'] = properties.pop('model_name')
-                        # task_obj['model_version'] = properties.pop('model_version')
-                        task_obj['runtime'] = 0
-                        task_obj['start_timestamp_ms'] = 0
-                        task_obj['tool_name'] = properties.pop('tool_name')
-                        task_obj['properties'] = json.dumps(properties)
-                        datastore_client.put(task_obj)
-                    except Exception as e:
-                        # CGM - The message/handling will probably need to be updated
-                        #   We may want separate try/excepts on the create and the put
-                        logging.warning('\nDatastore entity was not written')
-                        logging.warning('{}\n'.format(e))
+                # DEADBEEF
+                # # Write the export task info the openet-dri project datastore
+                # if log_tasks:
+                #     logging.debug('    Writing datastore entity')
+                #     try:
+                #         task_obj = datastore.Entity(key=datastore_client.key(
+                #             'Task', task.status()['id']),
+                #             exclude_from_indexes=['properties'])
+                #         for k, v in task.status().items():
+                #             task_obj[k] = v
+                #         # task_obj['date'] = datetime.datetime.today() \
+                #         #     .strftime('%Y-%m-%d')
+                #         task_obj['index'] = properties.pop('wrs2_tile')
+                #         # task_obj['wrs2_tile'] = properties.pop('wrs2_tile')
+                #         task_obj['model_name'] = properties.pop('model_name')
+                #         # task_obj['model_version'] = properties.pop('model_version')
+                #         task_obj['runtime'] = 0
+                #         task_obj['start_timestamp_ms'] = 0
+                #         task_obj['tool_name'] = properties.pop('tool_name')
+                #         task_obj['properties'] = json.dumps(properties)
+                #         datastore_client.put(task_obj)
+                #     except Exception as e:
+                #         # CGM - The message/handling will probably need to be updated
+                #         #   We may want separate try/excepts on the create and the put
+                #         logging.warning('\nDatastore entity was not written')
+                #         logging.warning('{}\n'.format(e))
 
                 # Pause before starting the next export task
                 utils.delay_task(delay_time, max_ready)
