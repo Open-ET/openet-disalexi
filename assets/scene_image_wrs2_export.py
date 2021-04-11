@@ -17,11 +17,11 @@ import openet.core
 import openet.core.utils as utils
 
 TOOL_NAME = 'tair_image_wrs2_export'
-TOOL_VERSION = '0.1.6'
+TOOL_VERSION = '0.1.7'
 
 
 def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
-         max_ready=-1, reverse_flag=False, tiles=None, update_flag=False,
+         ready_task_max=-1, reverse_flag=False, tiles=None, update_flag=False,
          log_tasks=True, recent_days=0, start_dt=None, end_dt=None):
     """Compute WRS2 Ta images
 
@@ -375,10 +375,17 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
 
 
     # Get current running tasks
+    logging.info('\nRequesting Task List')
     tasks = utils.get_ee_tasks()
     if logging.getLogger().getEffectiveLevel() == logging.DEBUG:
         logging.debug('  Tasks: {}'.format(len(tasks)))
         input('ENTER')
+    ready_task_count = len(tasks.keys())
+    logging.info(f'  Tasks: {ready_task_count}')
+    # CGM - I'm still not sure if it makes sense to hold here or after the
+    #   first task is started.
+    ready_task_count = delay_task(
+        delay_time=0, task_max=ready_task_max, task_count=ready_task_count)
 
 
     if not ee.data.getInfo(export_coll_id.rsplit('/', 1)[0]):
@@ -541,7 +548,6 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
                 logging.info('  {}'.format(image_id))
                 coll_id, scene_id = image_id.rsplit('/', 1)
                 l, p, r, year, month, day = parse_landsat_id(scene_id)
-                print('sensor is:',l)
                 image_dt = datetime.datetime.strptime(
                     '{:04d}{:02d}{:02d}'.format(year, month, day), '%Y%m%d')
                 image_date = image_dt.strftime('%Y-%m-%d')
@@ -723,9 +729,7 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
                 output_info = utils.get_info(landsat_img.select([1]))
                 # output_info = utils.get_info(landsat_img.select(['SR_B2']))
 
-                d_obj = openet.disalexi.Image(
-                    openet.disalexi.Image.from_image_id(image_id),
-                    **model_args)
+                d_obj = openet.disalexi.Image.from_image_id(image_id, **model_args)
                 export_img = d_obj.ta_mosaic(
                     ta_img=ta_source_img,
                     step_size=tair_args['step_size'],
@@ -798,7 +802,6 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
                 logging.debug('    Extent: {}'.format(export_extent))
                 logging.debug('    Geo: {}'.format(export_geo))
                 logging.debug('    Shape: {}'.format(export_shape))
-                input('ENTER')
 
                 # Build export tasks
                 max_retries = 4
@@ -1295,6 +1298,76 @@ def read_ini(ini_path):
         for k, v in config[section].items():
             ini[str(section)][str(k)] = v
     return ini
+
+
+# CGM - This is a modified copy of openet.utils.delay_task()
+#   It was changed to take and return the number of ready tasks
+#   This change may eventually be pushed to openet.utils.delay_task()
+def delay_task(delay_time=0, task_max=-1, task_count=0):
+    """Delay script execution based on number of READY tasks
+
+    Parameters
+    ----------
+    delay_time : float, int
+        Delay time in seconds between starting export tasks or checking the
+        number of queued tasks if "ready_task_max" is > 0.  The default is 0.
+        The delay time will be set to a minimum of 10 seconds if
+        ready_task_max > 0.
+    task_max : int, optional
+        Maximum number of queued "READY" tasks.
+    task_count : int
+        The current/previous/assumed number of ready tasks.
+        Value will only be updated if greater than or equal to ready_task_max.
+
+    Returns
+    -------
+    int : ready_task_count
+
+    """
+    if task_max > 3000:
+        raise ValueError('The maximum number of queued tasks must be less than 3000')
+
+    # Force delay time to be a positive value since the parameter used to
+    #   support negative values
+    if delay_time < 0:
+        delay_time = abs(delay_time)
+
+    if ((task_max is None or task_max <= 0) and (delay_time >= 0)):
+        # Assume task_max was not set and just wait the delay time
+        logging.debug(f'  Pausing {delay_time} seconds, not checking task list')
+        time.sleep(delay_time)
+        return 0
+    elif task_max and (task_count < task_max):
+        # Skip waiting or checking tasks if a maximum number of tasks was set
+        #   and the current task count is below the max
+        logging.debug(f'  Ready tasks: {task_count}')
+        return task_count
+
+    # If checking tasks, force delay_time to be at least 10 seconds if
+    #   ready_task_max is set to avoid excessive EE calls
+    delay_time = max(delay_time, 10)
+
+    # Make an initial pause before checking tasks lists to allow
+    #   for previous export to start up
+    # CGM - I'm not sure what a good default first pause time should be,
+    #   but capping it at 30 seconds is probably fine for now
+    logging.debug(f'  Pausing {min(delay_time, 30)} seconds for tasks to start')
+    time.sleep(delay_time)
+
+    # If checking tasks, don't continue to the next export until the number
+    #   of READY tasks is greater than or equal to "ready_task_max"
+    while True:
+        ready_task_count = len(utils.get_ee_tasks(states=['READY']).keys())
+        logging.debug(f'  Ready tasks: {ready_task_count}')
+        if ready_task_count >= task_max:
+            logging.debug(f'  Pausing {delay_time} seconds')
+            time.sleep(delay_time)
+        else:
+            logging.debug(f'  {task_max - ready_task_count} open task '
+                          f'slots, continuing processing')
+            break
+
+    return ready_task_count
 
 
 def arg_parse():
