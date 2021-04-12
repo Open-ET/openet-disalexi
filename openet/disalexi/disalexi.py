@@ -46,7 +46,7 @@ class Image(object):
             windspeed_source='CFSR',
             vp_source='CFSR',
             airpressure_source='CFSR',
-            stabil_iterations=36,
+            stabil_iterations=None,
             albedo_iterations=10,
             rs_interp_flag=True,
             # ta_interp_flag=True,
@@ -86,9 +86,10 @@ class Image(object):
             vapour pressure source keyword (the default is 'CFSR').
         airpressure_source: {'CFSR'}
             airpressure source keyword (the default is 'CFSR').
-        stabil_iterations : int
-            Number of istability calculation iterations (the default is 36).
-        albedo_iterations : int
+        stabil_iterations : int, optional
+            Number of istability calculation iterations.  If not set, the
+            number will be computed dynamically.
+        albedo_iterations : int, optional
             Number albedo separation iterations (the default is 10).
         rs_interp_flag : bool, optional
             If True, interpolate incoming solar radiation.
@@ -202,7 +203,8 @@ class Image(object):
         self.windspeed_source = windspeed_source
         self.vp_source = vp_source
         self.airpressure_source = airpressure_source
-        self.stabil_iter = int(stabil_iterations + 0.5)
+        if stabil_iterations:
+            self.stabil_iter = int(stabil_iterations + 0.5)
         self.albedo_iter = int(albedo_iterations + 0.5)
         self.rs_interp_flag = utils.boolean(rs_interp_flag)
         # self.ta_interp_flag = utils.boolean(ta_interp_flag)
@@ -659,7 +661,7 @@ class Image(object):
     #         .rename(['quality']).set(self.properties)
     @lazy_property
     def t_air0(self):
-        """"Air temperature [K]"""
+        """Air temperature [K]"""
         tair0_coll_id = 'projects/disalexi/meteo_data/airtemperature/GLOBAL_V001'
         tair0_coll = ee.ImageCollection(tair0_coll_id) \
             .filterDate(self.start_date, self.end_date)
@@ -674,6 +676,7 @@ class Image(object):
         tair0_b_img = tair0_img.select([bname])
         t_a = self.hour_int.divide(3).floor().multiply(3)
 
+        # CGM - We need to use EE And calls here
         tair0_img = ee.Algorithms.If(
             self.hour_int.lt(24) and self.hour_int.gt(0),
             tair0_b_img.subtract(tair0_a_img) \
@@ -719,6 +722,7 @@ class Image(object):
             t_a = self.hour_int.divide(3).floor().multiply(3)
             t_b = t_a.add(3)
 
+            # CGM - We need to use EE And calls here
             ap_img = ee.Algorithms.If(
                 self.hour_int.lt(24) and self.hour_int.gt(0),
                 ap_b_img.subtract(ap_a_img) \
@@ -1127,6 +1131,7 @@ class Image(object):
             t_a = self.hour_int.divide(3).floor().multiply(3)
             t_b = t_a.add(3)
 
+            # CGM - We need to use EE And calls here
             vp_img = ee.Algorithms.If(
                 self.hour_int.lt(24) and self.hour_int.gt(0),
                 vp_b_img.subtract(vp_a_img) \
