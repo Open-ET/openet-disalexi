@@ -41,6 +41,7 @@ class Image(object):
             tir_source='projects/earthengine-legacy/assets/projects/openet/tir/landsat/c02',
             elevation_source='USGS/SRTMGL1_003',
             landcover_source='USGS/NLCD/NLCD2016',
+            ta0_source='CFSR',
             rs_daily_source='CFSR',
             rs_hourly_source='CFSR',
             windspeed_source='CFSR',
@@ -76,16 +77,18 @@ class Image(object):
             Units must be in meters.
         landcover_source : {'NLCD2016', 'NLCD2011', 'NLCD2006', 'GLOBELAND30'}
             Land cover source keyword (the default is 'NLCD2016').
-        rs_daily_source : {'MERRA2','CFSR'}
+        ta0_source : {'CFSR'}
+            Air temperature source keyword (the default is 'CFSR').
+        rs_daily_source : {'MERRA2', 'CFSR'}
             Daily solar insolation source keyword (the default is 'CFSR').
-        rs_hourly_source : {'MERRA2','CFSR'}
+        rs_hourly_source : {'MERRA2', 'CFSR'}
             Hourly solar insolation source keyword (the default is 'CFSR').
-        windspeed_source : {'CFSV2','CFSR'}
+        windspeed_source : {'CFSV2', 'CFSR'}
             Windspeed source keyword (the default is 'CFSR').
         vp_source : {'CFSR'}
-            vapour pressure source keyword (the default is 'CFSR').
+            Vapour pressure source keyword (the default is 'CFSR').
         airpressure_source: {'CFSR'}
-            airpressure source keyword (the default is 'CFSR').
+            Air pressure source keyword (the default is 'CFSR').
         stabil_iterations : int, optional
             Number of istability calculation iterations.  If not set, the
             number will be computed dynamically.
@@ -198,6 +201,7 @@ class Image(object):
         self.tir_source = tir_source
         self.elevation_source = elevation_source
         self.landcover_source = landcover_source
+        self.ta0_source = ta0_source
         self.rs_daily_source = rs_daily_source
         self.rs_hourly_source = rs_hourly_source
         self.windspeed_source = windspeed_source
@@ -205,6 +209,8 @@ class Image(object):
         self.airpressure_source = airpressure_source
         if stabil_iterations:
             self.stabil_iter = int(stabil_iterations + 0.5)
+        else:
+            self.stabil_iter = None
         self.albedo_iter = int(albedo_iterations + 0.5)
         self.rs_interp_flag = utils.boolean(rs_interp_flag)
         # self.ta_interp_flag = utils.boolean(ta_interp_flag)
@@ -341,7 +347,7 @@ class Image(object):
         new instance of Image class
 
         """
-        # DEADBEEF - Should the supported image collection IDs and helper
+        # CGM - Should the supported image collection IDs and helper
         # function mappings be set in a property or method of the Image class?
         collection_methods = {
             'LANDSAT/LC08/C02/T1_L2': 'from_landsat_c2_sr',
@@ -458,11 +464,9 @@ class Image(object):
 
         """
         et = tseb.tseb_pt(
-            t_air0=self.t_air0, t_air=self.ta, t_rad=self.tir, e_air=self.vp,
+            t_air=self.ta, t_rad=self.tir, t_air0=self.t_air0, e_air=self.vp,
             u=self.windspeed, p=self.pressure, z=self.elevation,
             rs_1=self.rs1, rs24=self.rs24, vza=0,
-            # CGM - Need to add GEE gaussian_filter call to rs24
-            # rs24=ndimage.gaussian_filter(self.rs24, sigma=5),
             aleafv=self.aleafv, aleafn=self.aleafn, aleafl=self.aleafl,
             adeadv=self.adeadv, adeadn=self.adeadn, adeadl=self.adeadl,
             albedo=self.albedo, ndvi=self.ndvi, lai=self.lai,
@@ -659,43 +663,6 @@ class Image(object):
     #     """Set quality to 1 for all active pixels (for now)"""
     #     return self.mask\
     #         .rename(['quality']).set(self.properties)
-    @lazy_property
-    def t_air0(self):
-        """Air temperature [K]"""
-        tair0_coll_id = 'projects/disalexi/meteo_data/airtemperature/GLOBAL_V001'
-        tair0_coll = ee.ImageCollection(tair0_coll_id) \
-            .filterDate(self.start_date, self.end_date)
-        tair0_img = ee.Image(tair0_coll.first())
-        tair0_img_temp1 = tair0_img.select(['b8'])
-        tair0_img_temp2 = tair0_img.select(['b1'])
-        temp1 = self.hour_int.divide(3).floor().add(1)
-        temp2 = self.hour_int.divide(3).floor().add(2)
-        aname = ee.String('b').cat(temp1.int().format())
-        bname = ee.String('b').cat(temp2.int().format())
-        tair0_a_img = tair0_img.select([aname])
-        tair0_b_img = tair0_img.select([bname])
-        t_a = self.hour_int.divide(3).floor().multiply(3)
-
-        # CGM - We need to use EE And calls here
-        tair0_img = ee.Algorithms.If(
-            self.hour_int.lt(24).And(self.hour_int.gt(0)),
-            tair0_b_img.subtract(tair0_a_img) \
-            .multiply(self.hour.subtract(t_a).divide(3)) \
-            .add(tair0_a_img).rename(['tair0']),
-            tair0_b_img)
-        tair0_img = ee.Algorithms.If(
-            self.hour_int.gte(24), tair0_img_temp1, tair0_img)
-        tair0_img = ee.Algorithms.If(
-            self.hour_int.eq(0), tair0_img_temp2, tair0_img)
-
-        # smooth ap, with radius as 16, since it is smoothed in alexi scale
-        tair0_img = ee.Image(tair0_img)\
-            .resample('bicubic')\
-            .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo) \
-            .resample('bilinear') \
-            .reproject(crs=self.crs, crsTransform=self.transform)
-        #tair0_img = ee.Image(tair0_img).fastGaussianBlur(20000)
-        return ee.Image(tair0_img).rename(['tair0'])
 
     @lazy_property
     def pressure(self):
@@ -722,7 +689,6 @@ class Image(object):
             t_a = self.hour_int.divide(3).floor().multiply(3)
             t_b = t_a.add(3)
 
-            # CGM - We need to use EE And calls here
             ap_img = ee.Algorithms.If(
                 self.hour_int.lt(24).And(self.hour_int.gt(0)),
                 ap_b_img.subtract(ap_a_img) \
@@ -1030,6 +996,55 @@ class Image(object):
         #ta_img = ee.Image('users/tulipyangyun/Ta_20162091720').add(273.16)
         return ta_img.rename(['ta']).set(self.properties)
 
+    # TODO: Change the naming of this parameter, it is a little inconsistent.
+    #   The band is called "tair0", but the property is "t_air0".
+    #   We could also change the "ta" parameter instead.
+    @lazy_property
+    def t_air0(self):
+        """Air temperature [K]"""
+        if utils.is_number(self.ta0_source):
+            tair0_img = ee.Image.constant(float(self.ta0_source))
+        # elif isinstance(self.ta0_source, ee.computedobject.ComputedObject):
+        #     tair0_img = self.ta0_source
+        elif self.ta0_source.upper() == 'CFSR':
+            tair0_coll_id = 'projects/disalexi/meteo_data/airtemperature/GLOBAL_V001'
+            tair0_coll = ee.ImageCollection(tair0_coll_id) \
+                .filterDate(self.start_date, self.end_date)
+            tair0_img = ee.Image(tair0_coll.first())
+            tair0_img_temp1 = tair0_img.select(['b8'])
+            tair0_img_temp2 = tair0_img.select(['b1'])
+            temp1 = self.hour_int.divide(3).floor().add(1)
+            temp2 = self.hour_int.divide(3).floor().add(2)
+            aname = ee.String('b').cat(temp1.int().format())
+            bname = ee.String('b').cat(temp2.int().format())
+            tair0_a_img = tair0_img.select([aname])
+            tair0_b_img = tair0_img.select([bname])
+            t_a = self.hour_int.divide(3).floor().multiply(3)
+
+            tair0_img = ee.Algorithms.If(
+                self.hour_int.lt(24).And(self.hour_int.gt(0)),
+                tair0_b_img.subtract(tair0_a_img) \
+                .multiply(self.hour.subtract(t_a).divide(3)) \
+                .add(tair0_a_img).rename(['tair0']),
+                tair0_b_img)
+            tair0_img = ee.Algorithms.If(
+                self.hour_int.gte(24), tair0_img_temp1, tair0_img)
+            tair0_img = ee.Algorithms.If(
+                self.hour_int.eq(0), tair0_img_temp2, tair0_img)
+
+            # Smooth ap, with radius as 16, since it is smoothed in alexi scale
+            tair0_img = ee.Image(tair0_img)\
+                .resample('bicubic')\
+                .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo) \
+                .resample('bilinear') \
+                .reproject(crs=self.crs, crsTransform=self.transform)
+            # tair0_img = ee.Image(tair0_img).fastGaussianBlur(20000)
+        else:
+            raise ValueError('Invalid ta0_source: {}\n'.format(
+                self.ta0_source))
+
+        return ee.Image(tair0_img).rename(['tair0'])
+
     @lazy_property
     def time(self):
         """Return an image of the 0 UTC time (in milliseconds)"""
@@ -1131,7 +1146,6 @@ class Image(object):
             t_a = self.hour_int.divide(3).floor().multiply(3)
             t_b = t_a.add(3)
 
-            # CGM - We need to use EE And calls here
             vp_img = ee.Algorithms.If(
                 self.hour_int.lt(24) and self.hour_int.gt(0),
                 vp_b_img.subtract(vp_a_img) \
@@ -1142,7 +1156,7 @@ class Image(object):
                 self.hour_int.gte(24), vp_img_temp1, vp_img)
             vp_img = ee.Algorithms.If(
                 self.hour_int.eq(0), vp_img_temp2, vp_img)
-            # smooth vp, with radius as 2
+            # Smooth vp, with radius as 2
             vp_img = ee.Image(vp_img)\
                 .resample('bicubic')\
                 .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo) \
