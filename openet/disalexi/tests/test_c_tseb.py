@@ -53,7 +53,8 @@ ne3_xy = [-96.43968912903934, 41.17964494123755]
          0.83, 0.35, 0.95, 0.49, 0.13, 0.95,
          0.1259961, 0.87439300744578, 4.6797005913579, 0.83,
          0.0, 0.6, 0.05, 1500230731090, -121.5265, 38.7399, 1.32,
-         36, 10, 6.8747, 1E-3],
+         10, 2, 6.8747, 0.1],
+         # 36, 10, 6.8747, 0.001],
         # Low NDVI site in LC08_044033_20170716
         [300.0, 300.0, 323.59893135545, 0.84104, 3.2665367230039,
          101.252726383124, 4.0, 946.69066527778,
@@ -61,7 +62,8 @@ ne3_xy = [-96.43968912903934, 41.17964494123755]
          0.83, 0.35, 0.95, 0.49, 0.13, 0.95,
          0.1716302, 0.16195230171936, 0.029734416071998, 0.83,
          0.0, 0.6, 0.05, 1500230731090, -121.50822, 38.71776, 1.32,
-         36, 10, 3.5585, 1E-3],
+         10, 2, 3.5585, 0.1],
+         # 36, 10, 3.5585, 0.001],
     ]
 )
 def test_tseb_pt(T_air0, T_air, T_rad, e_air, u, p, z, Rs_1, Rs24, vza,
@@ -69,11 +71,15 @@ def test_tseb_pt(T_air0, T_air, T_rad, e_air, u, p, z, Rs_1, Rs24, vza,
                  albedo, ndvi, lai, clump,
                  hc_min, hc_max, leaf_width, datetime, lon, lat, a_PT_in,
                  stabil_iter, albedo_iter, expected, tol):
-    # mask = ee.Image('LANDSAT/LC08/C02/T1_L2/LC08_044033_20170716')
-    #     .select(['SR_B3']).float().multiply(0)
-    #   albedo=mask.add(albedo)
+
+    # study_area = ee.Geometry.Rectangle(-122.00, 38.60, -121.00, 39.0)
+    # mask = ee.Image('LANDSAT/LC08/C02/T1_L2/LC08_044033_20170716')\
+    #     .select(['SR_B3']).float().multiply(0)\
+    #     .clip(study_area)
+
     output_image = tseb.tseb_pt(
         t_air0=ee.Image.constant(T_air),
+        # t_air0=mask.add(T_air),
         t_air=ee.Image.constant(T_air), t_rad=ee.Image.constant(T_rad),
         e_air=ee.Image.constant(e_air), u=ee.Image.constant(u),
         p=ee.Image.constant(p), z=ee.Image.constant(z),
@@ -84,13 +90,16 @@ def test_tseb_pt(T_air0, T_air, T_rad, e_air, u, p, z, Rs_1, Rs24, vza,
         adeadn=ee.Image.constant(adeadn), adeadl=ee.Image.constant(adeadl),
         albedo=ee.Image.constant(albedo), ndvi=ee.Image.constant(ndvi),
         lai=ee.Image.constant(lai),
+        # lai=mask.add(lai),
         clump=ee.Image.constant(clump), leaf_width=ee.Image.constant(leaf_width),
         hc_min=ee.Image.constant(hc_min), hc_max=ee.Image.constant(hc_max),
         lon=ee.Image.constant(lon), lat=ee.Image.constant(lat),
         datetime=ee.Date(datetime), a_pt_in=ee.Image.constant(a_PT_in),
-        stabil_iter=stabil_iter, albedo_iter=albedo_iter)
+        stabil_iter=stabil_iter, albedo_iter=albedo_iter,
+    )
 
-    output = list(utils.point_image_value(output_image, [lon, lat], 30).values())[0]
+    output = list(utils.constant_image_value(output_image).values())[0]
+    # output = list(utils.point_image_value(output_image, [lon, lat], 30).values())[0]
     logging.debug('\n  Target values: {}'.format(expected))
     logging.debug('  Output values: {}'.format(output))
     assert abs(output - expected) <= tol
