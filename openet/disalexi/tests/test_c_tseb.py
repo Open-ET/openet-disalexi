@@ -13,12 +13,12 @@ ne3_xy = [-96.43968912903934, 41.17964494123755]
 
 
 @pytest.mark.parametrize(
-    'T_air0, T_air, T_rad, e_air, u,'
+    't_air, t_rad, t_air0, e_air, u,'
     'p, z, Rs_1, '
     'Rs24, vza,'
     'aleafv, aleafn, aleafl, adeadv, adeadn, adeadl,'
     'albedo, ndvi, lai, clump,'
-    'hc_min, hc_max, leaf_width, datetime, lon, lat, a_PT_in, '
+    'hc_min, hc_max, leaf_width, datetime, lon, lat, a_pt_in, '
     'stabil_iter, albedo_iter, expected, tol',
     [
         # # US-NE1 - IDL iteration 1
@@ -47,29 +47,29 @@ ne3_xy = [-96.43968912903934, 41.17964494123755]
         #  36, 10, 6.69752524158102 / 0.408, 1E-8],
 
         # High NDVI site in LC08_044033_20170716
-        [300.0, 300.0, 305.92253850611, 0.84104, 3.2665367230039,
+        [300.0, 305.92253850611, 306.3861390180871, 0.84104, 3.2665367230039,
          101.264543111959, 3.0, 946.69066527778,
          8603.212890625, 0,
          0.83, 0.35, 0.95, 0.49, 0.13, 0.95,
          0.1259961, 0.87439300744578, 4.6797005913579, 0.83,
          0.0, 0.6, 0.05, 1500230731090, -121.5265, 38.7399, 1.32,
-         10, 2, 6.8747, 0.1],
+         20, 10, 7.441832439559231, 0.1],
          # 36, 10, 6.8747, 0.001],
         # Low NDVI site in LC08_044033_20170716
-        [300.0, 300.0, 323.59893135545, 0.84104, 3.2665367230039,
+        [300.0, 323.59893135545, 306.3861390180871, 0.84104, 3.2665367230039,
          101.252726383124, 4.0, 946.69066527778,
          8603.212890625, 0,
          0.83, 0.35, 0.95, 0.49, 0.13, 0.95,
          0.1716302, 0.16195230171936, 0.029734416071998, 0.83,
          0.0, 0.6, 0.05, 1500230731090, -121.50822, 38.71776, 1.32,
-         10, 2, 3.5585, 0.1],
+         20, 10, 3.5585, 0.1],
          # 36, 10, 3.5585, 0.001],
     ]
 )
-def test_tseb_pt(T_air0, T_air, T_rad, e_air, u, p, z, Rs_1, Rs24, vza,
+def test_tseb_pt(t_air, t_rad, t_air0, e_air, u, p, z, Rs_1, Rs24, vza,
                  aleafv, aleafn, aleafl, adeadv, adeadn, adeadl,
                  albedo, ndvi, lai, clump,
-                 hc_min, hc_max, leaf_width, datetime, lon, lat, a_PT_in,
+                 hc_min, hc_max, leaf_width, datetime, lon, lat, a_pt_in,
                  stabil_iter, albedo_iter, expected, tol):
 
     # study_area = ee.Geometry.Rectangle(-122.00, 38.60, -121.00, 39.0)
@@ -78,9 +78,9 @@ def test_tseb_pt(T_air0, T_air, T_rad, e_air, u, p, z, Rs_1, Rs24, vza,
     #     .clip(study_area)
 
     output_image = tseb.tseb_pt(
-        t_air0=ee.Image.constant(T_air),
-        # t_air0=mask.add(T_air),
-        t_air=ee.Image.constant(T_air), t_rad=ee.Image.constant(T_rad),
+        t_air=ee.Image.constant(t_air), t_rad=ee.Image.constant(t_rad),
+        t_air0=ee.Image.constant(t_air0),
+        # t_air0=mask.add(t_air0),
         e_air=ee.Image.constant(e_air), u=ee.Image.constant(u),
         p=ee.Image.constant(p), z=ee.Image.constant(z),
         rs_1=ee.Image.constant(Rs_1), rs24=ee.Image.constant(Rs24),
@@ -94,7 +94,7 @@ def test_tseb_pt(T_air0, T_air, T_rad, e_air, u, p, z, Rs_1, Rs24, vza,
         clump=ee.Image.constant(clump), leaf_width=ee.Image.constant(leaf_width),
         hc_min=ee.Image.constant(hc_min), hc_max=ee.Image.constant(hc_max),
         lon=ee.Image.constant(lon), lat=ee.Image.constant(lat),
-        datetime=ee.Date(datetime), a_pt_in=ee.Image.constant(a_PT_in),
+        datetime=ee.Date(datetime), a_pt_in=ee.Image.constant(a_pt_in),
         stabil_iter=stabil_iter, albedo_iter=albedo_iter,
     )
 

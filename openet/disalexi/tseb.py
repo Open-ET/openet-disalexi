@@ -14,7 +14,7 @@ def debug(x_var, x_str, xy=test_xy, scale=1):
         x_var.rename(['test']), xy=xy, scale=scale)['test'])))
 
 # added t_air0, which is the air temperature from CFSR (or other METO data)
-def tseb_pt(t_air0, t_air, t_rad, e_air, u, p, z, rs_1, rs24, vza,
+def tseb_pt(t_air, t_rad, t_air0, e_air, u, p, z, rs_1, rs24, vza,
             aleafv, aleafn, aleafl, adeadv, adeadn, adeadl,
             albedo, ndvi, lai, clump, leaf_width, hc_min, hc_max,
             datetime, lon=None, lat=None, a_pt_in=1.32,
@@ -26,12 +26,12 @@ def tseb_pt(t_air0, t_air, t_rad, e_air, u, p, z, rs_1, rs24, vza,
 
     Parameters
     ----------
-    t_air0 : ee.Image
-        measured Air Temperature [K]
     t_air : ee.Image
         Air temperature [K].
     t_rad : ee.Image
         Radiometric composite temperature [K].
+    t_air0 : ee.Image
+        Measured Air Temperature [K]
     e_air : ee.Image
         Vapour pressure [kPa]
     u : ee.Image
@@ -269,6 +269,7 @@ def tseb_pt(t_air0, t_air, t_rad, e_air, u, p, z, rs_1, rs24, vza,
         .rename('a_pt')
 
     if stabil_iter is None:
+        # Compute the number of stability iterations dynamically
         a_pt_max = a_pt\
             .reduceRegion(reducer=ee.Reducer.max(), scale=4000, maxPixels=1E10)\
             .get('a_pt')
