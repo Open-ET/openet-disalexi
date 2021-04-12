@@ -678,7 +678,7 @@ class Image(object):
 
         # CGM - We need to use EE And calls here
         tair0_img = ee.Algorithms.If(
-            self.hour_int.lt(24) and self.hour_int.gt(0),
+            self.hour_int.lt(24).And(self.hour_int.gt(0)),
             tair0_b_img.subtract(tair0_a_img) \
             .multiply(self.hour.subtract(t_a).divide(3)) \
             .add(tair0_a_img).rename(['tair0']),
@@ -724,7 +724,7 @@ class Image(object):
 
             # CGM - We need to use EE And calls here
             ap_img = ee.Algorithms.If(
-                self.hour_int.lt(24) and self.hour_int.gt(0),
+                self.hour_int.lt(24).And(self.hour_int.gt(0)),
                 ap_b_img.subtract(ap_a_img) \
                 .multiply(self.hour.subtract(t_a).divide(3)) \
                 .add(ap_a_img).rename(['pressure']),
@@ -812,7 +812,7 @@ class Image(object):
             t_b = self.hour.ceil()
 
             rs1_img = ee.Algorithms.If(
-                self.hour_int.gt(0) and self.hour_int.lt(24),
+                self.hour_int.gt(0).And(self.hour_int.lt(24)),
                 rs1_b_img.subtract(rs1_a_img) \
                     .multiply(self.hour.subtract(t_a).divide(t_b.subtract(t_a))) \
                     .add(rs1_a_img),
