@@ -36,7 +36,7 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
         number of queued tasks, see "max_ready" parameter).  The default is 0.
     gee_key_file : str, None, optional
         Earth Engine service account JSON key file (the default is None).
-    max_ready: int, optional
+    ready_task_max: int, optional
         Maximum number of queued "READY" tasks.  The default is -1 which is
         implies no limit to the number of tasks that will be submitted.
     reverse_flag : bool, optional
@@ -875,7 +875,10 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
                 #         logging.warning('{}\n'.format(e))
 
                 # Pause before starting the next export task
-                utils.delay_task(delay_time, max_ready)
+                ready_task_count += 1
+                ready_task_count = delay_task(
+                    delay_time=delay_time, task_max=ready_task_max,
+                    task_count=ready_task_count)
 
                 logging.debug('')
 
@@ -1424,7 +1427,7 @@ if __name__ == "__main__":
     logging.getLogger('googleapiclient').setLevel(logging.ERROR)
 
     main(ini_path=args.ini, overwrite_flag=args.overwrite,
-         delay_time=args.delay, gee_key_file=args.key, max_ready=args.ready,
+         delay_time=args.delay, gee_key_file=args.key, ready_task_max=args.ready,
          reverse_flag=args.reverse, tiles=args.tiles, update_flag=args.update,
          recent_days=0, start_dt=args.start, end_dt=args.end,
     )
