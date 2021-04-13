@@ -163,7 +163,7 @@ def main(ini_path=None, overwrite_flag=False, delay=0, key=None,
     # Get current running tasks
     tasks = utils.get_ee_tasks()
     if logging.getLogger().getEffectiveLevel() == logging.DEBUG:
-        logging.debug('  Tasks: {}\n'.format(len(tasks)))
+        utils.print_ee_tasks()
         input('ENTER')
 
     # Limit by year and month

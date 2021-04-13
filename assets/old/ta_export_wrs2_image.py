@@ -308,7 +308,7 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
     # Get current running tasks
     tasks = utils.get_ee_tasks()
     if logging.getLogger().getEffectiveLevel() == logging.DEBUG:
-        logging.debug('  Tasks: {}'.format(len(tasks)))
+        utils.print_ee_tasks()
         input('ENTER')
 
 

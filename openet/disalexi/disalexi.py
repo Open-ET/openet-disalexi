@@ -570,7 +570,6 @@ class Image(object):
              lai_img = ee.Image(lai_coll.first()).select(['LAI'])
              lai_img = lai_img.multiply(ee.Number(lai_img.get('scale_factor'))) \
                  .set({'landsat_lai_version': lai_img.get('landsat_lai_version')})
-
              self.landsat_lai_version = lai_img.get('landsat_lai_version')
         else:
              raise ValueError('unsupported lai_source: {}\n'.format(

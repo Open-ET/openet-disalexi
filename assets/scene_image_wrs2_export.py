@@ -377,9 +377,10 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
 
     # Get current running tasks
     logging.info('\nRequesting Task List')
+
     tasks = utils.get_ee_tasks()
     if logging.getLogger().getEffectiveLevel() == logging.DEBUG:
-        logging.debug('  Tasks: {}'.format(len(tasks)))
+        utils.print_ee_tasks()
         input('ENTER')
     ready_task_count = len(tasks.keys())
     logging.info(f'  Tasks: {ready_task_count}')
@@ -1174,7 +1175,6 @@ def mgrs_export_tiles(study_area_coll_id, mgrs_coll_id,
         UTM zone property in the MGRS feature collection (the default is 'utm').
     wrs2_property : str, optional
         WRS2 property in the MGRS feature collection (the default is 'wrs2').
-
 
     Returns
     ------
