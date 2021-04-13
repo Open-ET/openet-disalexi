@@ -7,23 +7,21 @@ import logging
 import math
 import os
 import pprint
-# import random
 import re
 import time
 
 import ee
-from osgeo import ogr, osr
 
 import openet.disalexi
 import openet.core
 import openet.core.utils as utils
 
 TOOL_NAME = 'tair_image_wrs2_export'
-TOOL_VERSION = '0.1.6'
+TOOL_VERSION = '0.1.7'
 
 
 def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
-         max_ready=-1, reverse_flag=False, tiles=None, update_flag=False,
+         ready_task_max=-1, reverse_flag=False, tiles=None, update_flag=False,
          log_tasks=True, recent_days=0, start_dt=None, end_dt=None):
     """Compute WRS2 Ta images
 
@@ -38,7 +36,7 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
         number of queued tasks, see "max_ready" parameter).  The default is 0.
     gee_key_file : str, None, optional
         Earth Engine service account JSON key file (the default is None).
-    max_ready: int, optional
+    ready_task_max: int, optional
         Maximum number of queued "READY" tasks.  The default is -1 which is
         implies no limit to the number of tasks that will be submitted.
     reverse_flag : bool, optional
@@ -74,36 +72,36 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
         # 'p047r031', # North California coast
         'p042r037',  # San Nicholas Island, California
         # 'p041r037', # South California coast
-        'p040r038', 'p039r038', 'p038r038', # Mexico (by California)
-        'p037r039', 'p036r039', 'p035r039', # Mexico (by Arizona)
-        'p034r039', 'p033r039', # Mexico (by New Mexico)
+        'p040r038', 'p039r038', 'p038r038',  # Mexico (by California)
+        'p037r039', 'p036r039', 'p035r039',  # Mexico (by Arizona)
+        'p034r039', 'p033r039',  # Mexico (by New Mexico)
         'p032r040',  # Mexico (West Texas)
         'p029r041', 'p028r042', 'p027r043', 'p026r043',  # Mexico (South Texas)
-        'p019r040', # West Florida coast
-        'p016r043', 'p015r043', # South Florida coast
-        'p014r041', 'p014r042', 'p014r043', # East Florida coast
-        'p013r035', 'p013r036', # North Carolina Outer Banks
-        'p013r026', 'p012r026', # Canada (by Maine)
-        'p011r032', # Rhode Island coast
+        'p019r040',  # West Florida coast
+        'p016r043', 'p015r043',  # South Florida coast
+        'p014r041', 'p014r042', 'p014r043',  # East Florida coast
+        'p013r035', 'p013r036',  # North Carolina Outer Banks
+        'p013r026', 'p012r026',  # Canada (by Maine)
+        'p011r032',  # Rhode Island coast
     ]
     wrs2_path_skip_list = [9, 49]
     wrs2_row_skip_list = [25, 24, 43]
 
-    # date_skip_list = [
-    #     '2003-12-15', '2004-12-12', '2004-12-31', '2008-12-31',
-    #     '2009-03-20', '2009-03-21', '2010-04-10', '2011-04-10',
-    #     '2012-04-09', '2012-12-30', '2012-12-31',
-    #     '2013-04-10', '2016-03-28', '2016-12-31',
-    #     '2017-08-02', '2017-10-11', '2017-10-12', '2017-12-12',
-    #     '2017-12-13', '2017-12-14', '2017-12-15', '2017-12-16',
-    #     '2017-12-17', '2017-12-30', '2017-12-31',
-    #     '2018-05-25', '2018-05-26', '2018-05-27', '2018-06-30', '2018-07-01',
-    #     '2018-10-20', '2018-10-21', '2018-10-22', '2018-10-23', '2018-12-22',
-    #     '2018-12-23', '2018-12-24', '2018-12-25', '2018-12-30', '2018-12-31',
-    #     '2019-02-23', '2019-02-24', '2019-04-10', '2019-04-11', '2019-04-25',
-    #     '2019-04-26', '2019-04-27', '2019-10-17', '2019-10-18',
-    #     '2019-10-26', '2019-10-27',
-    # ]
+    #date_skip_list = [
+    #    '2003-12-15', '2004-12-12', '2004-12-31', '2008-12-31',
+    #    '2009-03-20', '2009-03-21', '2010-04-10', '2011-04-10',
+    #    '2012-04-09', '2012-12-30', '2012-12-31',
+    #    '2013-04-10', '2016-03-28', '2016-12-31',
+    #    '2017-08-02', '2017-10-11', '2017-10-12', '2017-12-12',
+    #    '2017-12-13', '2017-12-14', '2017-12-15', '2017-12-16',
+    #    '2017-12-17', '2017-12-30', '2017-12-31',
+    #    '2018-05-25', '2018-05-26', '2018-05-27', '2018-06-30', '2018-07-01',
+    #    '2018-10-20', '2018-10-21', '2018-10-22', '2018-10-23', '2018-12-22',
+    #    '2018-12-23', '2018-12-24', '2018-12-25', '2018-12-30', '2018-12-31',
+    #    '2019-02-23', '2019-02-24', '2019-04-10', '2019-04-11', '2019-04-25',
+    #    '2019-04-26', '2019-04-27', '2019-10-17', '2019-10-18',
+    #    '2019-10-26', '2019-10-27',
+    #]
     date_skip_list = []
 
     mgrs_skip_list = []
@@ -158,10 +156,16 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
         collections = str(ini['INPUTS']['collections'])
         collections = sorted([x.strip() for x in collections.split(',')])
     except KeyError:
+        # CGM - I don't think we want to mix the collections here
         logging.info('\nINPUTS collections parameter was net set, '
-                        'default to Landsat 5/7/8 C01 SR collections')
-        collections = ['LANDSAT/LC08/C01/T1_SR', 'LANDSAT/LE07/C01/T1_SR',
-                       'LANDSAT/LT05/C01/T1_SR']
+                        'default to Landsat 5/7/8 C02 L2 collections')
+        collections = ['LANDSAT/LC08/C02/T1_L2', 'LANDSAT/LE07/C02/T1_L2',
+                       'LANDSAT/LT05/C02/T1_L2']
+        # logging.info('\nINPUTS collections parameter was net set, '
+        #                 'default to Landsat 5/7/8 C02 L2 and C01 SR collections')
+        # collections = ['LANDSAT/LC08/C02/T1_L2', 'LANDSAT/LE07/C02/T1_L2',
+        #                'LANDSAT/LT05/C02/T1_L2', 'LANDSAT/LC08/C01/T1_SR',
+        #                'LANDSAT/LE07/C01/T1_SR', 'LANDSAT/LT05/C01/T1_SR']
     except Exception as e:
         raise e
 
@@ -329,7 +333,8 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
         tair_args['ta_start'] = None
 
     logging.info('\nDISALEXI Parameters')
-    logging.info('  Stabil iter: {}'.format(int(model_args['stabil_iterations'])))
+    if 'stability_iterations' in model_args.keys():
+        logging.info('  Stabil iter: {}'.format(int(model_args['stability_iterations'])))
     logging.info('  Albedo iter: {}'.format(int(model_args['albedo_iterations'])))
 
     logging.info('\nTAIR Parameters')
@@ -351,30 +356,38 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
         ee.Initialize()
 
 
-    # TODO: set datastore key file as a parameter?
-    datastore_key_file = 'openet-dri-datastore.json'
-    if log_tasks and not os.path.isfile(datastore_key_file):
-        logging.info('\nTask logging disabled, datastore key does not exist')
-        log_tasks = False
-        # input('ENTER')
-    if log_tasks:
-        logging.info('\nInitializing task datastore client')
-        # TODO: Move to top and add to requirements.txt and environment.yaml
-        from google.cloud import datastore
-        try:
-            datastore_client = datastore.Client.from_service_account_json(
-                datastore_key_file)
-        except Exception as e:
-            logging.error('{}'.format(e))
-            return False
+    # # DEADBEEF
+    # # TODO: set datastore key file as a parameter?
+    # datastore_key_file = 'openet-dri-datastore.json'
+    # if log_tasks and not os.path.isfile(datastore_key_file):
+    #     logging.info('\nTask logging disabled, datastore key does not exist')
+    #     log_tasks = False
+    #     # input('ENTER')
+    # if log_tasks:
+    #     logging.info('\nInitializing task datastore client')
+    #     # TODO: Move to top and add to requirements.txt and environment.yaml
+    #     from google.cloud import datastore
+    #     try:
+    #         datastore_client = datastore.Client.from_service_account_json(
+    #             datastore_key_file)
+    #     except Exception as e:
+    #         logging.error('{}'.format(e))
+    #         return False
 
 
     # Get current running tasks
-    # tasks = {}
+    logging.info('\nRequesting Task List')
+
     tasks = utils.get_ee_tasks()
     if logging.getLogger().getEffectiveLevel() == logging.DEBUG:
         utils.print_ee_tasks()
         input('ENTER')
+    ready_task_count = len(tasks.keys())
+    logging.info(f'  Tasks: {ready_task_count}')
+    # CGM - I'm still not sure if it makes sense to hold here or after the
+    #   first task is started.
+    ready_task_count = delay_task(
+        delay_time=0, task_max=ready_task_max, task_count=ready_task_count)
 
 
     if not ee.data.getInfo(export_coll_id.rsplit('/', 1)[0]):
@@ -398,11 +411,11 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
         alexi_mask = ee.Image('projects/earthengine-legacy/assets/'
                               'projects/disalexi/alexi/conus_v002_mask')\
             .double().multiply(0)
-    elif alexi_coll_id.upper() == 'CONUS_V001':
+    elif alexi_coll_id.upper() == 'CONUS_V003':
         alexi_coll_id = 'projects/earthengine-legacy/assets/' \
-                        'projects/disalexi/alexi/CONUS_V001'
+                        'projects/disalexi/alexi/CONUS_V003'
         alexi_mask = ee.Image('projects/earthengine-legacy/assets/'
-                              'projects/disalexi/alexi/conus_v001_mask')\
+                              'projects/disalexi/alexi/conus_v002_mask')\
             .double().multiply(0)
     else:
         raise ValueError(f'unsupported ALEXI source: {alexi_coll_id}')
@@ -479,70 +492,27 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
             # logging.debug('  Extent:    {}'.format(export_info['extent']))
             # logging.debug('  MaxPixels: {}'.format(export_info['maxpixels']))
 
-            # filter_args = {}
-            # for coll_id in collections:
-            #     filter_args[coll_id] = [
-            #         {'type': 'equals', 'leftField': 'WRS_PATH', 'rightValue': path},
-            #         {'type': 'equals', 'leftField': 'WRS_ROW', 'rightValue': row}]
-            # # logging.debug('  Filter Args: {}'.format(filter_args))
+            filter_args = {}
+            for coll_id in collections:
+                filter_args[coll_id] = [
+                    {'type': 'equals', 'leftField': 'WRS_PATH', 'rightValue': path},
+                    {'type': 'equals', 'leftField': 'WRS_ROW', 'rightValue': row}]
+            logging.debug(f'  Filter Args: {filter_args}')
 
-            # TODO: Switch to call to openet.disalexi.Collection()
-            landsat_coll = ee.ImageCollection([])
-            export_geom = ee.Geometry.Point(openet.core.wrs2.centroids[wrs2_tile])
-            if ('LANDSAT/LC08/C01/T1_SR' in collections and
-                    iter_end_dt.strftime('%Y-%m-%d') > '2013-03-24'):
-                l8_coll = ee.ImageCollection('LANDSAT/LC08/C01/T1_SR')\
-                    .filterDate(iter_start_dt.strftime('%Y-%m-%d'),
-                                iter_end_dt.strftime('%Y-%m-%d'))\
-                    .filterMetadata('WRS_PATH', 'equals', path)\
-                    .filterMetadata('WRS_ROW', 'equals', row)\
-                    .filter(ee.Filter.gt('system:time_start',
-                                         ee.Date('2013-03-24').millis()))\
-                    .filterMetadata('CLOUD_COVER_LAND', 'less_than',
-                                    float(ini['INPUTS']['cloud_cover']))\
-                    .filterBounds(export_geom)
-                landsat_coll = ee.ImageCollection(landsat_coll.merge(l8_coll))
-            if ('LANDSAT/LE07/C01/T1_SR' in collections and
-                    iter_end_dt.strftime('%Y-%m-%d') >= '1999-01-01'):
-                l7_coll = ee.ImageCollection('LANDSAT/LE07/C01/T1_SR')\
-                    .filterDate(iter_start_dt.strftime('%Y-%m-%d'),
-                                iter_end_dt.strftime('%Y-%m-%d'))\
-                    .filterMetadata('WRS_PATH', 'equals', path)\
-                    .filterMetadata('WRS_ROW', 'equals', row)\
-                    .filterMetadata('CLOUD_COVER_LAND', 'less_than',
-                                    float(ini['INPUTS']['cloud_cover']))\
-                    .filterBounds(export_geom)
-                landsat_coll = ee.ImageCollection(landsat_coll.merge(l7_coll))
-            if ('LANDSAT/LT05/C01/T1_SR' in collections and
-                    iter_start_dt.strftime('%Y-%m-%d') <= '2011-12-31'):
-                l5_coll = ee.ImageCollection('LANDSAT/LT05/C01/T1_SR')\
-                    .filterDate(iter_start_dt.strftime('%Y-%m-%d'),
-                                iter_end_dt.strftime('%Y-%m-%d'))\
-                    .filterMetadata('WRS_PATH', 'equals', path)\
-                    .filterMetadata('WRS_ROW', 'equals', row)\
-                    .filter(ee.Filter.lt('system:time_start',
-                                         ee.Date('2011-12-31').millis()))\
-                    .filterMetadata('CLOUD_COVER_LAND', 'less_than',
-                                    float(ini['INPUTS']['cloud_cover']))\
-                    .filterBounds(export_geom)
-                landsat_coll = ee.ImageCollection(landsat_coll.merge(l5_coll))
-            if ('LANDSAT/LT04/C01/T1_SR' in collections and
-                    iter_start_dt.strftime('%Y-%m-%d') <= '1993-12-01'):
-                l4_coll = ee.ImageCollection('LANDSAT/LT04/C01/T1_SR')\
-                    .filterDate(iter_start_dt.strftime('%Y-%m-%d'),
-                                iter_end_dt.strftime('%Y-%m-%d'))\
-                    .filterMetadata('WRS_PATH', 'equals', path)\
-                    .filterMetadata('WRS_ROW', 'equals', row)\
-                    .filterMetadata('CLOUD_COVER_LAND', 'less_than',
-                                    float(ini['INPUTS']['cloud_cover']))\
-                    .filterBounds(export_geom)
-                landsat_coll = ee.ImageCollection(landsat_coll.merge(l4_coll))
-            # DATA_TYPE filter only needed if using TOA collections
-            #     .filterMetadata('DATA_TYPE', 'equals', 'L1TP')
+            # Get the full Landsat collection
+            # Collection end date is exclusive
+            model_obj = openet.disalexi.Collection(
+                collections=collections,
+                cloud_cover_max=float(ini['INPUTS']['cloud_cover']),
+                start_date=iter_start_dt.strftime('%Y-%m-%d'),
+                end_date=iter_end_dt.strftime('%Y-%m-%d'),
+                geometry=ee.Geometry.Point(openet.core.wrs2.centroids[wrs2_tile]),
+                model_args=model_args,
+                filter_args=filter_args,
+            )
+            image_id_list = utils.get_info(ee.List(model_obj.overpass(
+                variables=['ndvi']).aggregate_array('image_id')), max_retries=10)
 
-
-            image_id_list = sorted(list(set(
-                landsat_coll.aggregate_array('system:id').getInfo())))
             if not image_id_list:
                 logging.info('  Empty image ID list, skipping tile')
                 # logging.debug('  Empty image ID list, exiting')
@@ -700,7 +670,6 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
                         logging.info('    Asset already exists, skipping')
                         continue
 
-
                 if tair_args['source_coll'] is None:
                     logging.debug('    Tair source: {}'.format(tair_args['ta_start']))
                     ta_source_img = alexi_mask.add(float(tair_args['ta_start']))\
@@ -727,7 +696,7 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
 
                 # Manually check if the source LAI and TIR images are present
                 # Eventually this should/could be done inside the model instead
-                if ('tir_source' in model_args.keys() and \
+                if ('tir_source' in model_args.keys() and
                         type(model_args['tir_source']) is str):
                     # Assumptions: string tir_source is an image collection ID
                     tir_coll = ee.ImageCollection(model_args['tir_source']) \
@@ -737,11 +706,11 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
                     try:
                         sharpen_version = tir_info['properties']['sharpen_version']
                     except:
-                        logging.info('  No TIR image in source, skipping')
+                        logging.info('    No TIR image in source, skipping')
                         input('ENTER')
                         continue
 
-                if ('lai_source' in model_args.keys() and \
+                if ('lai_source' in model_args.keys() and
                         type(model_args['lai_source']) is str):
                     # Assumptions: string lai_source is an image collection ID
                     lai_coll = ee.ImageCollection(model_args['lai_source']) \
@@ -751,21 +720,18 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
                     try:
                         landsat_lai_version = lai_info['properties']['landsat_lai_version']
                     except:
-                        logging.info('  No LAI image in source, skipping')
+                        logging.info('    No LAI image in source, skipping')
                         input('ENTER')
                         continue
 
-
-                landsat_img = ee.Image(image_id)
                 # CGM: We could pre-compute (or compute once and then save)
                 #   the crs, transform, and shape since they should (will?) be
                 #   the same for each wrs2 tile
-                output_info = utils.get_info(landsat_img.select(['B2']))
-                # pprint.pprint(output_info)
-                # input('ENTER')
+                landsat_img = ee.Image(image_id)
+                output_info = utils.get_info(landsat_img.select([1]))
+                # output_info = utils.get_info(landsat_img.select(['SR_B2']))
 
-                d_obj = openet.disalexi.Image(
-                    openet.disalexi.LandsatSR(landsat_img).prep(), **model_args)
+                d_obj = openet.disalexi.Image.from_image_id(image_id, **model_args)
                 export_img = d_obj.ta_mosaic(
                     ta_img=ta_source_img,
                     step_size=tair_args['step_size'],
@@ -883,34 +849,38 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
                 # # Not using ee_task_start since it doesn't return the task object
                 # utils.ee_task_start(task)
 
-                # Write the export task info the openet-dri project datastore
-                if log_tasks:
-                    logging.debug('    Writing datastore entity')
-                    try:
-                        task_obj = datastore.Entity(key=datastore_client.key(
-                            'Task', task.status()['id']),
-                            exclude_from_indexes=['properties'])
-                        for k, v in task.status().items():
-                            task_obj[k] = v
-                        # task_obj['date'] = datetime.datetime.today() \
-                        #     .strftime('%Y-%m-%d')
-                        task_obj['index'] = properties.pop('wrs2_tile')
-                        # task_obj['wrs2_tile'] = properties.pop('wrs2_tile')
-                        task_obj['model_name'] = properties.pop('model_name')
-                        # task_obj['model_version'] = properties.pop('model_version')
-                        task_obj['runtime'] = 0
-                        task_obj['start_timestamp_ms'] = 0
-                        task_obj['tool_name'] = properties.pop('tool_name')
-                        task_obj['properties'] = json.dumps(properties)
-                        datastore_client.put(task_obj)
-                    except Exception as e:
-                        # CGM - The message/handling will probably need to be updated
-                        #   We may want separate try/excepts on the create and the put
-                        logging.warning('\nDatastore entity was not written')
-                        logging.warning('{}\n'.format(e))
+                # DEADBEEF
+                # # Write the export task info the openet-dri project datastore
+                # if log_tasks:
+                #     logging.debug('    Writing datastore entity')
+                #     try:
+                #         task_obj = datastore.Entity(key=datastore_client.key(
+                #             'Task', task.status()['id']),
+                #             exclude_from_indexes=['properties'])
+                #         for k, v in task.status().items():
+                #             task_obj[k] = v
+                #         # task_obj['date'] = datetime.datetime.today() \
+                #         #     .strftime('%Y-%m-%d')
+                #         task_obj['index'] = properties.pop('wrs2_tile')
+                #         # task_obj['wrs2_tile'] = properties.pop('wrs2_tile')
+                #         task_obj['model_name'] = properties.pop('model_name')
+                #         # task_obj['model_version'] = properties.pop('model_version')
+                #         task_obj['runtime'] = 0
+                #         task_obj['start_timestamp_ms'] = 0
+                #         task_obj['tool_name'] = properties.pop('tool_name')
+                #         task_obj['properties'] = json.dumps(properties)
+                #         datastore_client.put(task_obj)
+                #     except Exception as e:
+                #         # CGM - The message/handling will probably need to be updated
+                #         #   We may want separate try/excepts on the create and the put
+                #         logging.warning('\nDatastore entity was not written')
+                #         logging.warning('{}\n'.format(e))
 
                 # Pause before starting the next export task
-                utils.delay_task(delay_time, max_ready)
+                ready_task_count += 1
+                ready_task_count = delay_task(
+                    delay_time=delay_time, task_max=ready_task_max,
+                    task_count=ready_task_count)
 
                 logging.debug('')
 
@@ -1334,6 +1304,76 @@ def read_ini(ini_path):
     return ini
 
 
+# CGM - This is a modified copy of openet.utils.delay_task()
+#   It was changed to take and return the number of ready tasks
+#   This change may eventually be pushed to openet.utils.delay_task()
+def delay_task(delay_time=0, task_max=-1, task_count=0):
+    """Delay script execution based on number of READY tasks
+
+    Parameters
+    ----------
+    delay_time : float, int
+        Delay time in seconds between starting export tasks or checking the
+        number of queued tasks if "ready_task_max" is > 0.  The default is 0.
+        The delay time will be set to a minimum of 10 seconds if
+        ready_task_max > 0.
+    task_max : int, optional
+        Maximum number of queued "READY" tasks.
+    task_count : int
+        The current/previous/assumed number of ready tasks.
+        Value will only be updated if greater than or equal to ready_task_max.
+
+    Returns
+    -------
+    int : ready_task_count
+
+    """
+    if task_max > 3000:
+        raise ValueError('The maximum number of queued tasks must be less than 3000')
+
+    # Force delay time to be a positive value since the parameter used to
+    #   support negative values
+    if delay_time < 0:
+        delay_time = abs(delay_time)
+
+    if ((task_max is None or task_max <= 0) and (delay_time >= 0)):
+        # Assume task_max was not set and just wait the delay time
+        logging.debug(f'  Pausing {delay_time} seconds, not checking task list')
+        time.sleep(delay_time)
+        return 0
+    elif task_max and (task_count < task_max):
+        # Skip waiting or checking tasks if a maximum number of tasks was set
+        #   and the current task count is below the max
+        logging.debug(f'  Ready tasks: {task_count}')
+        return task_count
+
+    # If checking tasks, force delay_time to be at least 10 seconds if
+    #   ready_task_max is set to avoid excessive EE calls
+    delay_time = max(delay_time, 10)
+
+    # Make an initial pause before checking tasks lists to allow
+    #   for previous export to start up
+    # CGM - I'm not sure what a good default first pause time should be,
+    #   but capping it at 30 seconds is probably fine for now
+    logging.debug(f'  Pausing {min(delay_time, 30)} seconds for tasks to start')
+    time.sleep(delay_time)
+
+    # If checking tasks, don't continue to the next export until the number
+    #   of READY tasks is greater than or equal to "ready_task_max"
+    while True:
+        ready_task_count = len(utils.get_ee_tasks(states=['READY']).keys())
+        logging.debug(f'  Ready tasks: {ready_task_count}')
+        if ready_task_count >= task_max:
+            logging.debug(f'  Pausing {delay_time} seconds')
+            time.sleep(delay_time)
+        else:
+            logging.debug(f'  {task_max - ready_task_count} open task '
+                          f'slots, continuing processing')
+            break
+
+    return ready_task_count
+
+
 def arg_parse():
     """"""
     parser = argparse.ArgumentParser(
@@ -1388,7 +1428,7 @@ if __name__ == "__main__":
     logging.getLogger('googleapiclient').setLevel(logging.ERROR)
 
     main(ini_path=args.ini, overwrite_flag=args.overwrite,
-         delay_time=args.delay, gee_key_file=args.key, max_ready=args.ready,
+         delay_time=args.delay, gee_key_file=args.key, ready_task_max=args.ready,
          reverse_flag=args.reverse, tiles=args.tiles, update_flag=args.update,
          recent_days=0, start_dt=args.start, end_dt=args.end,
     )
