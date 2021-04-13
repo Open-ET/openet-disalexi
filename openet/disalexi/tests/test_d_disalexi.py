@@ -265,7 +265,7 @@ def test_Image_set_landcover_vars_set_asset(tol=1E-6):
 #         elevation_source=ee.Image.constant(350.0),
 #         landcover_source='NLCD2011',
 #         albedo_iterations=iterations,
-#         stabil_iterations=iterations,
+#         stability_iterations=iterations,
 #     )
 #
 #     # Overwrite the default ancillary images with the test assets
@@ -319,7 +319,7 @@ def test_Image_set_landcover_vars_set_asset(tol=1E-6):
 #         test_img,
 #         elevation_source=ee.Image.constant(350.0),
 #         albedo_iterations=iterations,
-#         stabil_iterations=iterations,
+#         stability_iterations=iterations,
 #         landcover_source='NLCD2011',
 #     )
 #

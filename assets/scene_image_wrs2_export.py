@@ -333,7 +333,8 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
         tair_args['ta_start'] = None
 
     logging.info('\nDISALEXI Parameters')
-    logging.info('  Stabil iter: {}'.format(int(model_args['stabil_iterations'])))
+    if 'stability_iterations' in model_args.keys():
+        logging.info('  Stabil iter: {}'.format(int(model_args['stability_iterations'])))
     logging.info('  Albedo iter: {}'.format(int(model_args['albedo_iterations'])))
 
     logging.info('\nTAIR Parameters')

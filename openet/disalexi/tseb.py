@@ -134,7 +134,9 @@ def tseb_pt(t_air, t_rad, t_air0, e_air, u, p, z, rs_1, rs24, vza,
     # debug(hc_min, 'hc_min')
     # debug(hc_max, 'hc_max')
 
-    mask = lai.multiply(0).rename(['mask'])
+    mask = lai.double().multiply(0).rename(['mask'])
+    # mask = albedo.multiply(0).rename(['mask'])
+    # geometry = mask.geometry()
 
     # ************************************************************************
     # Apply met bands directly to Landsat image
@@ -251,20 +253,17 @@ def tseb_pt(t_air, t_rad, t_air0, e_air, u, p, z, rs_1, rs24, vza,
         {'e_s': e_s, 't_air': t_air})
 
     # Latent heat of vaporization (~2.45 at 20 C) [MJ kg-1] (FAO56 3-1)
-    lambda1 = t_air.expression(
-        '(2.501 - (2.361e-3 * (t_air - 273.16)))',
-        {'t_air': t_air})
+    lambda1 = t_air.subtract(273.16).multiply(2.361e-3).multiply(-1).add(2.501)
+    # lambda1 = t_air.expression(
+    #     '(2.501 - (2.361e-3 * (t_air - 273.16)))', {'t_air': t_air})
 
     # Psychrometric constant [kPa C-1] (FAO56 3-10)
-    g = p.expression('1.615E-3 * p / lambda1', {'p': p, 'lambda1': lambda1})
+    g = p.multiply(1.615E-3).divide(lambda1)
+    # g = p.expression('1.615E-3 * p / lambda1', {'p': p, 'lambda1': lambda1})
 
     # ************************************************************************
-    # Initialization of ?
     a_pt = mask.add(a_pt_in)
-    a_pt = a_pt\
-        .expression(
-            '(a_pt + (vpd - vpd1) * dvpd)',
-            {'a_pt': a_pt_in, 'vpd': vpd, 'vpd1': 2.0, 'dvpd': 0.4})\
+    a_pt = a_pt.add(vpd.subtract(2.0).multiply(0.4))\
         .max(a_pt_in).min(2.5)\
         .rename('a_pt')
 

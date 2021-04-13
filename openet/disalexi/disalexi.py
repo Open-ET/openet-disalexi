@@ -47,10 +47,10 @@ class Image(object):
             windspeed_source='CFSR',
             vp_source='CFSR',
             airpressure_source='CFSR',
-            stabil_iterations=None,
+            stability_iterations=None,
             albedo_iterations=10,
             rs_interp_flag=True,
-            # ta_interp_flag=True,
+            ta_interp_flag=True,
             ta_smooth_flag=True,
             lat=None,
             lon=None,
@@ -89,7 +89,7 @@ class Image(object):
             Vapour pressure source keyword (the default is 'CFSR').
         airpressure_source: {'CFSR'}
             Air pressure source keyword (the default is 'CFSR').
-        stabil_iterations : int, optional
+        stability_iterations : int, optional
             Number of istability calculation iterations.  If not set, the
             number will be computed dynamically.
         albedo_iterations : int, optional
@@ -97,16 +97,17 @@ class Image(object):
         rs_interp_flag : bool, optional
             If True, interpolate incoming solar radiation.
             If False, select image with same date and hour.
+            The default is True.
         ta_interp_flag : bool, optional
-            Ta interpolation is not implemented.
+            If True, interpolate between Ta step images (the default is True).
         ta_smooth_flag : bool, optional
-            If True, smooth and resample Ta image.
+            If True, smooth and resample Ta imagee (the default is True).
         lat : ee.Image, optional
             Latitude [deg].  If not set will default to ee.Image.pixelLonLat().
         lon : ee.Image, optional
             Longitude [deg].  If not set will default to ee.Image.pixelLonLat().
         et_min: float, optional
-            Minimum output ET value (the default is 0.01)
+            Minimum output ET value. (the default is 0.01).
         kwargs: dict, optional
             et_reference_source : str, float
                 Reference ET source (the default is None).
@@ -207,13 +208,13 @@ class Image(object):
         self.windspeed_source = windspeed_source
         self.vp_source = vp_source
         self.airpressure_source = airpressure_source
-        if stabil_iterations:
-            self.stabil_iter = int(stabil_iterations + 0.5)
+        if stability_iterations:
+            self.stabil_iter = int(stability_iterations + 0.5)
         else:
             self.stabil_iter = None
         self.albedo_iter = int(albedo_iterations + 0.5)
         self.rs_interp_flag = utils.boolean(rs_interp_flag)
-        # self.ta_interp_flag = utils.boolean(ta_interp_flag)
+        self.ta_interp_flag = utils.boolean(ta_interp_flag)
         self.ta_smooth_flag = utils.boolean(ta_smooth_flag)
         self.et_min = et_min
 
@@ -282,7 +283,7 @@ class Image(object):
             self.lc_source = ee.Image(self.landcover_source.upper()) \
                 .select(['landcover'])
             self.lc_type = 'NLCD'
-        # DEADBEEF - Eventually remove the landcover keyword sources
+        # TODO: Eventually remove the landcover keyword sources
         elif self.landcover_source.upper() == 'NLCD2016':
             self.lc_source = ee.Image('USGS/NLCD/NLCD2016').select(['landcover'])
             self.lc_type = 'NLCD'
@@ -320,8 +321,8 @@ class Image(object):
                 self.alexi_geo = [0.04, 0, -125.04, 0, -0.04, 49.8]
                 self.alexi_crs = 'EPSG:4326'
             else:
-            # Assume ALEXI source is an image collection ID if it is a string
-            #   but doesn't match on any of the keywords.
+                # Assume ALEXI source is an image collection ID if it is a string
+                #   but doesn't match on any of the keywords.
                 alexi_img = ee.Image(ee.ImageCollection(self.alexi_source).first())
                 self.alexi_geo = ee.List(ee.Dictionary(
                     ee.Algorithms.Describe(alexi_img.projection())).get('transform'))
@@ -330,7 +331,7 @@ class Image(object):
             self.alexi_geo = [0.04, 0, -125.04, 0, -0.04, 49.8]
             self.alexi_crs = 'EPSG:4326'
 
-    @ classmethod
+    @classmethod
     def from_image_id(cls, image_id, **kwargs):
         """Constructs a DisALEXI Image instance from an image ID
 
@@ -448,11 +449,6 @@ class Image(object):
 
         return ee.Image(output_images).set(self.properties)
 
-    # @lazy_property
-    # def albedo(self):
-    #     """Return albedo image"""
-    #     return self.image.select(['albedo']).set(self.properties)
-
     @lazy_property
     def et(self):
         """Compute Landsat scale DisALEXI ET
@@ -477,7 +473,6 @@ class Image(object):
             et_min=self.et_min,
         )
         return et.rename(['et']).set(self.properties)
-        #     .set({'ta_step_size': self.ta.get('ta_step_size')})
 
     @lazy_property
     def et_reference(self):
@@ -540,6 +535,7 @@ class Image(object):
         else:
             raise ValueError('unsupported alexi_source: {}'.format(
                 self.alexi_source))
+
         return alexi_img.rename(['et_alexi'])
 
     @lazy_property
@@ -653,6 +649,18 @@ class Image(object):
         return self.et.multiply(0).add(1).updateMask(1) \
             .rename(['mask']).set(self.properties).uint8()
 
+    @lazy_property
+    def time(self):
+        """Return an image of the 0 UTC time (in milliseconds)"""
+        return self.mask \
+            .double().multiply(0).add(utils.date_to_time_0utc(self.datetime)) \
+            .rename(['time']).set(self.properties)
+
+    # @lazy_property
+    # def albedo(self):
+    #     """Return albedo image"""
+    #     return self.image.select(['albedo']).set(self.properties)
+
     # @lazy_property
     # def ndvi(self):
     #     """Return NDVI image"""
@@ -663,6 +671,112 @@ class Image(object):
     #     """Set quality to 1 for all active pixels (for now)"""
     #     return self.mask\
     #         .rename(['quality']).set(self.properties)
+
+    @lazy_property
+    def ta(self):
+        """Return the precomputed Ta asset for the target image
+
+        Returns
+        -------
+        image : ee.Image
+            Ta image
+
+        """
+        # if self.ta_source is None:
+        #     raise ValueError('ta_source must be set to compute et')
+        if utils.is_number(self.ta_source):
+            ta_img = ee.Image.constant(float(self.ta_source))
+            #     .set({'ta_iteration': 'constant'})
+        elif isinstance(self.ta_source, ee.computedobject.ComputedObject):
+            ta_img = ee.Image(self.ta_source)
+            #     .set({'ta_iteration': 'image'})
+        elif self.ta_source.upper() == 'CONUS_V002':
+            ta_coll_id = 'projects/disalexi/ta/CONUS_V002_NLDAS_1K'
+            ta_coll = ee.ImageCollection(ta_coll_id) \
+                .filterMetadata('image_id', 'equals', self.id) \
+                .limit(1, 'step_size', False)
+            input_img = ee.Image(ta_coll.first())
+
+            # Select the Ta image with the minimum bias
+            ta_array = input_img.select('step_\\d+_ta').toArray()
+            bias_array = input_img.select('step_\\d+_bias').toArray()
+            index = bias_array.abs().multiply(-1).arrayArgmax() \
+                .arraySlice(0, 0, 1).arrayFlatten([['array']])
+            ta_img = ta_array.arrayGet(index)
+
+            # Yun add interpolation
+            if self.ta_interp_flag:
+                bias_img_1 = bias_array.arrayGet(index)
+                # CGM - Hardcoding the 12 here is probably a bad idea since the
+                #   number of steps/bands in the Ta image can change
+                bias_img_2 = bias_array.arrayGet(index.add(1).clamp(0, 12))
+                ta_img = bias_img_1.multiply(-1)\
+                    .divide(bias_img_2.subtract(bias_img_1)).add(ta_img)
+
+            # CGM - Should there be smoothing applied here also like in V003?
+
+        elif self.ta_source.upper() == 'CONUS_V003':
+            ta_coll_id = 'projects/disalexi/ta/CONUS_V003_1K'
+            ta_coll = ee.ImageCollection(ta_coll_id) \
+                .filterMetadata('image_id', 'equals', self.id) \
+                .limit(1, 'step_size', False)
+            input_img = ee.Image(ta_coll.first())
+
+            # Select the Ta image with the minimum bias
+            ta_array = input_img.select('step_\\d+_ta').toArray()
+            bias_array = input_img.select('step_\\d+_bias').toArray()
+            index = bias_array.abs().multiply(-1).arrayArgmax() \
+                .arraySlice(0, 0, 1).arrayFlatten([['array']])
+            ta_img = ta_array.arrayGet(index)
+
+            # Yun add interpolation
+            if self.ta_interp_flag:
+                bias_img_1 = bias_array.arrayGet(index)
+                # CGM - Hardcoding the 12 here is probably a bad idea since the
+                #   number of steps/bands in the Ta image can change
+                bias_img_2 = bias_array.arrayGet(index.add(1).clamp(0, 12))
+                ta_img = bias_img_1.multiply(-1)\
+                    .divide(bias_img_2.subtract(bias_img_1)).add(ta_img)
+
+            if self.ta_smooth_flag:
+                # Yun just a very slight smooth, should not change the value much
+                # CGM - Does this focal_mean call do anything since the Ta assets
+                #   have a ~4km cellsize?  The values are identical in the tests.
+                ta_img = ta_img \
+                    .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo) \
+                    .focal_mean(500, 'square', 'meters')\
+                    .reproject(crs=self.crs, crsTransform=self.transform)
+
+        elif self.ta_source.startswith('projects/disalexi/ta/CONUS_V'):
+            # CGM - How can I ensure it is an image collection ID?
+            ta_coll = ee.ImageCollection(self.ta_source) \
+                .filterMetadata('image_id', 'equals', self.id) \
+                .limit(1, 'step_size', False)
+            input_img = ee.Image(ta_coll.first())
+
+            # Select the Ta image with the minimum bias
+            ta_array = input_img.select('step_\\d+_ta').toArray()
+            bias_array = input_img.select('step_\\d+_bias').toArray()
+            index = bias_array.abs().multiply(-1).arrayArgmax() \
+                .arraySlice(0, 0, 1).arrayFlatten([['array']])
+            ta_img = ta_array.arrayGet(index)
+
+            # Yun add interpolation
+            if self.ta_interp_flag:
+                bias_img_1 = bias_array.arrayGet(index)
+                # CGM - Hardcoding the 12 here is probably a bad idea since the
+                #   number of steps/bands in the Ta image can change
+                bias_img_2 = bias_array.arrayGet(index.add(1).clamp(0, 12))
+                ta_img = bias_img_1.multiply(-1)\
+                    .divide(bias_img_2.subtract(bias_img_1)).add(ta_img)
+
+            # CGM - Should there be smoothing applied here also like in V003?
+
+        else:
+            raise ValueError('Unsupported ta_source: {}\n'.format(
+                self.ta_source))
+
+        return ta_img.rename(['ta']).set(self.properties)
 
     @lazy_property
     def pressure(self):
@@ -894,111 +1008,10 @@ class Image(object):
             # rs24_img = ee.Image('users/tulipyangyun/Rsd_2015222_inhouse').multiply(278.0)
         return ee.Image(rs24_img).rename(['rs'])
 
-    @lazy_property
-    def ta(self):
-        """Return the precomputed Ta asset for the target image
-
-        Returns
-        -------
-        image : ee.Image
-            Ta image
-
-        """
-        # if self.ta_source is None:
-        #     raise ValueError('ta_source must be set to compute et')
-        if utils.is_number(self.ta_source):
-            ta_img = ee.Image.constant(float(self.ta_source))
-            #     .set({'ta_iteration': 'constant'})
-        elif isinstance(self.ta_source, ee.computedobject.ComputedObject):
-            ta_img = ee.Image(self.ta_source)
-            #     .set({'ta_iteration': 'image'})
-        elif self.ta_source.upper() == 'CONUS_V002':
-            ta_coll_id = 'projects/disalexi/ta/CONUS_V002_NLDAS_1K'
-            ta_coll = ee.ImageCollection(ta_coll_id) \
-                .filterMetadata('image_id', 'equals', self.id) \
-                .limit(1, 'step_size', False)
-
-            input_img = ee.Image(ta_coll.first())
-
-            # Select the Ta image with the minimum bias
-            ta_array = input_img.select('step_\\d+_ta').toArray()
-            bias_array = input_img.select('step_\\d+_bias').toArray()
-            index = bias_array.abs().multiply(-1).arrayArgmax() \
-                .arraySlice(0, 0, 1).arrayFlatten([['array']])
-            ta_img = ta_array.arrayGet(index)
-            # yun add
-            index_next = index.add(1).clamp(0, 12)
-            bias_img_1 = bias_array.arrayGet(index)
-            bias_img_2 = bias_array.arrayGet(index_next)
-            ta_img_interp = bias_img_1.multiply(-1).divide(bias_img_2.subtract(bias_img_1)) \
-                .add(ta_img)
-            ta_img = ta_img_interp
-        elif self.ta_source.upper() == 'CONUS_V003':
-            ta_coll_id = 'projects/disalexi/ta/CONUS_V003_1K'
-            ta_coll = ee.ImageCollection(ta_coll_id) \
-                .filterMetadata('image_id', 'equals', self.id) \
-                .limit(1, 'step_size', False)
-            input_img = ee.Image(ta_coll.first())
-            # Select the Ta image with the minimum bias
-            ta_array = input_img.select('step_\\d+_ta').toArray()
-            bias_array = input_img.select('step_\\d+_bias').toArray()
-            index = bias_array.abs().multiply(-1).arrayArgmax() \
-                .arraySlice(0, 0, 1).arrayFlatten([['array']])
-            ta_img = ta_array.arrayGet(index)
-            # yun add interpolation
-            index_next = index.add(1).clamp(0, 12)
-            bias_img_1 = bias_array.arrayGet(index)
-            bias_img_2 = bias_array.arrayGet(index_next)
-            ta_img_interp = bias_img_1.multiply(-1).divide(bias_img_2.subtract(bias_img_1)) \
-                .add(ta_img)
-            ta_img = ta_img_interp
-            if self.ta_smooth_flag:
-                # CGM suggested using a radius of 4, trying 2 for now
-                # Yun just a very slight smooth, should not change the value much
-                ta_img = ee.Image(ta_img) \
-                    .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo) \
-                    .focal_mean(500,'square','meters')\
-                    .reproject(crs=self.crs, crsTransform=self.transform)
-        elif self.ta_source.startswith('projects/disalexi/ta/CONUS_V'):
-            # CGM - How can I ensure it is an image collection ID?
-            ta_coll = ee.ImageCollection(self.ta_source) \
-                .filterMetadata('image_id', 'equals', self.id) \
-                .limit(1, 'step_size', False)
-            input_img = ee.Image(ta_coll.first())
-            # Select the Ta image with the minimum bias
-            ta_array = input_img.select('step_\\d+_ta').toArray()
-            bias_array = input_img.select('step_\\d+_bias').toArray()
-            index = bias_array.abs().multiply(-1).arrayArgmax() \
-                .arraySlice(0, 0, 1).arrayFlatten([['array']])
-            ta_img = ta_array.arrayGet(index)
-            # yun add
-            bias_img_1 = bias_array.arrayGet(index)
-            bias_img_2 = bias_array.arrayGet(index.add(1))
-            ta_img_interp = bias_img_1.multiply(-1).divide(bias_img_2.subtract(bias_img_1)) \
-                .add(ta_img)
-            ta_img = ta_img_interp
-        else:
-            raise ValueError('Unsupported ta_source: {}\n'.format(
-                self.ta_source))
-
-        #if self.ta_smooth_flag:
-            # CGM suggested using a radius of 4, trying 2 for now
-            # Yun just a very slight smooth, should not change the value much
-            #ta_img = ee.Image(ta_img) \
-                #.reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo) \
-                #.resample('bicubic') \
-                #.reproject(crs=self.crs, crsTransform=self.transform)
-            #this is a new function
-            #ta_img = ee.Image(ta_img).fastGaussianBlur(1000)
-            # CGM - This approach doesn't mask nodata correctly
-            # ta_img = ta_img.convolve(
-            #     ee.Kernel.square(radius=4, units='pixels', normalize=True))
-        #ta_img = ee.Image('users/tulipyangyun/Ta_20162091720').add(273.16)
-        return ta_img.rename(['ta']).set(self.properties)
-
     # TODO: Change the naming of this parameter, it is a little inconsistent.
     #   The band is called "tair0", but the property is "t_air0".
-    #   We could also change the "ta" parameter instead.
+    # It might make more sense to change "ta" to something else and rename
+    #   this to "ta".
     @lazy_property
     def t_air0(self):
         """Air temperature [K]"""
@@ -1046,13 +1059,6 @@ class Image(object):
         return ee.Image(tair0_img).rename(['tair0'])
 
     @lazy_property
-    def time(self):
-        """Return an image of the 0 UTC time (in milliseconds)"""
-        return self.mask \
-            .double().multiply(0).add(utils.date_to_time_0utc(self.datetime)) \
-            .rename(['time']).set(self.properties)
-
-    @lazy_property
     def windspeed(self):
         """Windspeed [m/s]"""
         if utils.is_number(self.windspeed_source):
@@ -1088,7 +1094,7 @@ class Image(object):
             t_b = t_a.add(3)
 
             windspeed_img = ee.Algorithms.If(
-                self.hour_int.lt(24) and self.hour_int.gt(0),
+                self.hour_int.lt(24).gt(self.hour_int.gt(0)),
                 wind_b_img.subtract(wind_a_img) \
                 .multiply(self.hour.subtract(t_a).divide(3)) \
                 .add(wind_a_img),
@@ -1147,10 +1153,10 @@ class Image(object):
             t_b = t_a.add(3)
 
             vp_img = ee.Algorithms.If(
-                self.hour_int.lt(24) and self.hour_int.gt(0),
+                self.hour_int.lt(24).And(self.hour_int.gt(0)),
                 vp_b_img.subtract(vp_a_img) \
-                .multiply(self.hour.subtract(t_a).divide(3)) \
-                .add(vp_a_img),
+                    .multiply(self.hour.subtract(t_a).divide(3)) \
+                    .add(vp_a_img),
                 vp_b_img)
             vp_img = ee.Algorithms.If(
                 self.hour_int.gte(24), vp_img_temp1, vp_img)
@@ -1226,7 +1232,7 @@ class Image(object):
         self.adeadv = lc_remap(self.lc_source, self.lc_type, 'adeadv')
         self.adeadn = lc_remap(self.lc_source, self.lc_type, 'adeadn')
         self.adeadl = lc_remap(self.lc_source, self.lc_type, 'adeadl')
-        #yun modified to use hmax for hmin too!!!
+        # Yun modified to use hmax for hmin too!!!
         self.hc_min = lc_remap(self.lc_source, self.lc_type, 'hmax')
         self.hc_max = lc_remap(self.lc_source, self.lc_type, 'hmax')
         self.leaf_width = lc_remap(self.lc_source, self.lc_type, 'xl')
@@ -1250,17 +1256,15 @@ class Image(object):
 
         """
         et_fine = tseb.tseb_pt(
-            t_air0=self.t_air0, t_air=ta_img, t_rad=self.tir, e_air=self.vp,
-            # t_air=ta_img.reproject(crs=self.crs, crsTransform=self.transform),
-            # lat=lat, lon=lon,
-            u=self.windspeed, p=self.pressure, z=self.elevation,
+            t_air=ta_img, t_rad=self.tir, t_air0=self.t_air0,
+            e_air=self.vp, u=self.windspeed, p=self.pressure, z=self.elevation,
             rs_1=self.rs1, rs24=self.rs24, vza=0,
             aleafv=self.aleafv, aleafn=self.aleafn, aleafl=self.aleafl,
             adeadv=self.adeadv, adeadn=self.adeadn, adeadl=self.adeadl,
             albedo=self.albedo, ndvi=self.ndvi, lai=self.lai,
             clump=self.clump, leaf_width=self.leaf_width,
             hc_min=self.hc_min, hc_max=self.hc_max,
-            datetime=self.datetime, a_pt_in=1.32,
+            datetime=self.datetime, lat=self.lat, lon=self.lon,
             stabil_iter=self.stabil_iter, albedo_iter=self.albedo_iter,
         )
 
@@ -1303,15 +1307,15 @@ class Image(object):
         def ta_func(ta):
             """Compute TSEB ET for the target t_air value"""
             et_fine = tseb.tseb_pt(
-                t_air0=self.t_air0, t_air=ta, t_rad=self.tir, e_air=self.vp,
-                u=self.windspeed, p=self.pressure, z=self.elevation,
-                rs_1=self.rs1, rs24=self.rs24, vza=0,
+                t_air=ta, t_rad=self.tir, t_air0=self.t_air0,
+                e_air=self.vp, u=self.windspeed, p=self.pressure,
+                z=self.elevation, rs_1=self.rs1, rs24=self.rs24, vza=0,
                 aleafv=self.aleafv, aleafn=self.aleafn, aleafl=self.aleafl,
                 adeadv=self.adeadv, adeadn=self.adeadn, adeadl=self.adeadl,
                 albedo=self.albedo, ndvi=self.ndvi, lai=self.lai,
                 clump=self.clump, leaf_width=self.leaf_width,
                 hc_min=self.hc_min, hc_max=self.hc_max,
-                datetime=self.datetime, a_pt_in=1.32,
+                datetime=self.datetime, lat=self.lat, lon=self.lon,
                 stabil_iter=self.stabil_iter, albedo_iter=self.albedo_iter,
             )
 
@@ -1367,16 +1371,15 @@ class Image(object):
         def ta_func(ta):
             """Compute TSEB ET for the target t_air value"""
             et_fine = tseb.tseb_pt(
-                t_air0=self.t_air0, t_air=ta, t_rad=self.tir, e_air=self.vp,
-                # t_air=ta.reproject(crs=self.crs, crsTransform=self.transform),
-                u=self.windspeed, p=self.pressure, z=self.elevation,
-                rs_1=self.rs1, rs24=self.rs24, vza=0,
+                t_air=ta, t_rad=self.tir, t_air0=self.t_air0,
+                e_air=self.vp, u=self.windspeed, p=self.pressure,
+                z=self.elevation, rs_1=self.rs1, rs24=self.rs24, vza=0,
                 aleafv=self.aleafv, aleafn=self.aleafn, aleafl=self.aleafl,
                 adeadv=self.adeadv, adeadn=self.adeadn, adeadl=self.adeadl,
                 albedo=self.albedo, ndvi=self.ndvi, lai=self.lai,
                 clump=self.clump, leaf_width=self.leaf_width,
                 hc_min=self.hc_min, hc_max=self.hc_max,
-                datetime=self.datetime, a_pt_in=1.32,
+                datetime=self.datetime, lat=self.lat, lon=self.lon,
                 stabil_iter=self.stabil_iter, albedo_iter=self.albedo_iter,
             )
             # Aggregate the Landsat scale ET up to the ALEXI scale
@@ -1430,13 +1433,9 @@ class Image(object):
 
         # Aggregate the Landsat scale ET up to the ALEXI scale
         et_fine = tseb.tseb_pt(
-            t_air0=self.t_air0, t_air=ta_img, t_rad=self.tir, e_air=self.vp,
-            # t_air=ta_img.reproject(crs=self.crs, crsTransform=self.transform),
-            # lat=lat, lon=lon,
-            u=self.windspeed, p=self.pressure, z=self.elevation,
+            t_air=ta_img, t_rad=self.tir, t_air0=self.t_air0,
+            e_air=self.vp, u=self.windspeed, p=self.pressure, z=self.elevation,
             rs_1=self.rs1, rs24=self.rs24, vza=0,
-            # CGM - Need to add GEE gaussian_filter call to rs24
-            # rs24=ndimage.gaussian_filter(self.rs24, sigma=5),
             aleafv=self.aleafv, aleafn=self.aleafn, aleafl=self.aleafl,
             adeadv=self.adeadv, adeadn=self.adeadn, adeadl=self.adeadl,
             albedo=self.albedo, ndvi=self.ndvi, lai=self.lai,
@@ -1472,12 +1471,9 @@ class Image(object):
 
         """
         et = tseb.tseb_pt(
-            t_air0=self.t_air0, t_air=ta_img, t_rad=self.tir, e_air=self.vp,
-            # t_air=ta_img.reproject(crs=self.crs, crsTransform=self.transform),
-            u=self.windspeed, p=self.pressure, z=self.elevation,
+            t_air=ta_img, t_rad=self.tir, t_air0=self.t_air0,
+            e_air=self.vp, u=self.windspeed, p=self.pressure, z=self.elevation,
             rs_1=self.rs1, rs24=self.rs24, vza=0,
-            # CGM - Need to add GEE gaussian_filter call to rs24
-            # rs24=ndimage.gaussian_filter(self.rs24, sigma=5),
             aleafv=self.aleafv, aleafn=self.aleafn, aleafl=self.aleafl,
             adeadv=self.adeadv, adeadn=self.adeadn, adeadl=self.adeadl,
             albedo=self.albedo, ndvi=self.ndvi, lai=self.lai,
