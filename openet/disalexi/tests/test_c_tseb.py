@@ -13,63 +13,63 @@ ne3_xy = [-96.43968912903934, 41.17964494123755]
 
 
 @pytest.mark.parametrize(
-    'T_air, T_rad, e_air, u,'
+    't_air, t_rad, t_air0, e_air, u,'
     'p, z, Rs_1, '
     'Rs24, vza,'
     'aleafv, aleafn, aleafl, adeadv, adeadn, adeadl,'
     'albedo, ndvi, lai, clump,'
-    'hc_min, hc_max, leaf_width, datetime, lon, lat, a_PT_in, '
+    'hc_min, hc_max, leaf_width, datetime, lon, lat, a_pt_in, '
     'stabil_iter, albedo_iter, expected, tol',
     [
-        # # US-NE1 - IDL iteration 1
-        # [296.86259968439742, 302.49074951171878, e_air, 7.02662301063538,
-        #  97.23062487251868, 350, 917.87845865885413,
-        #  30.81263826599121 / (0.0864 / 24), 0,
-        #  0.83, 0.35, 0.95, 0.49, 0.13, 0.95,
-        #  0.19908118247986, 0.84600001573563, 2.82700014114380, 0.83,
-        #  0.44531310527793, 0.05, 1404839150550, ne1_xy[0], ne1_xy[1], 1.32,
-        #  36, 10,5.80784207568089 / 0.408, 1E-8],
-        # # US-NE1 - IDL iteration 2
-        # [298.76438086370422, 302.49074951171878, e_air, 7.02662301063538,
-        #  97.23062487251868, 350, 917.87845865885413,
-        #  30.81263826599121 / (0.0864 / 24), 0,
-        #  0.83, 0.35, 0.95, 0.49, 0.13, 0.95,
-        #  0.19908118247986, 0.84600001573563, 2.82700014114380, 0.83,
-        #  0.44531310527793, 0.05, 1404839150550, ne1_xy[0], ne1_xy[1], 1.32,
-        #  36, 10, 6.78850125182576 / 0.408, 1E-8],
-        # # US-NE1 - IDL iteration 3
-        # [298.47296436495526, 302.49074951171878, e_air, 7.02662301063538,
-        #  97.23062487251868, 350, 917.87845865885413,
-        #  30.81263826599121 / (0.0864 / 24), 0,
-        #  0.83, 0.35, 0.95, 0.49, 0.13, 0.95,
-        #  0.19908118247986, 0.84600001573563, 2.82700014114380, 0.83,
-        #  0.44531310527793, 0.05, 1404839150550, ne1_xy[0], ne1_xy[1], 1.32,
-        #  36, 10, 6.69752524158102 / 0.408, 1E-8],
-
         # High NDVI site in LC08_044033_20170716
-        [300.0, 305.92253850611, 0.84104, 3.2665367230039,
-         101.264543111959, 3.0, 946.69066527778,
-         8603.212890625, 0,
+        [300.0, 306.5, 306.3861390180871,
+         0.84104, 3.2665367230039, 101.264543111959, 3.0,
+         946.69066527778, 8603.212890625, 0,
          0.83, 0.35, 0.95, 0.49, 0.13, 0.95,
-         0.1259961, 0.87439300744578, 4.6797005913579, 0.83,
+         0.1259961, 0.8743930074457752, 4.234, 0.83,
          0.0, 0.6, 0.05, 1500230731090, -121.5265, 38.7399, 1.32,
-         36, 10, 6.8747, 1E-3],
+         25, 10, 6.713934963976832, 0.1],
         # Low NDVI site in LC08_044033_20170716
-        [300.0, 323.59893135545, 0.84104, 3.2665367230039,
-         101.252726383124, 4.0, 946.69066527778,
-         8603.212890625, 0,
+        [300.0, 323.6, 306.3840757488451,
+         0.84104, 3.2665367230039, 101.252726383124, 4.0,
+         946.69066527778, 8603.212890625, 0,
          0.83, 0.35, 0.95, 0.49, 0.13, 0.95,
-         0.1716302, 0.16195230171936, 0.029734416071998, 0.83,
+         0.1716302, 0.16195230171935662, 0.5791, 0.83,
          0.0, 0.6, 0.05, 1500230731090, -121.50822, 38.71776, 1.32,
-         36, 10, 3.5585, 1E-3],
+         25, 10, 2.2609140660778926, 0.1],
+        # High NDVI site in LC08_044033_20170716
+        [298.4269785619036, 306.5, 306.3861390180871,
+         0.84104, 3.2665367230039, 101.264543111959, 3.0,
+         946.69066527778, 8603.212890625, 0,
+         0.83, 0.35, 0.95, 0.49, 0.13, 0.95,
+         0.1259961, 0.8743930074457752, 4.234, 0.83,
+         0.0, 0.6, 0.05, 1500230731090, -121.5265, 38.7399, 1.32,
+         25, 10, 5.84718054547899, 0.1],
+        # Low NDVI site in LC08_044033_20170716
+        [300.36076433814867, 323.6, 306.3840757488451,
+         0.84104, 3.2665367230039, 101.252726383124, 4.0,
+         946.69066527778, 8603.212890625, 0,
+         0.83, 0.35, 0.95, 0.49, 0.13, 0.95,
+         0.1716302, 0.16195230171935662, 0.5791, 0.83,
+         0.0, 0.6, 0.05, 1500230731090, -121.50822, 38.71776, 1.32,
+         25, 10, 2.3879099490407283, 0.1],
     ]
 )
-def test_tseb_pt(T_air, T_rad, e_air, u, p, z, Rs_1, Rs24, vza, aleafv, aleafn,
-                 aleafl, adeadv, adeadn, adeadl, albedo, ndvi, lai, clump,
-                 hc_min, hc_max, leaf_width, datetime, lon, lat, a_PT_in,
+def test_tseb_pt(t_air, t_rad, t_air0, e_air, u, p, z, Rs_1, Rs24, vza,
+                 aleafv, aleafn, aleafl, adeadv, adeadn, adeadl,
+                 albedo, ndvi, lai, clump,
+                 hc_min, hc_max, leaf_width, datetime, lon, lat, a_pt_in,
                  stabil_iter, albedo_iter, expected, tol):
+
+    # study_area = ee.Geometry.Rectangle(-122.00, 38.60, -121.00, 39.0)
+    # mask = ee.Image('LANDSAT/LC08/C02/T1_L2/LC08_044033_20170716')\
+    #     .select(['SR_B3']).float().multiply(0)\
+    #     .clip(study_area)
+
     output_image = tseb.tseb_pt(
-        t_air=ee.Image.constant(T_air), t_rad=ee.Image.constant(T_rad),
+        t_air=ee.Image.constant(t_air), t_rad=ee.Image.constant(t_rad),
+        t_air0=ee.Image.constant(t_air0),
+        # t_air0=mask.add(t_air0),
         e_air=ee.Image.constant(e_air), u=ee.Image.constant(u),
         p=ee.Image.constant(p), z=ee.Image.constant(z),
         rs_1=ee.Image.constant(Rs_1), rs24=ee.Image.constant(Rs24),
@@ -79,13 +79,16 @@ def test_tseb_pt(T_air, T_rad, e_air, u, p, z, Rs_1, Rs24, vza, aleafv, aleafn,
         adeadn=ee.Image.constant(adeadn), adeadl=ee.Image.constant(adeadl),
         albedo=ee.Image.constant(albedo), ndvi=ee.Image.constant(ndvi),
         lai=ee.Image.constant(lai),
+        # lai=mask.add(lai),
         clump=ee.Image.constant(clump), leaf_width=ee.Image.constant(leaf_width),
         hc_min=ee.Image.constant(hc_min), hc_max=ee.Image.constant(hc_max),
         lon=ee.Image.constant(lon), lat=ee.Image.constant(lat),
-        datetime=ee.Date(datetime), a_pt_in=ee.Image.constant(a_PT_in),
-        stabil_iter=stabil_iter, albedo_iter=albedo_iter)
+        datetime=ee.Date(datetime), a_pt_in=ee.Image.constant(a_pt_in),
+        stabil_iter=stabil_iter, albedo_iter=albedo_iter,
+    )
 
     output = list(utils.constant_image_value(output_image).values())[0]
+    # output = list(utils.point_image_value(output_image, [lon, lat], 30).values())[0]
     logging.debug('\n  Target values: {}'.format(expected))
     logging.debug('  Output values: {}'.format(output))
     assert abs(output - expected) <= tol

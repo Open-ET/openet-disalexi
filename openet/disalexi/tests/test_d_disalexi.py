@@ -29,11 +29,10 @@ img_time = 17 + 5.0 / 60
 test_img = ee.Image([
     ee.Image(asset_ws + 'albedo'),
     ee.Image(asset_ws + 'cfmask'),
-    ee.Image(asset_ws + 'lst'),
     ee.Image(asset_ws + 'ndvi')
 ])
 test_img = ee.Image(test_img \
-    .rename(['albedo', 'cfmask', 'lst', 'ndvi']) \
+    .rename(['albedo', 'cfmask', 'ndvi']) \
     .set({'system:time_start': img_time_start,
           'system:index': 'LC08_028031_20140708',
           'system:id': 'LC08_028031_20140708'}))
@@ -266,7 +265,7 @@ def test_Image_set_landcover_vars_set_asset(tol=1E-6):
 #         elevation_source=ee.Image.constant(350.0),
 #         landcover_source='NLCD2011',
 #         albedo_iterations=iterations,
-#         stabil_iterations=iterations,
+#         stability_iterations=iterations,
 #     )
 #
 #     # Overwrite the default ancillary images with the test assets
@@ -320,7 +319,7 @@ def test_Image_set_landcover_vars_set_asset(tol=1E-6):
 #         test_img,
 #         elevation_source=ee.Image.constant(350.0),
 #         albedo_iterations=iterations,
-#         stabil_iterations=iterations,
+#         stability_iterations=iterations,
 #         landcover_source='NLCD2011',
 #     )
 #
@@ -502,7 +501,7 @@ def test_Image_set_landcover_vars_set_asset(tol=1E-6):
 #
 #     # Initialize the Landsat collection (with a single image)
 #     landsat_coll = ee.ImageCollection(
-#         ee.Image('LANDSAT/LC08/C01/T1_TOA/LC08_043033_20150805'))
+#         ee.Image('LANDSAT/LC08/C01/T1_SR/LC08_043033_20150805'))
 #
 #     # Prep each image in the Landsat collection
 #     def run_prep(img):
