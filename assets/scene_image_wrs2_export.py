@@ -724,6 +724,17 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
                         input('ENTER')
                         continue
 
+                if ('alexi_source' in model_args.keys() and
+                        type(model_args['alexi_source']) is str and
+                        model_args['alexi_source'].upper() == 'CONUS_V003'):
+                    alexi_coll_id = 'projects/disalexi/alexi/CONUS_V003'
+                    alexi_coll = ee.ImageCollection(alexi_coll_id) \
+                        .filterDate(image_date, next_date)
+                    if alexi_coll.size().getInfo() == 0:
+                        logging.info('    No ALEXI image in source, skipping')
+                        input('ENTER')
+                        continue
+
                 # CGM: We could pre-compute (or compute once and then save)
                 #   the crs, transform, and shape since they should (will?) be
                 #   the same for each wrs2 tile
