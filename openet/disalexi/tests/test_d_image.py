@@ -179,8 +179,8 @@ def test_Image_init_date_properties():
 @pytest.mark.parametrize(
     'source, xy, expected',
     [
-        ['CONUS_V003', TEST_POINT, 298.4269785619036],
-        ['CONUS_V003', [-121.50822, 38.71776], 300.36076433814867],
+        ['CONUS_V003', TEST_POINT, 298.1013811163322],
+        ['CONUS_V003', [-121.50822, 38.71776], 300.04066476402267],
         # ['CONUS_V001', TEST_POINT, 297.58],
         [ee.Image('USGS/SRTMGL1_003').multiply(0).add(10), TEST_POINT, 10],
         ['294.8', TEST_POINT, 294.8],  # Check constant values
@@ -200,7 +200,7 @@ def test_Image_ta_smooth_flag(tol=0.01):
     m = disalexi.Image(default_image(), ta_source='CONUS_V003',
                        ta_smooth_flag=False)
     output = utils.point_image_value(ee.Image(m.ta), TEST_POINT)
-    assert abs(output['ta'] - 298.427) <= tol
+    assert abs(output['ta'] - 298.1013811163322) <= tol
 
 
 def test_Image_ta_interp_flag(tol=0.01):
@@ -370,6 +370,7 @@ def test_Image_pressure_daily_band_name():
 @pytest.mark.parametrize(
     'source, xy, expected',
     [
+        ['CFSR', TEST_POINT, 8589.406133874349],
         ['MERRA2', TEST_POINT, 8587.4091796875],
         [ee.Image('USGS/SRTMGL1_003').multiply(0).add(10), TEST_POINT, 10],
         ['8587.4091796875', TEST_POINT, 8587.4091796875],
@@ -396,7 +397,8 @@ def test_Image_rs_daily_band_name():
 @pytest.mark.parametrize(
     'source, xy, expected',
     [
-        ['MERRA2', TEST_POINT, 946.6906],
+        ['CFSR', TEST_POINT, 936.7536],
+        # ['MERRA2', TEST_POINT, 946.6906],
         [ee.Image('USGS/SRTMGL1_003').multiply(0).add(10), TEST_POINT, 10],
         ['946.6906', TEST_POINT, 946.6906],
         [946.6906, TEST_POINT, 946.6906],
@@ -410,16 +412,16 @@ def test_Image_rs_hourly_source(source, xy, expected, tol=0.0001):
 
 def test_Image_rs_hourly_interp(tol=0.001):
     output = utils.point_image_value(disalexi.Image(
-        default_image(), rs_hourly_source='MERRA2',
+        default_image(), rs_hourly_source='CFSR',
         rs_interp_flag=True).rs1, TEST_POINT)
-    assert abs(output['rs'] - 946.6906) <= tol
+    assert abs(output['rs'] - 936.7536) <= tol
 
 
 def test_Image_rs_hourly_no_interp(tol=0.001):
     output = utils.point_image_value(disalexi.Image(
-        default_image(), rs_hourly_source='MERRA2',
+        default_image(), rs_hourly_source='CFSR',
         rs_interp_flag=False).rs1, TEST_POINT)
-    assert abs(output['rs'] - 929.75) <= tol
+    assert abs(output['rs'] - 936.7536) <= tol
 
 
 def test_Image_rs_hourly_source_exception():
@@ -458,7 +460,7 @@ def test_Image_windspeed_band_name():
     assert output == 'windspeed'
 
 
-def test_Image_et_default_values(expected=5.900447866344607, tol=0.0001):
+def test_Image_et_default_values(expected=5.702390169392773, tol=0.0001):
     output = utils.point_image_value(default_image_obj().et, TEST_POINT)
     assert abs(output['et'] - expected) <= tol
 
