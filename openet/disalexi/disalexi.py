@@ -523,6 +523,7 @@ class Image(object):
             alexi_coll_id = 'projects/disalexi/alexi/CONUS_V003'
             alexi_coll = ee.ImageCollection(alexi_coll_id) \
                 .filterDate(self.start_date, self.end_date)
+            # TODO: Check if collection size is 0
             alexi_img = ee.Image(alexi_coll.first()) \
                 .multiply(0.408)
             # self.alexi_geo = [0.04, 0, -125.04, 0, -0.04, 49.8]
@@ -1381,6 +1382,7 @@ class Image(object):
                 datetime=self.datetime, lat=self.lat, lon=self.lon,
                 stabil_iter=self.stabil_iter, albedo_iter=self.albedo_iter,
             )
+
             # Aggregate the Landsat scale ET up to the ALEXI scale
             et_coarse = ee.Image(et_fine) \
                 .reproject(crs=self.crs, crsTransform=self.transform) \
@@ -1389,8 +1391,11 @@ class Image(object):
                 .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)
             et_agg = ee.Image(et_fine) \
                 .reproject(crs=self.crs, crsTransform=self.transform) \
-                .reduceResolution(reducer=ee.Reducer.count().combine(reducer2=ee.Reducer.countEvery(),outputPrefix="all",sharedInputs= False),
-                                    maxPixels = 30000)\
+                .reduceResolution(reducer=ee.Reducer.count()
+                                      .combine(reducer2=ee.Reducer.countEvery(),
+                                               outputPrefix='all',
+                                               sharedInputs=False),
+                                  maxPixels=30000)\
                 .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)
             et_perc = et_agg.select(['et_count']).divide(et_agg.select(['et_allcount']))
             et_mask = et_perc.gt(threshold)
