@@ -1033,7 +1033,7 @@ def ta_min_bias(input_img):
     bias_bands = input_img.select('step_\\d+_bias').bandNames().reverse()
     ta_array = input_img.select(ta_bands).toArray()
     bias_array = input_img.select(bias_bands).toArray()
-    #Yun Assign the bias that are very similar a very large value that they will not be selected
+    #Assign the bias that are very similar a very large value that they will not be selected
     diff = bias_array.arraySlice(0,1).subtract(bias_array.arraySlice(0,0,-1))
     bias_array_mask = diff.abs().lt(0.001)
     #repeat the last value to make the array the same length. array is reversed order.

@@ -702,20 +702,20 @@ class Image(object):
             # Select the Ta image with the minimum bias
             ta_array = input_img.select('step_\\d+_ta').toArray()
             bias_array = input_img.select('step_\\d+_bias').toArray()
-            index = bias_array.abs().multiply(-1).arrayArgmax() \
+            diff = bias_array.arraySlice(0, 1).subtract(bias_array.arraySlice(0, 0, -1))
+            bias_array_mask = diff.abs().lt(0.001)
+            #make the array the same length by repeating the first value
+            bias_array_mask = bias_array_mask.arraySlice(0, 0, 1).arrayCat(bias_array_mask, 0)
+            bias_array_new = bias_array.add(bias_array_mask.multiply(99))
+            index = bias_array_new.abs().multiply(-1).arrayArgmax() \
                 .arraySlice(0, 0, 1).arrayFlatten([['array']])
             ta_img = ta_array.arrayGet(index)
 
-            # Yun add interpolation
-            if self.ta_interp_flag:
-                bias_img_1 = bias_array.arrayGet(index)
-                # CGM - Hardcoding the 12 here is probably a bad idea since the
-                #   number of steps/bands in the Ta image can change
-                bias_img_2 = bias_array.arrayGet(index.add(1).clamp(0, 12))
-                ta_img = bias_img_1.multiply(-1)\
-                    .divide(bias_img_2.subtract(bias_img_1)).add(ta_img)
-
-            # CGM - Should there be smoothing applied here also like in V003?
+            if self.ta_smooth_flag:
+                ta_img = ta_img.focal_mean(2,'circle','pixels')\
+                    .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)\
+                    .resample('bilinear')\
+                    .reproject(crs=self.crs,crsTransform=self.transform)
 
         elif self.ta_source.upper() == 'CONUS_V003':
             ta_coll_id = 'projects/disalexi/ta/CONUS_V003_1K'
@@ -738,13 +738,6 @@ class Image(object):
             ta_img = ta_array.arrayGet(index)
 
             if self.ta_smooth_flag:
-                # Yun just a very slight smooth, should not change the value much
-                # CGM - Does this focal_mean call do anything since the Ta assets
-                #   have a ~4km cellsize?  The values are identical in the tests.
-                #ta_img = ta_img \
-                #    .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo) \
-                #    .focal_mean(500, 'square', 'meters')\
-                #    .reproject(crs=self.crs, crsTransform=self.transform)
                 ta_img = ta_img.focal_mean(2,'circle','pixels')\
                     .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)\
                     .resample('bilinear')\
@@ -759,11 +752,20 @@ class Image(object):
             # Select the Ta image with the minimum bias
             ta_array = input_img.select('step_\\d+_ta').toArray()
             bias_array = input_img.select('step_\\d+_bias').toArray()
-            index = bias_array.abs().multiply(-1).arrayArgmax() \
+            diff = bias_array.arraySlice(0, 1).subtract(bias_array.arraySlice(0, 0, -1))
+            bias_array_mask = diff.abs().lt(0.001)
+            #make the array the same length by repeating the first value
+            bias_array_mask = bias_array_mask.arraySlice(0, 0, 1).arrayCat(bias_array_mask, 0)
+            bias_array_new = bias_array.add(bias_array_mask.multiply(99))
+            index = bias_array_new.abs().multiply(-1).arrayArgmax() \
                 .arraySlice(0, 0, 1).arrayFlatten([['array']])
             ta_img = ta_array.arrayGet(index)
 
-            # CGM - Should there be smoothing applied here also like in V003?
+            if self.ta_smooth_flag:
+                ta_img = ta_img.focal_mean(2,'circle','pixels')\
+                    .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)\
+                    .resample('bilinear')\
+                    .reproject(crs=self.crs,crsTransform=self.transform)
 
         else:
             raise ValueError('Unsupported ta_source: {}\n'.format(
