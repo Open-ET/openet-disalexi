@@ -1033,6 +1033,12 @@ def ta_min_bias(input_img):
     bias_bands = input_img.select('step_\\d+_bias').bandNames().reverse()
     ta_array = input_img.select(ta_bands).toArray()
     bias_array = input_img.select(bias_bands).toArray()
+    #Yun Assign the bias that are very similar a very large value that they will not be selected
+    diff = bias_array.arraySlice(0,1).subtract(bias_array.arraySlice(0,0,-1))
+    bias_array_mask = diff.abs().lt(0.001)
+    #repeat the last value to make the array the same length. array is reversed order.
+    bias_array_mask = bias_array_mask.arrayCat(bias_array_mask.arraySlice(0,-1),0)
+    bias_array = bias_array.add(bias_array_mask.multiply(99))
 
     # Identify the "last" transition from a negative to positive bias
     # CGM - Having problems with .ceil() limiting result to the image data range
