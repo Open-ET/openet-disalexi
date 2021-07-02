@@ -107,9 +107,10 @@ def main(overwrite_flag=False, gee_key_file=None, reverse_flag=False,
 
 
     # Get current running tasks
+    logging.info('\nRequesting Task List')
     tasks = utils.get_ee_tasks()
     if logging.getLogger().getEffectiveLevel() == logging.DEBUG:
-        utils.print_ee_tasks()
+        utils.print_ee_tasks(tasks)
         input('ENTER')
 
 
