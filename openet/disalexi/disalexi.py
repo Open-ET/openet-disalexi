@@ -537,7 +537,7 @@ class Image(object):
             raise ValueError('unsupported alexi_source: {}'.format(
                 self.alexi_source))
 
-        return alexi_img.rename(['et_alexi'])
+        return alexi_img.max(0.1).rename(['et_alexi'])
 
     @lazy_property
     def elevation(self):
