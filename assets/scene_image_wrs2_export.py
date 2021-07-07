@@ -376,18 +376,26 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
 
 
     # Get current running tasks
-    logging.info('\nRequesting Task List')
-
-    tasks = utils.get_ee_tasks()
-    if logging.getLogger().getEffectiveLevel() == logging.DEBUG:
-        utils.print_ee_tasks()
-        input('ENTER')
-    ready_task_count = len(tasks.keys())
-    logging.info(f'  Tasks: {ready_task_count}')
-    # CGM - I'm still not sure if it makes sense to hold here or after the
-    #   first task is started.
-    ready_task_count = delay_task(
-        delay_time=0, task_max=ready_task_max, task_count=ready_task_count)
+    if ready_task_max == -9999:
+        # CGM - Getting the task list can take awhile so set ready tasks to
+        #   -9999 to skip requesting it.  Only run this if you are going to
+        #   manually avoid running existing tasks.
+        # TODO: Check if this should disable delay_task() or set the
+        #   ready_task_max to a large value
+        tasks = {}
+        ready_task_count = 0
+    else:
+        logging.info('\nRequesting Task List')
+        tasks = utils.get_ee_tasks()
+        if logging.getLogger().getEffectiveLevel() == logging.DEBUG:
+            utils.print_ee_tasks(tasks)
+            input('ENTER')
+        ready_task_count = len(tasks.keys())
+        logging.info(f'  Tasks: {ready_task_count}')
+        # CGM - I'm still not sure if it makes sense to hold here or after the
+        #   first task is started.
+        ready_task_count = delay_task(
+            delay_time=0, task_max=ready_task_max, task_count=ready_task_count)
 
 
     if not ee.data.getInfo(export_coll_id.rsplit('/', 1)[0]):
@@ -1033,6 +1041,12 @@ def ta_min_bias(input_img):
     bias_bands = input_img.select('step_\\d+_bias').bandNames().reverse()
     ta_array = input_img.select(ta_bands).toArray()
     bias_array = input_img.select(bias_bands).toArray()
+    #Assign the bias that are very similar a very large value that they will not be selected
+    diff = bias_array.arraySlice(0,1).subtract(bias_array.arraySlice(0,0,-1))
+    bias_array_mask = diff.abs().lt(0.001)
+    #repeat the last value to make the array the same length. array is reversed order.
+    bias_array_mask = bias_array_mask.arrayCat(bias_array_mask.arraySlice(0,-1),0)
+    bias_array = bias_array.add(bias_array_mask.multiply(99))
 
     # Identify the "last" transition from a negative to positive bias
     # CGM - Having problems with .ceil() limiting result to the image data range
