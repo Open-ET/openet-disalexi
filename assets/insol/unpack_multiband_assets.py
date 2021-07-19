@@ -9,7 +9,8 @@ import openet.core.utils as utils
 
 
 def main(overwrite_flag=False, gee_key_file=None, reverse_flag=False,
-         start_dt=None, end_dt=None, daily_flag=True, hourly_flag=False):
+         recent_days=0, start_dt=None, end_dt=None,
+         daily_flag=True, hourly_flag=False):
     """Unpack multiband insol assets
 
     Parameters
@@ -20,6 +21,10 @@ def main(overwrite_flag=False, gee_key_file=None, reverse_flag=False,
         Earth Engine service account JSON key file (the default is None).
     reverse_flag : bool, optional
         If True, process dates in reverse order (the default is False).
+    recent_days : int, optional
+        Limit start/end date range to this many days before the current date
+        (the default is 0 which is equivalent to not setting the parameter and
+         will use the INI start/end date directly).
     start_dt : datetime, optional
         Override the start date in the INI file
         (the default is None which will use the INI start date).
@@ -52,7 +57,16 @@ def main(overwrite_flag=False, gee_key_file=None, reverse_flag=False,
     # export_transform = export_info['bands][0]['crs_transform']
     # export_shape = '{0}x{1}'.format(*export_info['bands][0]['dimensions'])
 
-    if start_dt and end_dt:
+    today_dt = datetime.datetime.now()
+    today_dt = today_dt.replace(hour=0, minute=0, second=0, microsecond=0)
+    if recent_days:
+        logging.info('\nOverriding INI "start_date" and "end_date" parameters')
+        logging.info('  Recent days: {}'.format(recent_days))
+        end_dt = today_dt - datetime.timedelta(days=1)
+        start_dt = today_dt - datetime.timedelta(days=recent_days)
+        start_date = start_dt.strftime('%Y-%m-%d')
+        end_date = end_dt.strftime('%Y-%m-%d')
+    elif start_dt and end_dt:
         logging.info('\nUser defined date range')
         start_date = start_dt.strftime('%Y-%m-%d')
         # Make end date exclusive for filterDate call
@@ -291,13 +305,17 @@ def arg_parse():
         '--overwrite', default=False, action='store_true',
         help='Force overwrite of existing files')
     parser.add_argument(
+        '--recent', default=0, type=int,
+        help='Number of days to process before current date '
+             '(ignore INI start_date and end_date')
+    parser.add_argument(
         '--reverse', default=False, action='store_true',
         help='Process dates in reverse order')
     parser.add_argument(
-        '-s', '--start', type=utils.arg_valid_date, metavar='DATE', default=None,
+        '--start', type=utils.arg_valid_date, metavar='DATE', default=None,
         help='Start date (format YYYY-MM-DD)')
     parser.add_argument(
-        '-e', '--end', type=utils.arg_valid_date, metavar='DATE', default=None,
+        '--end', type=utils.arg_valid_date, metavar='DATE', default=None,
         help='End date (format YYYY-MM-DD)')
     args = parser.parse_args()
 
@@ -311,5 +329,6 @@ if __name__ == "__main__":
     logging.getLogger('googleapiclient').setLevel(logging.ERROR)
 
     main(overwrite_flag=args.overwrite, gee_key_file=args.key,
-         reverse_flag=args.reverse, start_dt=args.start, end_dt=args.end,
+         reverse_flag=args.reverse, recent_days=args.recent,
+         start_dt=args.start, end_dt=args.end,
     )
