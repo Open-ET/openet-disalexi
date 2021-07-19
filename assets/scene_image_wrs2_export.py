@@ -1422,10 +1422,10 @@ def arg_parse():
     parser.add_argument(
         '--ready', default=-1, type=int,
         help='Maximum number of queued READY tasks')
-    # parser.add_argument(
-    #     '--recent', default=0, type=int,
-    #     help='Number of days to process before current date '
-    #          '(ignore INI start_date and end_date')
+    parser.add_argument(
+        '--recent', default=0, type=int,
+        help='Number of days to process before current date '
+             '(ignore INI start_date and end_date')
     parser.add_argument(
         '--reverse', default=False, action='store_true',
         help='Process WRS2 tiles in reverse order')
@@ -1455,5 +1455,5 @@ if __name__ == "__main__":
     main(ini_path=args.ini, overwrite_flag=args.overwrite,
          delay_time=args.delay, gee_key_file=args.key, ready_task_max=args.ready,
          reverse_flag=args.reverse, tiles=args.tiles, update_flag=args.update,
-         recent_days=0, start_dt=args.start, end_dt=args.end,
+         recent_days=args.recent, start_dt=args.start, end_dt=args.end,
     )
