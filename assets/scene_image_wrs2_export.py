@@ -715,7 +715,8 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
                         sharpen_version = tir_info['properties']['sharpen_version']
                     except:
                         logging.info('    No TIR image in source, skipping')
-                        input('ENTER')
+                        time.sleep(2)
+                        # input('ENTER')
                         continue
 
                 if ('lai_source' in model_args.keys() and
@@ -729,7 +730,8 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
                         landsat_lai_version = lai_info['properties']['landsat_lai_version']
                     except:
                         logging.info('    No LAI image in source, skipping')
-                        input('ENTER')
+                        time.sleep(2)
+                        # input('ENTER')
                         continue
 
                 if ('alexi_source' in model_args.keys() and
@@ -740,7 +742,8 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
                         .filterDate(image_date, next_date)
                     if alexi_coll.size().getInfo() == 0:
                         logging.info('    No ALEXI image in source, skipping')
-                        input('ENTER')
+                        time.sleep(2)
+                        # input('ENTER')
                         continue
 
                 # CGM: We could pre-compute (or compute once and then save)
