@@ -11,6 +11,7 @@ import re
 import time
 
 import ee
+from google.cloud import datastore
 
 import openet.disalexi
 import openet.core
@@ -356,23 +357,22 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
         ee.Initialize()
 
 
-    # # DEADBEEF
-    # # TODO: set datastore key file as a parameter?
-    # datastore_key_file = 'openet-dri-datastore.json'
-    # if log_tasks and not os.path.isfile(datastore_key_file):
-    #     logging.info('\nTask logging disabled, datastore key does not exist')
-    #     log_tasks = False
-    #     # input('ENTER')
-    # if log_tasks:
-    #     logging.info('\nInitializing task datastore client')
-    #     # TODO: Move to top and add to requirements.txt and environment.yaml
-    #     from google.cloud import datastore
-    #     try:
-    #         datastore_client = datastore.Client.from_service_account_json(
-    #             datastore_key_file)
-    #     except Exception as e:
-    #         logging.error('{}'.format(e))
-    #         return False
+    # TODO: set datastore key file as a parameter?
+    datastore_key_file = 'openet-dri-datastore.json'
+    if log_tasks and not os.path.isfile(datastore_key_file):
+        logging.info('\nTask logging disabled, datastore key does not exist')
+        log_tasks = False
+        # input('ENTER')
+    if log_tasks:
+        logging.info('\nInitializing task datastore client')
+        # TODO: Move to top and add to requirements.txt and environment.yaml
+        from google.cloud import datastore
+        try:
+            datastore_client = datastore.Client.from_service_account_json(
+                datastore_key_file)
+        except Exception as e:
+            logging.error('{}'.format(e))
+            return False
 
 
     # Get current running tasks
@@ -871,32 +871,31 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
                 # # Not using ee_task_start since it doesn't return the task object
                 # utils.ee_task_start(task)
 
-                # DEADBEEF
-                # # Write the export task info the openet-dri project datastore
-                # if log_tasks:
-                #     logging.debug('    Writing datastore entity')
-                #     try:
-                #         task_obj = datastore.Entity(key=datastore_client.key(
-                #             'Task', task.status()['id']),
-                #             exclude_from_indexes=['properties'])
-                #         for k, v in task.status().items():
-                #             task_obj[k] = v
-                #         # task_obj['date'] = datetime.datetime.today() \
-                #         #     .strftime('%Y-%m-%d')
-                #         task_obj['index'] = properties.pop('wrs2_tile')
-                #         # task_obj['wrs2_tile'] = properties.pop('wrs2_tile')
-                #         task_obj['model_name'] = properties.pop('model_name')
-                #         # task_obj['model_version'] = properties.pop('model_version')
-                #         task_obj['runtime'] = 0
-                #         task_obj['start_timestamp_ms'] = 0
-                #         task_obj['tool_name'] = properties.pop('tool_name')
-                #         task_obj['properties'] = json.dumps(properties)
-                #         datastore_client.put(task_obj)
-                #     except Exception as e:
-                #         # CGM - The message/handling will probably need to be updated
-                #         #   We may want separate try/excepts on the create and the put
-                #         logging.warning('\nDatastore entity was not written')
-                #         logging.warning('{}\n'.format(e))
+                # Write the export task info the openet-dri project datastore
+                if log_tasks:
+                    logging.debug('    Writing datastore entity')
+                    try:
+                        task_obj = datastore.Entity(key=datastore_client.key(
+                            'Task', task.status()['id']),
+                            exclude_from_indexes=['properties'])
+                        for k, v in task.status().items():
+                            task_obj[k] = v
+                        # task_obj['date'] = datetime.datetime.today() \
+                        #     .strftime('%Y-%m-%d')
+                        task_obj['index'] = properties.pop('wrs2_tile')
+                        # task_obj['wrs2_tile'] = properties.pop('wrs2_tile')
+                        task_obj['model_name'] = properties.pop('model_name')
+                        # task_obj['model_version'] = properties.pop('model_version')
+                        task_obj['runtime'] = 0
+                        task_obj['start_timestamp_ms'] = 0
+                        task_obj['tool_name'] = properties.pop('tool_name')
+                        task_obj['properties'] = json.dumps(properties)
+                        datastore_client.put(task_obj)
+                    except Exception as e:
+                        # CGM - The message/handling will probably need to be updated
+                        #   We may want separate try/excepts on the create and the put
+                        logging.warning('\nDatastore entity was not written')
+                        logging.warning('{}\n'.format(e))
 
                 # Pause before starting the next export task
                 ready_task_count += 1
