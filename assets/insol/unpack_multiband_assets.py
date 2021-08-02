@@ -44,18 +44,26 @@ def main(overwrite_flag=False, gee_key_file=None, reverse_flag=False,
     # input_coll_id = 'projects/disalexi/insol_data/GLOBAL_V001'
 
     daily_coll_id = 'projects/earthengine-legacy/assets/' \
-                    'projects/disalexi/insol_data/global_v001_daily'
+                    'projects/disalexi/insol_data/global_v001_daily_conus'
     hourly_coll_id = 'projects/earthengine-legacy/assets/' \
-                     'projects/disalexi/insol_data/global_v001_hourly'
+                     'projects/disalexi/insol_data/global_v001_hourly_conus'
 
+    resample_method = 'bicubic'
+    utc_offset = 6
+
+    # Project to ALEXI projection/shape/domain
     export_crs = 'EPSG:4326'
-    export_transform = [0.25, 0, -180, 0, -0.25, 90]
-    export_shape = '1440x720'
-    # export_info = ee.Image(ee.ImageCollection(input_coll_id).first())\
-    #     .select([0]).getInfo()
-    # export_crs = export_info['bands][0]['crs']
-    # export_transform = export_info['bands][0]['crs_transform']
-    # export_shape = '{0}x{1}'.format(*export_info['bands][0]['dimensions'])
+    export_transform = [0.04, 0, -125.04, 0, -0.04, 49.8]
+    export_shape = '1456x625'
+
+    # export_crs = 'EPSG:4326'
+    # export_transform = [0.25, 0, -180, 0, -0.25, 90]
+    # export_shape = '1440x720'
+    # # export_info = ee.Image(ee.ImageCollection(input_coll_id).first())\
+    # #     .select([0]).getInfo()
+    # # export_crs = export_info['bands][0]['crs']
+    # # export_transform = export_info['bands][0]['crs_transform']
+    # # export_shape = '{0}x{1}'.format(*export_info['bands][0]['dimensions'])
 
     today_dt = datetime.datetime.now()
     today_dt = today_dt.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -139,12 +147,17 @@ def main(overwrite_flag=False, gee_key_file=None, reverse_flag=False,
         logging.debug('\nExporting daily assets')
         for input_id in sorted(input_id_list, reverse=reverse_flag):
             logging.info(f'{input_id}')
+            export_dt = datetime.datetime.strptime(input_id, '%Y%j')
+            logging.debug(f'  {export_dt}')
+
             input_img_id = f'{input_coll_id}/{input_id}'
             input_img = ee.Image(input_img_id)
             logging.debug(f'  {input_img_id}')
 
-            export_dt = datetime.datetime.strptime(input_id, '%Y%j')
-            logging.debug(f'  {export_dt}')
+            next_id = (export_dt + datetime.timedelta(days=1)).strftime('%Y%j')
+            next_img_id = f'{input_coll_id}/{next_id}'
+            next_img = ee.Image(next_img_id)
+            logging.debug(f'  {next_id}')
 
             image_id = f'{daily_coll_id}/{export_dt.strftime("%Y%m%d")}'
             logging.debug(f'  {image_id}')
@@ -173,16 +186,34 @@ def main(overwrite_flag=False, gee_key_file=None, reverse_flag=False,
                     logging.info('  Asset already exists, skipping')
                     continue
 
+            if utc_offset > 0:
+                input_img = input_img\
+                    .select(list(range(utc_offset, 24)))\
+                    .addBands(next_img.select(list(range(utc_offset))))
+                # print(input_img.bandNames().getInfo())
+                # input('ENTER')
+            elif utc_offset == 0:
+                pass
+            else:
+                raise ValueError('Negative utc_offsets are not supported')
+
             # Sum the hourly bands to daily
             output_img = input_img.reduce(ee.Reducer.sum()) \
-                .rename(['rs']) \
-                .toInt16() \
-                .set({'system:time_start': utils.millis(export_dt),
-                      'date_ingested': input_img.get('DATE_INGESTED'),
-                      'insolation_version': input_img.get('INSOLATION_VERSION'),
-                      'doy': export_dt.strftime('%j'),
-                      'units': 'W m-2',
-                      })
+                .rename(['rs']).toInt16()
+
+            if resample_method != 'nearest':
+                output_img = output_img.resample('bicubic')
+                #     .reproject(crs=export_crs, crsTransform=export_transform)
+
+            output_img = output_img.set({
+                'system:time_start': utils.millis(export_dt),
+                'date_ingested': input_img.get('DATE_INGESTED'),
+                'doy': export_dt.strftime('%j'),
+                'insolation_version': input_img.get('INSOLATION_VERSION'),
+                'resample_method': resample_method,
+                'units': 'W m-2',
+                'utc_offset': utc_offset,
+            })
 
             task = ee.batch.Export.image.toAsset(
                 image=output_img,
