@@ -143,6 +143,9 @@ def main(overwrite_flag=False, gee_key_file=None, reverse_flag=False,
         asset_props = {
             f'{daily_coll_id}/{x["properties"]["system:index"]}': x['properties']
             for x in utils.get_info(asset_coll)['features']}
+        # pprint.pprint(asset_props)
+        # pprint.pprint(asset_props.keys())
+        # input('ENTER')
 
         logging.debug('\nExporting daily assets')
         for input_id in sorted(input_id_list, reverse=reverse_flag):
@@ -157,7 +160,7 @@ def main(overwrite_flag=False, gee_key_file=None, reverse_flag=False,
             next_id = (export_dt + datetime.timedelta(days=1)).strftime('%Y%j')
             next_img_id = f'{input_coll_id}/{next_id}'
             next_img = ee.Image(next_img_id)
-            logging.debug(f'  {next_id}')
+            logging.debug(f'  {next_img_id}')
 
             image_id = f'{daily_coll_id}/{export_dt.strftime("%Y%m%d")}'
             logging.debug(f'  {image_id}')

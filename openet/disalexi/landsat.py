@@ -327,7 +327,7 @@ class Landsat_C02_SR(Landsat):
 
     @lazy_property
     def _cfmask(self, cirrus_flag=False, dilate_flag=False,
-                shadow_flag=True, snow_flag=False,
+                shadow_flag=True, snow_flag=True,
                 ):
         """Extract cloud mask from the Landsat Collection 2 SR QA_PIXEL band
 
@@ -344,7 +344,7 @@ class Landsat_C02_SR(Landsat):
         shadow_flag : bool
             If true, mask shadow pixels (the default is True).
         snow_flag : bool
-            If true, mask snow pixels (the default is False).
+            If true, mask snow pixels (the default is True).
 
         Returns
         -------
