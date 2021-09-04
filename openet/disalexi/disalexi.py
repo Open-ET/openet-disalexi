@@ -1,6 +1,7 @@
 # from builtins import input
 # import datetime
 import pprint
+import re
 
 import ee
 # import numpy as np
@@ -718,7 +719,7 @@ class Image(object):
                     .reproject(crs=self.crs,crsTransform=self.transform)
 
         elif self.ta_source.upper() == 'CONUS_V003':
-            ta_coll_id = 'projects/disalexi/ta/CONUS_V003_1K'
+            ta_coll_id = 'projects/openet/disalexi/tair/conus_v003_1k'
             ta_coll = ee.ImageCollection(ta_coll_id) \
                 .filterMetadata('image_id', 'equals', self.id) \
                 .limit(1, 'step_size', False)
@@ -738,10 +739,11 @@ class Image(object):
             ta_img = ta_array.arrayGet(index)
 
             if self.ta_smooth_flag:
-                ta_img = ta_img.focal_mean(2,'circle','pixels')\
+                ta_img = ta_img.focal_mean(2, 'circle', 'pixels')\
                     .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)\
                     .resample('bilinear')\
                     .reproject(crs=self.crs,crsTransform=self.transform)
+
         elif self.ta_source.startswith('projects/disalexi/ta/CONUS_V'):
             # CGM - How can I ensure it is an image collection ID?
             ta_coll = ee.ImageCollection(self.ta_source) \
@@ -762,7 +764,7 @@ class Image(object):
             ta_img = ta_array.arrayGet(index)
 
             if self.ta_smooth_flag:
-                ta_img = ta_img.focal_mean(2,'circle','pixels')\
+                ta_img = ta_img.focal_mean(2, 'circle', 'pixels')\
                     .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)\
                     .resample('bilinear')\
                     .reproject(crs=self.crs,crsTransform=self.transform)
@@ -770,6 +772,8 @@ class Image(object):
         else:
             raise ValueError('Unsupported ta_source: {}\n'.format(
                 self.ta_source))
+
+        # elif re.match('projects/(\w+/)?disalexi/ta/conus_v', self.ta_source, re.I):
 
         return ta_img.rename(['ta']).set(self.properties)
 
