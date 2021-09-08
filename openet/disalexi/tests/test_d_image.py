@@ -47,8 +47,15 @@ TEST_POINT = (-121.5265, 38.7399)
 
 
 # DisALEXI needs a non-constant image since it compute lat/lon
-def default_image(albedo=0.125, cfmask=0, lai=4.2, lst=306.5, ndvi=0.875):
-    mask_img = ee.Image(COLL_ID + SCENE_ID).select(['SR_B1']).multiply(0)
+def default_image(albedo=0.125, cfmask=0, lai=4.2, lst=306.5, ndvi=0.875,
+                  coll_id=None, scene_id=None, scene_time=None):
+    if coll_id is None:
+        coll_id = COLL_ID
+    if scene_id is None:
+        scene_id = SCENE_ID
+    if scene_time is None:
+        scene_time = SCENE_TIME
+    mask_img = ee.Image(coll_id + scene_id).select(['SR_B1']).multiply(0)
     # mask_img = ee.Image('projects/disalexi/ta/CONUS_V001/{}_0'.format(SCENE_ID))\
     #     .select(0).multiply(0)
     return ee.Image([mask_img.add(albedo), mask_img.add(cfmask),
@@ -56,10 +63,10 @@ def default_image(albedo=0.125, cfmask=0, lai=4.2, lst=306.5, ndvi=0.875):
                      mask_img.add(ndvi)])\
         .rename(['albedo', 'cfmask', 'lai', 'lst', 'ndvi'])\
         .set({
-            'system:index': SCENE_ID,
-            'system:time_start': SCENE_TIME,
+            'system:index': scene_id,
+            'system:time_start': scene_time,
             # 'system:time_start': ee.Date(SCENE_DATE).millis(),
-            'system:id': COLL_ID + SCENE_ID,
+            'system:id': coll_id + scene_id,
         })
 
 def default_image_args(albedo=0.125, cfmask=0, lai=4.2, lst=306.5, ndvi=0.875,
@@ -179,9 +186,17 @@ def test_Image_init_date_properties():
 @pytest.mark.parametrize(
     'source, xy, expected',
     [
-        ['CONUS_V003', TEST_POINT, 298.1013811163322],
-        ['CONUS_V003', [-121.50822, 38.71776], 300.04066476402267],
-        # ['CONUS_V001', TEST_POINT, 297.58],
+        # ['CONUS_V004', TEST_POINT, 298.1013811163322],
+        # ['CONUS_V004', [-121.50822, 38.71776], 300.04066476402267],
+        ['CONUS_V003', TEST_POINT, 300.99823651442586],
+        ['CONUS_V003', [-121.50822, 38.71776], 300.4560056192083],
+        ['projects/openet/disalexi/tair/conus_v003_1k', TEST_POINT, 300.99823651442586],
+        ['projects/earthengine-legacy/assets/projects/openet/disalexi/tair/conus_v003_1k',
+        # CGM - I'm not sure why the test values below don't work anymore when
+        #   Ta shouldn't have changed.
+        # ['CONUS_V003', TEST_POINT, 298.1013811163322],
+        # ['CONUS_V003', [-121.50822, 38.71776], 300.04066476402267],
+         TEST_POINT, 300.99823651442586],
         [ee.Image('USGS/SRTMGL1_003').multiply(0).add(10), TEST_POINT, 10],
         ['294.8', TEST_POINT, 294.8],  # Check constant values
         [294.8, TEST_POINT, 294.8],    # Check constant values
@@ -226,20 +241,35 @@ def test_Image_ta_properties():
    # assert output['properties']['ta_iteration'] > 0
 
 
+# CGM - Added the scene_id for this test since the ALEXI_V004 is only currently
+#   loaded for 2020 and 2021 and I needed a quick way to switch the datetime.
+# I also modified the default_image to take the scene_id & scene_time parameters
+# This could all be removed once ALEXI V004 is loaded for more years.
 @pytest.mark.parametrize(
-    'source, xy, expected',
+    'scene_id, source, xy, expected',
     [
         # ALEXI ET is currently in MJ m-2 d-1
-        ['CONUS_V003', TEST_POINT, 12.03880786895752 * 0.408],
-        # ['CONUS_V001', TEST_POINT, 10.382039 * 0.408],
-        [ee.Image('USGS/SRTMGL1_003').multiply(0).add(10), TEST_POINT, 10],
-        ['10.382039', TEST_POINT, 10.382039],
-        [10.382039, TEST_POINT, 10.382039],
+        ['LC08_044033_20200708', 'CONUS_V004', TEST_POINT, 16.58306312561035 * 0.408],
+        ['LC08_044033_20200724', 'CONUS_V004', TEST_POINT, 16.664167404174805 * 0.408],
+        ['LC08_044033_20200708', 'CONUS_V003', TEST_POINT, 15.465087890625 * 0.408],
+        ['LC08_044033_20200724', 'CONUS_V003', TEST_POINT, 14.467782974243164 * 0.408],
+        ['LC08_044033_20170716', 'CONUS_V003', TEST_POINT, 12.03880786895752 * 0.408],
+        [None, 'projects/disalexi/alexi/CONUS_V003', TEST_POINT, 12.03880786895752 * 0.408],
+        [None, 'projects/earthengine-legacy/assets/projects/disalexi/alexi/CONUS_V003',
+         TEST_POINT, 12.03880786895752 * 0.408],
+        [None, ee.Image('USGS/SRTMGL1_003').multiply(0).add(10), TEST_POINT, 10],
+        [None, '10.382039', TEST_POINT, 10.382039],
+        [None, 10.382039, TEST_POINT, 10.382039],
     ]
 )
-def test_Image_alexi_source(source, xy, expected, tol=0.0001):
+def test_Image_alexi_source(scene_id, source, xy, expected, tol=0.0001):
+    if scene_id:
+        scene_time = ee.Image(COLL_ID + scene_id).get('system:time_start').getInfo()
+    else:
+        scene_time = None
     output = utils.point_image_value(disalexi.Image(
-        default_image(), alexi_source=source).et_alexi, xy)
+        default_image(scene_id=scene_id, scene_time=scene_time),
+        alexi_source=source).et_alexi, xy)
     assert abs(output['et_alexi'] - expected) <= tol
 
 

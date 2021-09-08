@@ -413,18 +413,33 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
     # Get an ET image to set the Ta values to
     logging.debug('\nALEXI ET properties')
     alexi_coll_id = model_args['alexi_source']
-    if alexi_coll_id.upper() == 'CONUS_V002':
+    if alexi_coll_id.upper() == 'CONUS_V004':
         alexi_coll_id = 'projects/earthengine-legacy/assets/' \
-                        'projects/disalexi/alexi/CONUS_V002'
+                        'projects/disalexi/alexi/CONUS_V004'
         alexi_mask = ee.Image('projects/earthengine-legacy/assets/'
-                              'projects/disalexi/alexi/conus_v002_mask')\
+                              'projects/disalexi/alexi/conus_v004_mask')\
             .double().multiply(0)
+        alexi_geo = [0.04, 0.0, -125.02, 0.0, -0.04, 49.78]
+        alexi_cs = 0.04
+        alexi_x, alexi_y = -125.02, 49.78
     elif alexi_coll_id.upper() == 'CONUS_V003':
         alexi_coll_id = 'projects/earthengine-legacy/assets/' \
                         'projects/disalexi/alexi/CONUS_V003'
         alexi_mask = ee.Image('projects/earthengine-legacy/assets/'
                               'projects/disalexi/alexi/conus_v002_mask')\
             .double().multiply(0)
+        alexi_geo = [0.04, 0.0, -125.04, 0.0, -0.04, 49.8]
+        alexi_cs = 0.04
+        alexi_x, alexi_y = -125.04, 49.8
+    elif alexi_coll_id.upper() == 'CONUS_V002':
+        alexi_coll_id = 'projects/earthengine-legacy/assets/' \
+                        'projects/disalexi/alexi/CONUS_V002'
+        alexi_mask = ee.Image('projects/earthengine-legacy/assets/'
+                              'projects/disalexi/alexi/conus_v002_mask')\
+            .double().multiply(0)
+        alexi_geo = [0.04, 0.0, -125.04, 0.0, -0.04, 49.8]
+        alexi_cs = 0.04
+        alexi_x, alexi_y = -125.04, 49.8
     else:
         raise ValueError(f'unsupported ALEXI source: {alexi_coll_id}')
     # alexi_coll = ee.ImageCollection(alexi_coll_id)
@@ -432,9 +447,6 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
     # alexi_geo = alexi_proj['transform']
     # alexi_crs = alexi_proj['crs']
     alexi_crs = 'EPSG:4326'
-    alexi_geo = [0.04, 0.0, -125.04, 0.0, -0.04, 49.8]
-    alexi_cs = 0.04
-    alexi_x, alexi_y = -125.04, 49.8
     logging.debug('  Collection: {}'.format(alexi_coll_id))
 
 
@@ -735,9 +747,7 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
                         continue
 
                 if ('alexi_source' in model_args.keys() and
-                        type(model_args['alexi_source']) is str and
-                        model_args['alexi_source'].upper() == 'CONUS_V003'):
-                    alexi_coll_id = 'projects/disalexi/alexi/CONUS_V003'
+                        type(model_args['alexi_source']) is str):
                     alexi_coll = ee.ImageCollection(alexi_coll_id) \
                         .filterDate(image_date, next_date)
                     if alexi_coll.size().getInfo() == 0:
@@ -870,6 +880,7 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
                         time.sleep(i ** 2)
                 # # Not using ee_task_start since it doesn't return the task object
                 # utils.ee_task_start(task)
+                # input('ENTER')
 
                 # Write the export task info the openet-dri project datastore
                 if log_tasks:
