@@ -562,7 +562,7 @@ def test_Image_et_reference_default_values(expected=10.0, tol=0.0001):
 @pytest.mark.parametrize(
     'source, band, xy, expected',
     [
-        ['IDAHO_EPSCOR/GRIDMET', 'etr', TEST_POINT, 10.9],
+        ['IDAHO_EPSCOR/GRIDMET', 'etr', TEST_POINT, 11.2],
         ['projects/climate-engine/cimis/daily', 'ETr_ASCE', TEST_POINT, 10.124],
         ['10.8985', None, TEST_POINT, 10.8985],
         [10.8985, None, TEST_POINT, 10.8985],
@@ -711,11 +711,11 @@ def test_Image_from_landsat_c1_sr_image():
 def test_Image_from_landsat_c1_sr_et():
     """Test if ET can be built for a Landsat images"""
     image_id = 'LANDSAT/LC08/C01/T1_SR/LC08_044033_20170716'
-    # Collection 2 is the default so Collection 1 images need custom inputs
+    # Using the collection 2 inputs since the c01 inputs no longer exist
     output = utils.getinfo(disalexi.Image.from_landsat_c1_sr(
         image_id, ta_source='CONUS_V002',
-        lai_source='projects/earthengine-legacy/assets/projects/openet/lai/landsat/scene',
-        tir_source='projects/earthengine-legacy/assets/projects/openet/tir/landsat/scene',
+        lai_source='projects/earthengine-legacy/assets/projects/openet/lai/landsat/c02',
+        tir_source='projects/earthengine-legacy/assets/projects/openet/tir/landsat/c02',
     ).et)
     assert output['properties']['system:index'] == image_id.split('/')[-1]
 
