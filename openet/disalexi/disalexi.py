@@ -36,8 +36,8 @@ class Image(object):
     def __init__(
             self,
             image,
-            ta_source='CONUS_V003',
-            alexi_source='CONUS_V003',
+            ta_source='CONUS_V004',
+            alexi_source='CONUS_V004',
             lai_source='projects/earthengine-legacy/assets/projects/openet/lai/landsat/c02',
             tir_source='projects/earthengine-legacy/assets/projects/openet/tir/landsat/c02',
             elevation_source='USGS/SRTMGL1_003',
@@ -64,11 +64,11 @@ class Image(object):
         ----------
         image : ee.Image
             Prepped image
-        ta_source : {'CONUS_V003'}
+        ta_source : {'CONUS_V003', 'CONUS_V004'}
             ALEXI scale air temperature image collection ID.
-            The default is 'CONUS_V003'.
-        alexi_source : {'CONUS_V003'}
-            ALEXI ET image collection ID (the default is 'CONUS_V003').
+            The default is 'CONUS_V004'.
+        alexi_source : {'CONUS_V003', 'CONUS_V004'}
+            ALEXI ET image collection ID (the default is 'CONUS_V004').
         lai_source : string
             LAI image collection ID.
         tir_source : string
@@ -315,7 +315,10 @@ class Image(object):
 
         # CGM - This should probably be set in et_alexi() but that wasn't working
         if type(self.alexi_source) is str:
-            if self.alexi_source.upper() == 'CONUS_V003':
+            if self.alexi_source.upper() == 'CONUS_V004':
+                self.alexi_geo = [0.04, 0, -125.02, 0, -0.04, 49.78]
+                self.alexi_crs = 'EPSG:4326'
+            elif self.alexi_source.upper() == 'CONUS_V003':
                 self.alexi_geo = [0.04, 0, -125.04, 0, -0.04, 49.8]
                 self.alexi_crs = 'EPSG:4326'
             elif self.alexi_source.upper() == 'CONUS_V002':
@@ -515,25 +518,30 @@ class Image(object):
         ALEXI ET is converted from MJ m-2 d-1 to mm d-1
 
         """
+        alexi_keyword_sources = {
+            'CONUS_V003': 'projects/disalexi/alexi/CONUS_V003',
+            'CONUS_V004': 'projects/disalexi/alexi/CONUS_V004'
+        }
+        alexi_re = re.compile('(projects/earthengine-legacy/assets/)?'
+                              'projects/disalexi/alexi/CONUS_V\\w+')
+
         if utils.is_number(self.alexi_source):
             # Interpret numbers as constant images
             alexi_img = ee.Image.constant(float(self.alexi_source))
         elif isinstance(self.alexi_source, ee.computedobject.ComputedObject):
             alexi_img = self.alexi_source
-        elif self.alexi_source.upper() == 'CONUS_V003':
-            alexi_coll_id = 'projects/disalexi/alexi/CONUS_V003'
+        elif self.alexi_source.upper() in alexi_keyword_sources.keys():
+            alexi_coll_id = alexi_keyword_sources[self.alexi_source.upper()]
             alexi_coll = ee.ImageCollection(alexi_coll_id) \
                 .filterDate(self.start_date, self.end_date)
             # TODO: Check if collection size is 0
-            alexi_img = ee.Image(alexi_coll.first()) \
-                .multiply(0.408)
+            alexi_img = ee.Image(alexi_coll.first()).multiply(0.408)
             # self.alexi_geo = [0.04, 0, -125.04, 0, -0.04, 49.8]
             # self.alexi_crs = 'EPSG:4326'
-        elif 'projects/disalexi/alexi/CONUS_V' in self.alexi_source:
+        elif alexi_re.match(self.alexi_source):
             alexi_coll = ee.ImageCollection(self.alexi_source) \
                 .filterDate(self.start_date, self.end_date)
-            alexi_img = ee.Image(alexi_coll.first()) \
-                .multiply(0.408)
+            alexi_img = ee.Image(alexi_coll.first()).multiply(0.408)
         else:
             raise ValueError('unsupported alexi_source: {}'.format(
                 self.alexi_source))
@@ -685,6 +693,15 @@ class Image(object):
             Ta image
 
         """
+        ta_keyword_sources = {
+            'CONUS_V002': 'projects/disalexi/ta/CONUS_V002_NLDAS_1K',
+            'CONUS_V003': 'projects/openet/disalexi/tair/conus_v003_1k',
+            'CONUS_V004': 'projects/openet/disalexi/tair/conus_v004_1k'
+        }
+        ta_source_re = re.compile(
+            '(projects/earthengine-legacy/assets/)?'
+            'projects/(\w+/)?disalexi/ta(ir)?/conus_v\d{3}(_\w+)', re.IGNORECASE)
+
         # if self.ta_source is None:
         #     raise ValueError('ta_source must be set to compute et')
         if utils.is_number(self.ta_source):
@@ -693,8 +710,8 @@ class Image(object):
         elif isinstance(self.ta_source, ee.computedobject.ComputedObject):
             ta_img = ee.Image(self.ta_source)
             #     .set({'ta_iteration': 'image'})
-        elif self.ta_source.upper() == 'CONUS_V002':
-            ta_coll_id = 'projects/disalexi/ta/CONUS_V002_NLDAS_1K'
+        elif self.ta_source.upper() in ta_keyword_sources.keys():
+            ta_coll_id = ta_keyword_sources[self.ta_source.upper()]
             ta_coll = ee.ImageCollection(ta_coll_id) \
                 .filterMetadata('image_id', 'equals', self.id) \
                 .limit(1, 'step_size', False)
@@ -705,33 +722,7 @@ class Image(object):
             bias_array = input_img.select('step_\\d+_bias').toArray()
             diff = bias_array.arraySlice(0, 1).subtract(bias_array.arraySlice(0, 0, -1))
             bias_array_mask = diff.abs().lt(0.001)
-            #make the array the same length by repeating the first value
-            bias_array_mask = bias_array_mask.arraySlice(0, 0, 1).arrayCat(bias_array_mask, 0)
-            bias_array_new = bias_array.add(bias_array_mask.multiply(99))
-            index = bias_array_new.abs().multiply(-1).arrayArgmax() \
-                .arraySlice(0, 0, 1).arrayFlatten([['array']])
-            ta_img = ta_array.arrayGet(index)
-
-            if self.ta_smooth_flag:
-                ta_img = ta_img.focal_mean(2,'circle','pixels')\
-                    .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)\
-                    .resample('bilinear')\
-                    .reproject(crs=self.crs,crsTransform=self.transform)
-
-        elif self.ta_source.upper() == 'CONUS_V003':
-            ta_coll_id = 'projects/openet/disalexi/tair/conus_v003_1k'
-            ta_coll = ee.ImageCollection(ta_coll_id) \
-                .filterMetadata('image_id', 'equals', self.id) \
-                .limit(1, 'step_size', False)
-            input_img = ee.Image(ta_coll.first())
-
-            # Select the Ta image with the minimum bias
-            ta_array = input_img.select('step_\\d+_ta').toArray()
-            bias_array = input_img.select('step_\\d+_bias').toArray()
-
-            diff = bias_array.arraySlice(0, 1).subtract(bias_array.arraySlice(0, 0, -1))
-            bias_array_mask = diff.abs().lt(0.001)
-            #make the array the same length by repeating the first value
+            # Make the array the same length by repeating the first value
             bias_array_mask = bias_array_mask.arraySlice(0, 0, 1).arrayCat(bias_array_mask, 0)
             bias_array_new = bias_array.add(bias_array_mask.multiply(99))
             index = bias_array_new.abs().multiply(-1).arrayArgmax() \
@@ -744,7 +735,7 @@ class Image(object):
                     .resample('bilinear')\
                     .reproject(crs=self.crs,crsTransform=self.transform)
 
-        elif self.ta_source.startswith('projects/disalexi/ta/CONUS_V'):
+        elif ta_source_re.match(self.ta_source):
             # CGM - How can I ensure it is an image collection ID?
             ta_coll = ee.ImageCollection(self.ta_source) \
                 .filterMetadata('image_id', 'equals', self.id) \
@@ -756,7 +747,7 @@ class Image(object):
             bias_array = input_img.select('step_\\d+_bias').toArray()
             diff = bias_array.arraySlice(0, 1).subtract(bias_array.arraySlice(0, 0, -1))
             bias_array_mask = diff.abs().lt(0.001)
-            #make the array the same length by repeating the first value
+            # Make the array the same length by repeating the first value
             bias_array_mask = bias_array_mask.arraySlice(0, 0, 1).arrayCat(bias_array_mask, 0)
             bias_array_new = bias_array.add(bias_array_mask.multiply(99))
             index = bias_array_new.abs().multiply(-1).arrayArgmax() \
