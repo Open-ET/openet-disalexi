@@ -36,8 +36,8 @@ class Image(object):
     def __init__(
             self,
             image,
-            ta_source='CONUS_V003',
-            alexi_source='CONUS_V003',
+            ta_source='CONUS_V004',
+            alexi_source='CONUS_V004',
             lai_source='projects/earthengine-legacy/assets/projects/openet/lai/landsat/c02',
             tir_source='projects/earthengine-legacy/assets/projects/openet/tir/landsat/c02',
             elevation_source='USGS/SRTMGL1_003',
