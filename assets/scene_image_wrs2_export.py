@@ -413,7 +413,9 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
     # Get an ET image to set the Ta values to
     logging.debug('\nALEXI ET properties')
     alexi_coll_id = model_args['alexi_source']
-    if alexi_coll_id.upper() == 'CONUS_V004':
+
+    if (alexi_coll_id.upper() == 'CONUS_V004' or
+            alexi_coll_id.endswith('projects/disalexi/alexi/CONUS_V004')):
         alexi_coll_id = 'projects/earthengine-legacy/assets/' \
                         'projects/disalexi/alexi/CONUS_V004'
         alexi_mask = ee.Image('projects/earthengine-legacy/assets/'
