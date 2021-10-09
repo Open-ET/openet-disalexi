@@ -622,15 +622,15 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
                             except:
                                 logging.info('    Error removing asset, skipping')
                                 continue
-                        elif (asset_props[asset_id]['alexi_source'] <
-                              model_args['alexi_source']):
-                            logging.info('    ALEXI source is old, removing')
-                            # input('ENTER')
-                            try:
-                                ee.data.deleteAsset(asset_id)
-                            except:
-                                logging.info('    Error removing asset, skipping')
-                                continue
+                        # elif (asset_props[asset_id]['alexi_source'] <
+                        #       model_args['alexi_source']):
+                        #     logging.info('    ALEXI source is old, removing')
+                        #     # input('ENTER')
+                        #     try:
+                        #         ee.data.deleteAsset(asset_id)
+                        #     except:
+                        #         logging.info('    Error removing asset, skipping')
+                        #         continue
                         # elif (asset_props[asset_id]['date_ingested'] <= '2020-04-27'):
                         #     logging.info('    date_ingested is old, removing')
                         #     # input('ENTER')
