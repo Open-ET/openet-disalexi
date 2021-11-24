@@ -1,5 +1,6 @@
 import argparse
 from builtins import input
+from collections import defaultdict
 import configparser
 import datetime
 import json
@@ -18,12 +19,12 @@ import openet.core
 import openet.core.utils as utils
 
 TOOL_NAME = 'tair_image_wrs2_export'
-TOOL_VERSION = '0.1.7'
+TOOL_VERSION = '0.1.8'
 
 
 def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
          ready_task_max=-1, reverse_flag=False, tiles=None, update_flag=False,
-         log_tasks=True, recent_days=0, start_dt=None, end_dt=None):
+         log_tasks=True, recent_days=None, start_dt=None, end_dt=None):
     """Compute WRS2 Ta images
 
     Parameters
@@ -87,25 +88,8 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
     ]
     wrs2_path_skip_list = [9, 49]
     wrs2_row_skip_list = [25, 24, 43]
-
-    #date_skip_list = [
-    #    '2003-12-15', '2004-12-12', '2004-12-31', '2008-12-31',
-    #    '2009-03-20', '2009-03-21', '2010-04-10', '2011-04-10',
-    #    '2012-04-09', '2012-12-30', '2012-12-31',
-    #    '2013-04-10', '2016-03-28', '2016-12-31',
-    #    '2017-08-02', '2017-10-11', '2017-10-12', '2017-12-12',
-    #    '2017-12-13', '2017-12-14', '2017-12-15', '2017-12-16',
-    #    '2017-12-17', '2017-12-30', '2017-12-31',
-    #    '2018-05-25', '2018-05-26', '2018-05-27', '2018-06-30', '2018-07-01',
-    #    '2018-10-20', '2018-10-21', '2018-10-22', '2018-10-23', '2018-12-22',
-    #    '2018-12-23', '2018-12-24', '2018-12-25', '2018-12-30', '2018-12-31',
-    #    '2019-02-23', '2019-02-24', '2019-04-10', '2019-04-11', '2019-04-25',
-    #    '2019-04-26', '2019-04-27', '2019-10-17', '2019-10-18',
-    #    '2019-10-26', '2019-10-27',
-    #]
-    date_skip_list = []
-
     mgrs_skip_list = []
+    date_skip_list = []
 
     export_id_fmt = '{model}_{index}'
 
@@ -130,7 +114,7 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
         raise ValueError('"et_model" parameter was not set in INI')
     except Exception as e:
         raise e
-    logging.info('  ET Model: {}'.format(model_name))
+    logging.info(f'  ET Model: {model_name}')
 
     try:
         study_area_coll_id = str(ini['INPUTS']['study_area_coll'])
@@ -170,7 +154,7 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
     except Exception as e:
         raise e
 
-    export_coll_id = '{}'.format(ini['EXPORT']['export_coll'])
+    export_coll_id = f'{ini["EXPORT"]["export_coll"]}'
 
     try:
         mgrs_ftr_coll_id = str(ini['EXPORT']['mgrs_ftr_coll'])
@@ -213,7 +197,7 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
         mgrs_tiles = sorted([x.strip() for x in mgrs_tiles.split(',')])
         # CGM - Remove empty strings caused by trailing or extra commas
         mgrs_tiles = [x.upper() for x in mgrs_tiles if x]
-        logging.debug('  mgrs_tiles: {}'.format(mgrs_tiles))
+        logging.debug(f'  mgrs_tiles: {mgrs_tiles}')
     except KeyError:
         mgrs_tiles = []
         logging.debug('  mgrs_tiles: not set in INI, defaulting to []')
@@ -223,7 +207,7 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
     try:
         utm_zones = str(ini['EXPORT']['utm_zones'])
         utm_zones = sorted([int(x.strip()) for x in utm_zones.split(',')])
-        logging.debug('  utm_zones: {}'.format(utm_zones))
+        logging.debug(f'  utm_zones: {utm_zones}')
     except KeyError:
         utm_zones = []
         logging.debug('  utm_zones: not set in INI, defaulting to []')
@@ -235,8 +219,7 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
     # except KeyError:
     #     output_type = 'float'
     #     # output_type = 'int16'
-    #     logging.debug('  output_type: not set in INI, '
-    #                   'defaulting to {}'.format(output_type))
+    #     logging.debug(f'  output_type: not set in INI, defaulting to {output_type}')
     # except Exception as e:
     #     raise e
     #
@@ -245,8 +228,7 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
     # except KeyError:
     #     scale_factor = 1
     #     # scale_factor = 10000
-    #     logging.debug('  scale_factor: not set in INI, '
-    #                   'defaulting to {}'.format(scale_factor))
+    #     logging.debug(f'  scale_factor: not set in INI, defaulting to {scale_factor}')
     # except Exception as e:
     #     raise e
 
@@ -262,18 +244,18 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
     # If the user set the tiles argument, use these instead of the INI values
     if tiles:
         logging.info('\nOverriding INI mgrs_tiles and utm_zones parameters')
-        logging.info('  user tiles: {}'.format(tiles))
+        logging.info(f'  user tiles: {tiles}')
         mgrs_tiles = sorted([y.strip() for x in tiles for y in x.split(',')])
         mgrs_tiles = [x.upper() for x in mgrs_tiles if x]
-        logging.info('  mgrs_tiles: {}'.format(', '.join(mgrs_tiles)))
+        logging.info(f'  mgrs_tiles: {", ".join(mgrs_tiles)}')
         utm_zones = sorted(list(set([int(x[:2]) for x in mgrs_tiles])))
-        logging.info('  utm_zones:  {}'.format(', '.join(map(str, utm_zones))))
+        logging.info(f'  utm_zones:  {", ".join(map(str, utm_zones))}')
 
     today_dt = datetime.datetime.now()
     today_dt = today_dt.replace(hour=0, minute=0, second=0, microsecond=0)
     if recent_days:
         logging.info('\nOverriding INI "start_date" and "end_date" parameters')
-        logging.info('  Recent days: {}'.format(recent_days))
+        logging.info(f'  Recent days: {recent_days}')
         end_dt = today_dt - datetime.timedelta(days=1)
         start_dt = today_dt - datetime.timedelta(days=recent_days)
         start_date = start_dt.strftime('%Y-%m-%d')
@@ -292,18 +274,18 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
             end_dt = datetime.datetime.strptime(end_date, '%Y-%m-%d')
         except Exception as e:
             raise e
-    logging.info('  Start: {}'.format(start_date))
-    logging.info('  End:   {}'.format(end_date))
+    logging.info(f'  Start: {start_date}')
+    logging.info(f'  End:   {end_date}')
 
     # TODO: Add a few more checks on the dates
     if end_dt < start_dt:
         raise ValueError('end date can not be before start date')
 
-    logging.info('\nFilter date range')
+    logging.debug('\nFilter date range')
     iter_start_dt = start_dt
     iter_end_dt = end_dt + datetime.timedelta(days=1)
-    logging.info('  Start: {}'.format(iter_start_dt.strftime('%Y-%m-%d')))
-    logging.info('  End:   {}'.format(iter_end_dt.strftime('%Y-%m-%d')))
+    logging.debug(f'  Start: {iter_start_dt.strftime("%Y-%m-%d")}')
+    logging.debug(f'  End:   {iter_end_dt.strftime("%Y-%m-%d")}')
 
     model_args = {
         k.lower(): float(v) if utils.is_number(v) else v
@@ -349,11 +331,12 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
 
     logging.info('\nInitializing Earth Engine')
     if gee_key_file:
-        logging.info('  Using service account key file: {}'.format(gee_key_file))
+        logging.info(f'  Using service account key file: {gee_key_file}')
         # The "EE_ACCOUNT" parameter is not used if the key file is valid
         ee.Initialize(ee.ServiceAccountCredentials(
             'deadbeef', key_file=gee_key_file))
     else:
+        logging.info(f'  Using user credentials')
         ee.Initialize()
 
 
@@ -371,7 +354,7 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
             datastore_client = datastore.Client.from_service_account_json(
                 datastore_key_file)
         except Exception as e:
-            logging.error('{}'.format(e))
+            logging.error(f'{e}')
             return False
 
 
@@ -449,7 +432,17 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
     # alexi_geo = alexi_proj['transform']
     # alexi_crs = alexi_proj['crs']
     alexi_crs = 'EPSG:4326'
-    logging.debug('  Collection: {}'.format(alexi_coll_id))
+    logging.debug(f'  Collection: {alexi_coll_id}')
+
+
+    # Get list of ALEXI dates (not using the system:index since it is YYYYJJJ)
+    alexi_coll = ee.ImageCollection(alexi_coll_id) \
+        .filterDate(iter_start_dt.strftime('%Y-%m-%d'),
+                    iter_end_dt.strftime('%Y-%m-%d'))
+    def set_date(x):
+        return x.set('date', ee.Date(x.get('system:time_start')).format('yyyy-MM-dd'))
+    alexi_date_list = utils.get_info(alexi_coll.map(set_date).aggregate_array('date'))
+    # alexi_image_id_list = alexi_coll.aggregate_array('system:index').getInfo()
 
 
     # Get list of MGRS tiles that intersect the study area
@@ -472,36 +465,83 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
 
 
     # Process each WRS2 tile separately
-    logging.info('\nImage Exports')
+    logging.debug('\nImage Exports')
     wrs2_tiles = []
     for export_info in sorted(export_list, key=lambda i: i['index'],
                               reverse=reverse_flag):
-        logging.info('{}'.format(export_info['index']))
-        # logging.info('  {} - {}'.format(
+        logging.debug(f'{export_info["index"]}')
+        # logging.debug('  {} - {}'.format(
         #     export_info['index'], ', '.join(export_info['wrs2_tiles'])))
         tile_count = len(export_info['wrs2_tiles'])
         tile_list = sorted(export_info['wrs2_tiles'], reverse=not(reverse_flag))
 
+
+        # TODO: Add error checking for long time periods when number of images
+        #   in getInfo call may exceed 3000 limit
+        # Get the image and asset lists for the full zone
+        # Collection end date is exclusive
+        model_obj = openet.disalexi.Collection(
+            collections=collections,
+            cloud_cover_max=float(ini['INPUTS']['cloud_cover']),
+            start_date=iter_start_dt.strftime('%Y-%m-%d'),
+            end_date=iter_end_dt.strftime('%Y-%m-%d'),
+            geometry=ee.Geometry.Rectangle(export_info['extent'],
+                                           export_info['crs'], False),
+            # model_args={},
+            # filter_args=filter_args,
+        )
+        logging.debug('  Getting image IDs from EarthEngine')
+        export_image_id_list = utils.get_info(ee.List(model_obj.overpass(
+            variables=['ndvi']).aggregate_array('image_id')))
+        if not export_image_id_list:
+            logging.info('  No Landsat images in date range, skipping zone')
+            continue
+        export_image_id_list = sorted(
+            export_image_id_list, key=lambda k: k.split('/')[-1].split('_')[-1],
+            reverse=reverse_flag)
+
+        # Group images by wrs2 tile
+        image_id_lists = defaultdict(list)
+        for image_id in export_image_id_list:
+            wrs2_tile = 'p{}r{}'.format(
+                *wrs2_tile_re.findall(image_id.split('/')[-1].split('_')[1])[0])
+            if wrs2_tile not in tile_list:
+                continue
+            image_id_lists[wrs2_tile].append(image_id)
+
+        # Get list of existing image assets and their properties
+        logging.debug('  Getting GEE asset list')
+        asset_coll = ee.ImageCollection(export_coll_id) \
+            .filterDate(iter_start_dt.strftime('%Y-%m-%d'),
+                        iter_end_dt.strftime('%Y-%m-%d')) \
+            .filterBounds(ee.Geometry.Rectangle(export_info['extent'],
+                                                export_info['crs'], False)) \
+            .filter(ee.Filter.inList('wrs2_tile', tile_list))
+        asset_props = {f'{export_coll_id}/{x["properties"]["system:index"]}':
+                           x['properties']
+                       for x in utils.get_info(asset_coll)['features']}
+
+
         for export_n, wrs2_tile in enumerate(tile_list):
             path, row = map(int, wrs2_tile_re.findall(wrs2_tile)[0])
             if wrs2_tile in wrs2_tiles:
-                logging.info('{} {} ({}/{}) - already processed'.format(
+                logging.debug('{} {} ({}/{}) - already processed'.format(
                     export_info['index'], wrs2_tile, export_n + 1, tile_count))
                 continue
             elif wrs2_skip_list and wrs2_tile in wrs2_skip_list:
-                logging.info('{} {} ({}/{}) - in wrs2 skip list'.format(
+                logging.debug('{} {} ({}/{}) - in wrs2 skip list'.format(
                     export_info['index'], wrs2_tile, export_n + 1, tile_count))
                 continue
             elif wrs2_row_skip_list and row in wrs2_row_skip_list:
-                logging.info('{} {} ({}/{}) - in wrs2 row skip list'.format(
+                logging.debug('{} {} ({}/{}) - in wrs2 row skip list'.format(
                     export_info['index'], wrs2_tile, export_n + 1, tile_count))
                 continue
             elif wrs2_path_skip_list and path in wrs2_path_skip_list:
-                logging.info('{} {} ({}/{}) - in wrs2 path skip list'.format(
+                logging.debug('{} {} ({}/{}) - in wrs2 path skip list'.format(
                     export_info['index'], wrs2_tile, export_n + 1, tile_count))
                 continue
             else:
-                logging.info('{} {} ({}/{})'.format(
+                logging.debug('{} {} ({}/{})'.format(
                     export_info['index'], wrs2_tile, export_n + 1, tile_count))
             wrs2_tiles.append(wrs2_tile)
 
@@ -509,102 +549,119 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
             # logging.info('WRS2 tile: {}  ({}/{})'.format(
             #     export_info['index'], export_n + 1, len(export_list)))
             #
-            # logging.debug('  Shape:     {}'.format(export_info['shape']))
-            # logging.debug('  Transform: {}'.format(export_info['geo_str']))
-            # logging.debug('  Extent:    {}'.format(export_info['extent']))
-            # logging.debug('  MaxPixels: {}'.format(export_info['maxpixels']))
+            # logging.debug(f'  Shape:     {export_info["shape"]}')
+            # logging.debug(f'  Transform: {export_info["geo_str"]}')
+            # logging.debug(f'  Extent:    {export_info["extent"]}')
+            # logging.debug(f'  MaxPixels: {export_info["maxpixels"]}')
 
-            filter_args = {}
-            for coll_id in collections:
-                filter_args[coll_id] = [
-                    {'type': 'equals', 'leftField': 'WRS_PATH', 'rightValue': path},
-                    {'type': 'equals', 'leftField': 'WRS_ROW', 'rightValue': row}]
-            logging.debug(f'  Filter Args: {filter_args}')
 
-            # Get the full Landsat collection
-            # Collection end date is exclusive
-            model_obj = openet.disalexi.Collection(
-                collections=collections,
-                cloud_cover_max=float(ini['INPUTS']['cloud_cover']),
-                start_date=iter_start_dt.strftime('%Y-%m-%d'),
-                end_date=iter_end_dt.strftime('%Y-%m-%d'),
-                geometry=ee.Geometry.Point(openet.core.wrs2.centroids[wrs2_tile]),
-                model_args=model_args,
-                filter_args=filter_args,
-            )
-            image_id_list = utils.get_info(ee.List(model_obj.overpass(
-                variables=['ndvi']).aggregate_array('image_id')), max_retries=10)
-
+            # Subset the image ID list to the WRS2 tile
+            try:
+                image_id_list = image_id_lists[wrs2_tile]
+            except KeyError:
+                image_id_list = []
             if not image_id_list:
-                logging.info('  Empty image ID list, skipping tile')
-                # logging.debug('  Empty image ID list, exiting')
-                # return False
+                logging.debug('  No Landsat images in date range, skipping tile')
+                continue
 
-            # Get list of existing images for the target tile
-            logging.debug('  Getting GEE asset list')
-            asset_coll = ee.ImageCollection(export_coll_id) \
-                .filterDate(iter_start_dt.strftime('%Y-%m-%d'),
-                            iter_end_dt.strftime('%Y-%m-%d')) \
-                .filterMetadata('wrs2_tile', 'equals',
-                                wrs2_tile_fmt.format(path, row))
-            asset_props = {f'{export_coll_id}/{x["properties"]["system:index"]}':
-                               x['properties']
-                           for x in utils.get_info(asset_coll)['features']}
-            # asset_props = {x['id']: x['properties']
-            #                for x in assets_info['features']}
 
-            # # Get list of band types for checking to see if any bands are floats
-            # asset_types = {
-            #     f['id']: {b['id']: b['data_type']['precision'] for b in
-            #               f['bands']}
-            #     for f in assets_info['features']}
+            # filter_args = {}
+            # for coll_id in collections:
+            #     filter_args[coll_id] = [
+            #         {'type': 'equals', 'leftField': 'WRS_PATH', 'rightValue': path},
+            #         {'type': 'equals', 'leftField': 'WRS_ROW', 'rightValue': row}]
+            # logging.debug(f'  Filter Args: {filter_args}')
+            #
+            # # Get the full Landsat collection
+            # # Collection end date is exclusive
+            # model_obj = openet.disalexi.Collection(
+            #     collections=collections,
+            #     cloud_cover_max=float(ini['INPUTS']['cloud_cover']),
+            #     start_date=iter_start_dt.strftime('%Y-%m-%d'),
+            #     end_date=iter_end_dt.strftime('%Y-%m-%d'),
+            #     geometry=ee.Geometry.Point(openet.core.wrs2.centroids[wrs2_tile]),
+            #     model_args=model_args,
+            #     filter_args=filter_args,
+            # )
+            # image_id_list = utils.get_info(ee.List(model_obj.overpass(
+            #     variables=['ndvi']).aggregate_array('image_id')), max_retries=10)
+            #
+            # if not image_id_list:
+            #     logging.info('  Empty image ID list, skipping tile')
+            #     # logging.debug('  Empty image ID list, exiting')
+            #     # return False
+            #
+            # # Get list of existing images for the target tile
+            # logging.debug('  Getting GEE asset list')
+            # asset_coll = ee.ImageCollection(export_coll_id) \
+            #     .filterDate(iter_start_dt.strftime('%Y-%m-%d'),
+            #                 iter_end_dt.strftime('%Y-%m-%d')) \
+            #     .filterMetadata('wrs2_tile', 'equals',
+            #                     wrs2_tile_fmt.format(path, row))
+            # asset_props = {f'{export_coll_id}/{x["properties"]["system:index"]}':
+            #                    x['properties']
+            #                for x in utils.get_info(asset_coll)['features']}
+            # # asset_props = {x['id']: x['properties']
+            # #                for x in assets_info['features']}
+            #
+            # # # Get list of band types for checking to see if any bands are floats
+            # # asset_types = {
+            # #     f['id']: {b['id']: b['data_type']['precision'] for b in
+            # #               f['bands']}
+            # #     for f in assets_info['features']}
+            #
+            # # Sort image ID list by date
+            # image_id_list = sorted(
+            #     image_id_list, key=lambda k: k.split('/')[-1].split('_')[-1],
+            #     reverse=reverse_flag)
+            # # pprint.pprint(image_id_list)
+            # # input('ENTER')
 
-            # Sort image ID list by date
-            image_id_list = sorted(
-                image_id_list, key=lambda k: k.split('/')[-1].split('_')[-1],
-                reverse=reverse_flag)
-            # pprint.pprint(image_id_list)
-            # input('ENTER')
 
             # Process each image in the collection by date
             # image_id is the full Earth Engine ID to the asset
             for image_id in image_id_list:
-                logging.info('  {}'.format(image_id))
                 coll_id, scene_id = image_id.rsplit('/', 1)
                 l, p, r, year, month, day = parse_landsat_id(scene_id)
                 image_dt = datetime.datetime.strptime(
                     '{:04d}{:02d}{:02d}'.format(year, month, day), '%Y%m%d')
                 image_date = image_dt.strftime('%Y-%m-%d')
                 next_date = (image_dt + datetime.timedelta(days=1)).strftime('%Y-%m-%d')
-                logging.debug('    Date: {}'.format(image_date))
-                # logging.debug('    DOY: {}'.format(doy))
-
-                if date_skip_list and image_date in date_skip_list:
-                    logging.info('    Date in skip list, skipping')
-                    continue
 
                 export_id = export_id_fmt.format(
                     model=ini['INPUTS']['et_model'].lower(),
                     index=image_id.lower().replace('/', '_'))
                 export_id = export_id.replace('-', '')
                 export_id += export_id_name
-                logging.debug('    Export ID:  {}'.format(export_id))
+                asset_id = f'{export_coll_id}/{scene_id.lower()}'
 
-                asset_id = '{}/{}'.format(export_coll_id, scene_id.lower())
-                logging.debug('    Collection: {}'.format(
-                    os.path.dirname(asset_id)))
-                logging.debug('    Image ID:   {}'.format(
-                    os.path.basename(asset_id)))
+                if date_skip_list and image_date in date_skip_list:
+                    logging.info(f'{image_id}\n  Date in skip list, skipping')
+                    continue
+                if ('alexi_source' in model_args.keys() and
+                        type(model_args['alexi_source']) is str):
+                    # Check if the ALEXI image is present
+                    # This is the most likely asset to be missing on updates so
+                    #   check for it early
+                    if image_date not in alexi_date_list:
+                        logging.info(f'{image_id}\n  No ALEXI image in source, skipping')
+                        time.sleep(0.1)
+                        continue
+                    # alexi_coll = ee.ImageCollection(alexi_coll_id) \
+                    #     .filterDate(image_date, next_date)
+                    # if alexi_coll.size().getInfo() == 0:
+                    #     logging.info('  No ALEXI image in source, skipping')
+                    #     time.sleep(1)
+                    #     # input('ENTER')
+                    #     continue
 
                 if update_flag:
-                    def version_number(version_str):
-                        return list(map(int, version_str.split('.')))
-
+                    logging.info(f'{image_id}')
                     if export_id in tasks.keys():
-                        logging.info('    Task already submitted, skipping')
+                        logging.info('  Task already submitted, skipping')
                         continue
-                    # In update mode only overwrite if the version is old
-                    if asset_props and asset_id in asset_props.keys():
+                    elif asset_props and asset_id in asset_props.keys():
+                        # In update mode only overwrite if the version is old
                         model_ver = version_number(openet.disalexi.__version__)
                         asset_ver = version_number(
                             asset_props[asset_id]['model_version'])
@@ -613,91 +670,101 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
                         #     if b in ['et', 'et_reference']]
 
                         if asset_ver < model_ver:
-                            logging.info('    Existing asset model version is old, '
+                            logging.info('  Existing asset model version is old, '
                                          'removing')
-                            logging.debug(f'    asset: {asset_ver}\n'
-                                          f'    model: {model_ver}')
+                            logging.debug(f'  asset: {asset_ver}\n'
+                                          f'  model: {model_ver}')
                             try:
                                 ee.data.deleteAsset(asset_id)
                             except:
-                                logging.info('    Error removing asset, skipping')
+                                logging.info('  Error removing asset, skipping')
                                 continue
                         # elif (asset_props[asset_id]['alexi_source'] <
                         #       model_args['alexi_source']):
-                        #     logging.info('    ALEXI source is old, removing')
+                        #     logging.info('  ALEXI source is old, removing')
                         #     # input('ENTER')
                         #     try:
                         #         ee.data.deleteAsset(asset_id)
                         #     except:
-                        #         logging.info('    Error removing asset, skipping')
+                        #         logging.info('  Error removing asset, skipping')
                         #         continue
                         # elif (asset_props[asset_id]['date_ingested'] <= '2020-04-27'):
-                        #     logging.info('    date_ingested is old, removing')
+                        #     logging.info('  date_ingested is old, removing')
                         #     # input('ENTER')
                         #     try:
                         #         ee.data.deleteAsset(asset_id)
                         #     except:
-                        #         logging.info('    Error removing asset, skipping')
+                        #         logging.info('  Error removing asset, skipping')
                         #         continue
                         # elif ((('T1_RT_TOA' in asset_props[asset_id]['coll_id']) and
                         #        ('T1_RT_TOA' not in image_id)) or
                         #       (('T1_RT' in asset_props[asset_id]['coll_id']) and
                         #        ('T1_RT' not in image_id))):
                         #     logging.info(
-                        #         '    Existing asset is from realtime Landsat '
+                        #         '  Existing asset is from realtime Landsat '
                         #         'collection, removing')
                         #     try:
                         #         ee.data.deleteAsset(asset_id)
                         #     except:
-                        #         logging.info('    Error removing asset, skipping')
+                        #         logging.info('  Error removing asset, skipping')
                         #         continue
                         # elif (version_number(asset_props[asset_id]['tool_version']) <
                         #       version_number(TOOL_VERSION)):
-                        #     logging.info('    Asset tool version is old, removing')
+                        #     logging.info('  Asset tool version is old, removing')
                         #     try:
                         #         ee.data.deleteAsset(asset_id)
                         #     except:
-                        #         logging.info('    Error removing asset, skipping')
+                        #         logging.info('  Error removing asset, skipping')
                         #         continue
                         # elif any(asset_flt):
                         #     logging.info(
-                        #         '    Asset ET types are float, removing')
+                        #         '  Asset ET types are float, removing')
                         #     ee.data.deleteAsset(asset_id)
                         # elif 'tool_version' not in asset_props[asset_id].keys():
-                        #     logging.info('    TOOL_VERSION property was not set, removing')
+                        #     logging.info('  TOOL_VERSION property was not set, removing')
                         #     ee.data.deleteAsset(asset_id)
 
                         # elif asset_props[asset_id]['images'] == '':
-                        #     logging.info('    Images property was not set, removing')
+                        #     logging.info('  Images property was not set, removing')
                         #     input('ENTER')
                         #     ee.data.deleteAsset(asset_id)
                         else:
-                            logging.info('    Asset is up to date, skipping')
+                            logging.info('  Asset is up to date, skipping')
                             continue
                 elif overwrite_flag:
+                    logging.info(f'  {image_id}')
                     if export_id in tasks.keys():
-                        logging.info('    Task already submitted, cancelling')
+                        logging.info('  Task already submitted, cancelling')
                         ee.data.cancelTask(tasks[export_id]['id'])
                         # ee.data.cancelOperation(tasks[export_id]['id'])
                     # This is intentionally not an "elif" so that a task can be
                     # cancelled and an existing image/file/asset can be removed
                     if asset_props and asset_id in asset_props.keys():
-                        logging.info('    Asset already exists, removing')
+                        logging.info('  Asset already exists, removing')
                         ee.data.deleteAsset(asset_id)
                 else:
                     if export_id in tasks.keys():
-                        logging.info('    Task already submitted, skipping')
+                        logging.debug(f'{image_id}\n  Task already submitted, skipping')
                         continue
                     elif asset_props and asset_id in asset_props.keys():
-                        logging.info('    Asset already exists, skipping')
+                        logging.debug(f'{image_id}\n  Asset already exists, skipping')
                         continue
+                    else:
+                        logging.info(f'{image_id}')
+
+                # logging.info(f'{image_id}')
+                logging.debug(f'  Date: {image_date}')
+                # logging.debug(f'  DOY:  {doy}')
+                logging.debug(f'  Export ID:  {export_id}')
+                logging.debug(f'  Collection: {os.path.dirname(asset_id)}')
+                logging.debug(f'  Image ID:   {os.path.basename(asset_id)}')
 
                 if tair_args['source_coll'] is None:
-                    logging.debug('    Tair source: {}'.format(tair_args['ta_start']))
+                    logging.debug(f'  Tair source: {tair_args["ta_start"]}')
                     ta_source_img = alexi_mask.add(float(tair_args['ta_start']))\
                         .rename(['ta'])
                 elif tair_args['source_coll'] == 'NLDAS':
-                    logging.debug('    Tair source: NLDAS')
+                    logging.debug('  Tair source: NLDAS')
                     ta_source_coll = ee.ImageCollection('NASA/NLDAS/FORA0125_H002')\
                         .filterDate(image_date, next_date)\
                         .select(['temperature'])
@@ -707,11 +774,11 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
                         .add(273.15).floor()
                     ta_source_img = alexi_mask.add(input_image).rename(['ta'])
                 else:
-                    logging.debug('    Tair source: {}'.format(tair_args['source_coll']))
+                    logging.debug(f'  Tair source: {tair_args["source_coll"]}')
                     ta_source_coll = ee.ImageCollection(tair_args['source_coll'])\
                         .filterMetadata('image_id', 'equals', image_id)
                     if ta_source_coll.size().getInfo() == 0:
-                        logging.info('    No Tair image in source coll, skipping')
+                        logging.info('  No Tair image in source coll, skipping')
                         # input('ENTER')
                         continue
                     ta_source_img = ta_min_bias(ee.Image(ta_source_coll.first()))
@@ -728,11 +795,8 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
                     try:
                         sharpen_version = tir_info['properties']['sharpen_version']
                     except:
-                        logging.info('    No TIR image in source, skipping')
-                        time.sleep(2)
-                        # input('ENTER')
+                        logging.info('  No TIR image in source, skipping')
                         continue
-
                 if ('lai_source' in model_args.keys() and
                         type(model_args['lai_source']) is str):
                     # Assumptions: string lai_source is an image collection ID
@@ -743,19 +807,7 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
                     try:
                         landsat_lai_version = lai_info['properties']['landsat_lai_version']
                     except:
-                        logging.info('    No LAI image in source, skipping')
-                        time.sleep(2)
-                        # input('ENTER')
-                        continue
-
-                if ('alexi_source' in model_args.keys() and
-                        type(model_args['alexi_source']) is str):
-                    alexi_coll = ee.ImageCollection(alexi_coll_id) \
-                        .filterDate(image_date, next_date)
-                    if alexi_coll.size().getInfo() == 0:
-                        logging.info('    No ALEXI image in source, skipping')
-                        time.sleep(2)
-                        # input('ENTER')
+                        logging.info('  No LAI image in source, skipping')
                         continue
 
                 # CGM: We could pre-compute (or compute once and then save)
@@ -834,14 +886,14 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
                 export_shape = [
                     int(abs(export_extent[2] - export_extent[0]) / alexi_cs),
                     int(abs(export_extent[3] - export_extent[1]) / alexi_cs)]
-                logging.debug('    CRS: {}'.format(alexi_crs))
-                logging.debug('    Extent: {}'.format(export_extent))
-                logging.debug('    Geo: {}'.format(export_geo))
-                logging.debug('    Shape: {}'.format(export_shape))
+                logging.debug(f'  CRS:    {alexi_crs}')
+                logging.debug(f'  Extent: {export_extent}')
+                logging.debug(f'  Geo:    {export_geo}')
+                logging.debug(f'  Shape:  {export_shape}')
 
                 # Build export tasks
                 max_retries = 4
-                logging.debug('    Building export task')
+                logging.debug('  Building export task')
                 # TODO: Move into try/except if getting EEException
                 # for i in range(1, max_retries):
                 #     try:
@@ -857,28 +909,26 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
                 #     except Exception as e:
                 #         if ('Earth Engine memory capacity exceeded' in str(e) or
                 #                 'Earth Engine capacity exceeded' in str(e)):
-                #             logging.info('    Rebuilding task ({}/{})'.format(
-                #                 i, max_retries))
-                #             logging.debug('    {}'.format(e))
+                #             logging.info(f'  Rebuilding task ({i}/{max_retries})')
+                #             logging.debug(f'  {e}')
                 #             time.sleep(i ** 2)
                 #         else:
-                #             logging.warning('Unhandled exception\n{}'.format(e))
+                #             logging.warning(f'Unhandled exception\n{e}')
                 #             break
                 #             raise e
 
                 if not task:
-                    logging.warning('    Export task was not built, skipping')
+                    logging.warning('  Export task was not built, skipping')
                     continue
 
-                logging.info('    Starting export task')
+                logging.info('  Starting export task')
                 for i in range(1, max_retries):
                     try:
                         task.start()
                         break
                     except Exception as e:
-                        logging.info('    Resending query ({}/{})'.format(
-                            i, max_retries))
-                        logging.debug('    {}'.format(e))
+                        logging.info(f'  Resending query ({i}/{max_retries})')
+                        logging.debug(f'  {e}')
                         time.sleep(i ** 2)
                 # # Not using ee_task_start since it doesn't return the task object
                 # utils.ee_task_start(task)
@@ -886,7 +936,7 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
 
                 # Write the export task info the openet-dri project datastore
                 if log_tasks:
-                    logging.debug('    Writing datastore entity')
+                    logging.debug('  Writing datastore entity')
                     try:
                         task_obj = datastore.Entity(key=datastore_client.key(
                             'Task', task.status()['id']),
@@ -907,8 +957,7 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
                     except Exception as e:
                         # CGM - The message/handling will probably need to be updated
                         #   We may want separate try/excepts on the create and the put
-                        logging.warning('\nDatastore entity was not written')
-                        logging.warning('{}\n'.format(e))
+                        logging.warning(f'\nDatastore entity was not written\n{e}\n')
 
                 # Pause before starting the next export task
                 ready_task_count += 1
@@ -1223,7 +1272,7 @@ def mgrs_export_tiles(study_area_coll_id, mgrs_coll_id,
     """
     # Build and filter the study area feature collection
     logging.debug('Building study area collection')
-    logging.debug('  {}'.format(study_area_coll_id))
+    logging.debug(f'  {study_area_coll_id}')
     study_area_coll = ee.FeatureCollection(study_area_coll_id)
     if (study_area_property == 'STUSPS' and
             'CONUS' in [x.upper() for x in study_area_features]):
@@ -1242,8 +1291,8 @@ def mgrs_export_tiles(study_area_coll_id, mgrs_coll_id,
 
     if study_area_property and study_area_features:
         logging.debug('  Filtering study area collection')
-        logging.debug('  Property: {}'.format(study_area_property))
-        logging.debug('  Features: {}'.format(','.join(study_area_features)))
+        logging.debug(f'  Property: {study_area_property}')
+        logging.debug(f'  Features: {",".join(study_area_features)}')
         study_area_coll = study_area_coll.filter(
             ee.Filter.inList(study_area_property, study_area_features))
 
@@ -1253,14 +1302,14 @@ def mgrs_export_tiles(study_area_coll_id, mgrs_coll_id,
 
     # Filter collection by user defined lists
     if utm_zones:
-        logging.debug('  Filter user UTM Zones:    {}'.format(utm_zones))
+        logging.debug(f'  Filter user UTM Zones:    {utm_zones}')
         tiles_coll = tiles_coll.filter(ee.Filter.inList(utm_property, utm_zones))
     if mgrs_skip_list:
-        logging.debug('  Filter MGRS skip list:    {}'.format(mgrs_skip_list))
+        logging.debug(f'  Filter MGRS skip list:    {mgrs_skip_list}')
         tiles_coll = tiles_coll.filter(
             ee.Filter.inList(mgrs_property, mgrs_skip_list).Not())
     if mgrs_tiles:
-        logging.debug('  Filter MGRS tiles/zones:  {}'.format(mgrs_tiles))
+        logging.debug(f'  Filter MGRS tiles/zones:  {mgrs_tiles}')
         # Allow MGRS tiles to be subsets of the full tile code
         #   i.e. mgrs_tiles = 10TE, 10TF
         mgrs_filters = [
@@ -1278,6 +1327,11 @@ def mgrs_export_tiles(study_area_coll_id, mgrs_coll_id,
     tiles_list = []
     for tile_ftr in tiles_info['features']:
         tiles_list.append({
+            'crs': 'EPSG:{:d}'.format(int(tile_ftr['properties']['epsg'])),
+            'extent': [int(tile_ftr['properties']['xmin']),
+                       int(tile_ftr['properties']['ymin']),
+                       int(tile_ftr['properties']['xmax']),
+                       int(tile_ftr['properties']['ymax'])],
             'index': tile_ftr['properties']['mgrs'].upper(),
             'wrs2_tiles': sorted(utils.wrs2_str_2_set(
                 tile_ftr['properties'][wrs2_property])),
@@ -1285,7 +1339,7 @@ def mgrs_export_tiles(study_area_coll_id, mgrs_coll_id,
 
     # Apply the user defined WRS2 tile list
     if wrs2_tiles:
-        logging.debug('  Filter WRS2 tiles: {}'.format(wrs2_tiles))
+        logging.debug(f'  Filter WRS2 tiles: {wrs2_tiles}')
         for tile in tiles_list:
             tile['wrs2_tiles'] = sorted(list(
                 set(tile['wrs2_tiles']) & set(wrs2_tiles)))
@@ -1414,6 +1468,10 @@ def delay_task(delay_time=0, task_max=-1, task_count=0):
     return ready_task_count
 
 
+def version_number(version_str):
+    return list(map(int, version_str.split('.')))
+
+
 def arg_parse():
     """"""
     parser = argparse.ArgumentParser(
@@ -1438,8 +1496,8 @@ def arg_parse():
         '--ready', default=-1, type=int,
         help='Maximum number of queued READY tasks')
     parser.add_argument(
-        '--recent', default=0, type=int,
-        help='Number of days to process before current date '
+        '--recent', default='',
+        help='Day range (or number of days) to process before current date '
              '(ignore INI start_date and end_date')
     parser.add_argument(
         '--reverse', default=False, action='store_true',
