@@ -280,3 +280,63 @@ def test_from_scene_et_actual_daily_et_fraction_max(tol=0.0001):
     TEST_POINT = (-121.5265, 38.7399)
     output = utils.point_coll_value(output_coll, TEST_POINT, scale=10)
     assert abs(output['et_fraction']['2017-07-10'] - 1.4) <= tol
+
+
+def test_from_scene_et_fraction_t_interval_bad_value():
+    # Function should raise a ValueError if t_interval is not supported
+    with pytest.raises(ValueError):
+        output_coll = interpolate.from_scene_et_fraction(
+            scene_coll(['et', 'time', 'mask']),
+            start_date='2017-07-01', end_date='2017-08-01', variables=['et'],
+            interp_args={'interp_method': 'linear', 'interp_days': 32},
+            model_args={'et_reference_source': 'IDAHO_EPSCOR/GRIDMET',
+                        'et_reference_band': 'etr',
+                        'et_reference_factor': 0.5,
+                        'et_reference_resample': 'nearest'},
+            t_interval='deadbeef')
+
+
+def test_from_scene_et_fraction_t_interval_no_value():
+    # Function should raise an Exception if t_interval is not set
+    with pytest.raises(TypeError):
+        output_coll = interpolate.from_scene_et_fraction(
+            scene_coll(['et', 'time', 'mask']),
+            start_date='2017-07-01', end_date='2017-08-01',
+            variables=['et', 'et_reference', 'et_fraction', 'count'],
+            interp_args={'interp_method': 'linear', 'interp_days': 32},
+            model_args={'et_reference_source': 'IDAHO_EPSCOR/GRIDMET',
+                        'et_reference_band': 'etr',
+                        'et_reference_factor': 0.5,
+                        'et_reference_resample': 'nearest'})
+
+
+def test_from_scene_et_actual_t_interval_bad_value():
+    # Function should raise a ValueError if t_interval is not supported
+    with pytest.raises(ValueError):
+        output_coll = interpolate.from_scene_et_actual(
+            scene_coll(['et', 'time', 'mask']),
+            start_date='2017-07-01', end_date='2017-08-01', variables=['et'],
+            interp_args={'interp_method': 'linear', 'interp_days': 32,
+                         'interp_source': 'IDAHO_EPSCOR/GRIDMET',
+                         'interp_band': 'etr', 'interp_resample': 'nearest'},
+            model_args={'et_reference_source': 'IDAHO_EPSCOR/GRIDMET',
+                        'et_reference_band': 'etr',
+                        'et_reference_factor': 1.0,
+                        'et_reference_resample': 'nearest'},
+            t_interval='deadbeef')
+
+
+def test_from_scene_et_actual_t_interval_no_value():
+    # Function should raise an Exception if t_interval is not set
+    with pytest.raises(TypeError):
+        output_coll = interpolate.from_scene_et_actual(
+            scene_coll(['et', 'time', 'mask']),
+            start_date='2017-07-01', end_date='2017-08-01', variables=['et'],
+            interp_args={'interp_method': 'linear', 'interp_days': 32,
+                         'interp_source': 'IDAHO_EPSCOR/GRIDMET',
+                         'interp_band': 'etr',
+                         'interp_resample': 'nearest'},
+            model_args={'et_reference_source': 'IDAHO_EPSCOR/GRIDMET',
+                        'et_reference_band': 'etr',
+                        'et_reference_factor': 1.0,
+                        'et_reference_resample': 'nearest'})

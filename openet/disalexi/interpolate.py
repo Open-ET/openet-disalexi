@@ -12,7 +12,7 @@ import openet.core.interpolate
 
 
 def from_scene_et_fraction(scene_coll, start_date, end_date, variables,
-                           interp_args, model_args, t_interval='custom',
+                           interp_args, model_args, t_interval,
                            use_joins=False):
     """
 
@@ -35,10 +35,10 @@ def from_scene_et_fraction(scene_coll, start_date, end_date, variables,
             to include in the interpolation calculation. The default is 32.
     model_args : dict
         Parameters from the MODEL section of the INI file.
-    t_interval : {'daily', 'monthly', 'annual', 'custom'}, optional
+    t_interval : {'daily', 'monthly', 'annual', 'custom'}
         Time interval over which to interpolate and aggregate values
-        The default is 'custom' which means the aggregation time period
-        will be controlled by the start and end date parameters.
+        The 'custom' interval will aggregate all days within the start and end
+        dates into an image collection with a single image.
     use_joins : bool, optional
         If True, use joins to link the target and source collections.
 
@@ -359,7 +359,7 @@ def from_scene_et_fraction(scene_coll, start_date, end_date, variables,
 
 
 def from_scene_et_actual(scene_coll, start_date, end_date, variables,
-                         interp_args, model_args, t_interval='custom',
+                         interp_args, model_args, t_interval,
                          use_joins=False):
     """
 
@@ -383,10 +383,10 @@ def from_scene_et_actual(scene_coll, start_date, end_date, variables,
             to include in the interpolation calculation. The default is 32.
     model_args : dict
         Parameters from the MODEL section of the INI file.
-    t_interval : {'daily', 'monthly', 'annual', 'custom'}, optional
+    t_interval : {'daily', 'monthly', 'annual', 'custom'}
         Time interval over which to interpolate and aggregate values
-        The default is 'custom' which means the aggregation time period
-        will be controlled by the start and end date parameters.
+        The 'custom' interval will aggregate all days within the start and end
+        dates into an image collection with a single image.
     use_joins : bool, optional
         If True, use joins to link the target and source collections.
 
