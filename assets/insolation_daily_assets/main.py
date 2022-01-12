@@ -28,7 +28,7 @@ SOURCE_COLL_ID = 'projects/earthengine-legacy/assets/' \
 RESAMPLE_METHOD = 'bicubic'
 UTC_OFFSET = 6
 START_DAY_OFFSET = 60
-END_DAY_OFFSET = 10
+END_DAY_OFFSET = 3
 
 
 def cfsr_daily_ingest(tgt_dt, overwrite_flag=False,
@@ -70,9 +70,6 @@ def cfsr_daily_ingest(tgt_dt, overwrite_flag=False,
         ee.Initialize()
     else:
         ee.Initialize(CREDENTIALS)
-    # elif os.path.isfile(GEE_KEY_FILE):
-    #     logging.debug(f'  Using service account key file: {GEE_KEY_FILE}')
-    #     ee.Initialize(ee.ServiceAccountCredentials('', key_file=GEE_KEY_FILE))
     # else:
     #     raise Exception('EE not initialized')
 
@@ -87,14 +84,22 @@ def cfsr_daily_ingest(tgt_dt, overwrite_flag=False,
             return f'{export_name} - The asset already exists and overwrite '\
                    f'is False, skipping\n'
 
+    # CGM - Is projecting to the ALEXI grid intentional?
+    #   Does it matter that the v004 grid was shifted?
     # Project to ALEXI projection/shape/domain
-    asset_crs = 'EPSG:4326'
     asset_transform = [0.04, 0, -125.04, 0, -0.04, 49.8]
     asset_shape = '1456x625'
+    asset_crs = 'EPSG:4326'
 
     input_img_id = f'{SOURCE_COLL_ID}/{tgt_dt.strftime("%Y%j")}'
     input_img = ee.Image(input_img_id)
     logging.debug(f'  {input_img_id}')
+
+    # asset_info = input_img.select([0]).getInfo()
+    # asset_crs = 'EPSG:4326'
+    # asset_shape = asset_info['bands'][0]['dimensions']
+    # asset_shape = '{0}x{1}'.format(*asset_shape)
+    # asset_transform = asset_info['bands'][0]['crs_transform']
 
     if UTC_OFFSET > 0:
         logging.debug('  Positive UTC offset, adding bands for next day')
@@ -147,6 +152,7 @@ def cfsr_daily_ingest(tgt_dt, overwrite_flag=False,
         crsTransform=asset_transform,
         dimensions=asset_shape,
     )
+    # return f'{export_name}\n'
 
     # Start the export task
     task.start()
@@ -164,7 +170,6 @@ def cfsr_daily_ingest(tgt_dt, overwrite_flag=False,
     #     time.sleep(i ** 2)
 
     return f'{export_name} - {task.id}\n'
-    # return f'{export_name}\n'
 
 
 def cron_scheduler(request):
@@ -246,7 +251,7 @@ def cron_scheduler(request):
     }
 
     for tgt_dt in cfsr_daily_dates(**args):
-        logging.info(f'Date: {tgt_dt.strftime("%Y-%m-%d")}')
+        # logging.info(f'Date: {tgt_dt.strftime("%Y-%m-%d")}')
         # response += 'Date: {}\n'.format(tgt_dt.strftime('%Y-%m-%d'))
         response += cfsr_daily_ingest(tgt_dt, overwrite_flag=True)
 
@@ -268,9 +273,6 @@ def cfsr_daily_dates(start_dt, end_dt, overwrite_flag=False,
         ee.Initialize()
     else:
         ee.Initialize(CREDENTIALS)
-    # elif os.path.isfile(GEE_KEY_FILE):
-    #     logging.debug(f'  Using service account key file: {GEE_KEY_FILE}')
-    #     ee.Initialize(ee.ServiceAccountCredentials('', key_file=GEE_KEY_FILE))
     # else:
     #     raise Exception('EE not initialized')
 
@@ -373,16 +375,13 @@ def date_range(start_dt, end_dt, days=1, skip_leap_days=False):
         curr_dt += datetime.timedelta(days=days)
 
 
-def get_ee_tasks(states=['RUNNING', 'READY'], verbose=False, retries=6):
+def get_ee_tasks(states=['RUNNING', 'READY'], retries=6):
     """Return current active tasks
 
     Parameters
     ----------
     states : list, optional
         List of task states to check (the default is ['RUNNING', 'READY']).
-    verbose : bool, optional
-        This parameter is deprecated and is no longer being used.
-        To get verbose logging of the active tasks use utils.print_ee_tasks().
     retries : int, optional
         The number of times to retry getting the task list if there is an error.
 

@@ -26,5 +26,5 @@ gcloud functions call cfsr-insolation-daily --project openet-dri
 ### Scheduling the job
 
 ```
-gcloud scheduler jobs update http cfsr-insolation-daily --schedule "0 8 * * *" --uri "https://us-central1-openet.cloudfunctions.net/cfsr-insolation-daily" --description "Update Daily Insolation" --http-method POST --time-zone "UTC" --project openet-dri --max-retry-attempts 5
+gcloud scheduler jobs update http cfsr-insolation-daily --schedule "0 7 5,15,25 * *" --uri "https://us-central1-openet-dri.cloudfunctions.net/cfsr-insolation-daily" --description "Update Daily Insolation" --http-method POST --time-zone "UTC" --project openet-dri --max-retry-attempts 5
 ```
