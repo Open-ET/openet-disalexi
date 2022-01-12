@@ -95,9 +95,19 @@ def test_Collection_init_cloud_cover_max_str():
 @pytest.mark.parametrize(
     'coll_id, start_date, end_date',
     [
+        # ['LANDSAT/LT04/C01/T1_SR', '1981-01-01', '1982-01-01'],
+        # ['LANDSAT/LT04/C01/T1_SR', '1994-01-01', '1995-01-01'],
+        ['LANDSAT/LT05/C01/T1_SR', '1983-01-01', '1984-01-01'],
+        ['LANDSAT/LT05/C01/T1_SR', '2012-01-01', '2013-01-01'],
+        ['LANDSAT/LE07/C01/T1_SR', '1998-01-01', '1999-01-01'],
+        ['LANDSAT/LE07/C01/T1_SR', '2022-01-01', '2023-01-01'],
+        ['LANDSAT/LC08/C01/T1_SR', '2012-01-01', '2013-01-01'],
+        # ['LANDSAT/LT04/C02/T1_L2', '1981-01-01', '1982-01-01'],
+        # ['LANDSAT/LT04/C02/T1_L2', '1994-01-01', '1995-01-01'],
         ['LANDSAT/LT05/C02/T1_L2', '1983-01-01', '1984-01-01'],
         ['LANDSAT/LT05/C02/T1_L2', '2012-01-01', '2013-01-01'],
         ['LANDSAT/LE07/C02/T1_L2', '1998-01-01', '1999-01-01'],
+        ['LANDSAT/LE07/C02/T1_L2', '2022-01-01', '2023-01-01'],
         ['LANDSAT/LC08/C02/T1_L2', '2012-01-01', '2013-01-01'],
     ]
 )
@@ -203,23 +213,54 @@ def test_Collection_build_cloud_cover():
     assert 'LE07_044033_20170724' not in parse_scene_id(output)
 
 
-def test_Collection_build_filter_dates_lt05():
+pytest.mark.parametrize(
+    'collection, start_date, end_date',
+    [
+        # ['LANDSAT/LT05/C01/T1_TOA', '2012-01-01', '2013-01-01'],
+        ['LANDSAT/LT05/C01/T1_SR', '2012-01-01', '2013-01-01'],
+        ['LANDSAT/LT05/C02/T1_L2', '2012-01-01', '2013-01-01'],
+    ]
+)
+def test_Collection_build_filter_dates_lt05(collection, start_date, end_date):
     """Test that bad Landsat 5 images are filtered"""
     output = utils.getinfo(default_coll_obj(
-        collections=['LANDSAT/LT05/C02/T1_L2'],
-        start_date='2012-01-01', end_date='2013-01-01',
+        collections=[collection], start_date=start_date, end_date=end_date,
         geometry=ee.Geometry.Rectangle(-125, 25, -65, 50))._build(variables=['et']))
     assert parse_scene_id(output) == []
 
 
-# def test_Collection_build_filter_dates_lc08():
-#     """Test that pre-op Landsat 8 images before 2013-04-01 are filtered"""
-#     output = utils.getinfo(default_coll_obj(
-#         collections=['LANDSAT/LC08/C02/T1_L2'],
-#         start_date='2013-01-01', end_date='2013-05-01',
-#         geometry=ee.Geometry.Rectangle(-125, 25, -65, 45))._build(variables=['et']))
-#     assert not [x for x in parse_scene_id(output) if x.split('_')[-1] < '20130401']
-#     # assert parse_scene_id(output) == []
+@pytest.mark.parametrize(
+    'collection, start_date, end_date',
+    [
+        # ['LANDSAT/LE07/C01/T1_TOA', '2022-01-01', '2023-01-01'],
+        ['LANDSAT/LE07/C01/T1_SR', '2022-01-01', '2023-01-01'],
+        ['LANDSAT/LE07/C02/T1_L2', '2022-01-01', '2023-01-01'],
+    ]
+)
+def test_Collection_build_filter_dates_le07(collection, start_date, end_date):
+    """Test that Landsat 7 images after 2021 are filtered"""
+    output = utils.getinfo(default_coll_obj(
+        collections=[collection], start_date=start_date, end_date=end_date,
+        geometry=ee.Geometry.Rectangle(-125, 25, -65, 50))._build(variables=['et']))
+    assert parse_scene_id(output) == []
+
+
+@pytest.mark.parametrize(
+    'collection, start_date, end_date',
+    [
+        # ['LANDSAT/LC08/C01/T1_TOA', '2013-01-01', '2013-04-01'],
+        ['LANDSAT/LC08/C01/T1_SR', '2013-01-01', '2013-04-01'],
+        ['LANDSAT/LC08/C02/T1_L2', '2013-01-01', '2013-04-01'],
+    ]
+)
+def test_Collection_build_filter_dates_lc08(collection, start_date, end_date):
+    """Test that pre-op Landsat 8 images before 2013-04-01 are filtered"""
+    output = utils.getinfo(default_coll_obj(
+        collections=[collection], start_date=start_date, end_date=end_date,
+        geometry=ee.Geometry.Rectangle(-125, 25, -65, 50))._build(variables=['et']))
+    assert not [x for x in parse_scene_id(output)
+                if x.split('_')[-1] < end_date.replace('-', '')]
+    assert parse_scene_id(output) == []
 
 
 def test_Collection_build_filter_args():

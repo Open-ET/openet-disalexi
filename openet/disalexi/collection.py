@@ -211,6 +211,8 @@ class Collection():
             self.collections = [c for c in self.collections if 'LT05' not in c]
         if self.end_date <= '1999-01-01':
             self.collections = [c for c in self.collections if 'LE07' not in c]
+        if self.start_date >= '2022-01-01':
+            self.collections = [c for c in self.collections if 'LE07' not in c]
         if self.end_date <= '2013-01-01':
             self.collections = [c for c in self.collections if 'LC08' not in c]
 
@@ -275,6 +277,9 @@ class Collection():
                 if 'LT05' in coll_id:
                     input_coll = input_coll.filter(ee.Filter.lt(
                         'system:time_start', ee.Date('2011-12-31').millis()))
+                elif 'LE07' in coll_id:
+                    input_coll = input_coll.filter(ee.Filter.lt(
+                        'system:time_start', ee.Date('2022-01-01').millis()))
                 elif 'LC08' in coll_id:
                     input_coll = input_coll.filter(ee.Filter.gt(
                         'system:time_start', ee.Date('2013-04-01').millis()))
@@ -308,6 +313,9 @@ class Collection():
                 if 'LT05' in coll_id:
                     input_coll = input_coll.filter(ee.Filter.lt(
                         'system:time_start', ee.Date('2011-12-31').millis()))
+                elif 'LE07' in coll_id:
+                    input_coll = input_coll.filter(ee.Filter.lt(
+                        'system:time_start', ee.Date('2022-01-01').millis()))
                 elif 'LC08' in coll_id:
                     input_coll = input_coll.filter(ee.Filter.gt(
                         'system:time_start', ee.Date('2013-04-01').millis()))
@@ -402,7 +410,8 @@ class Collection():
             instantiation call.
         t_interval : {'daily', 'monthly', 'annual', 'custom'}, optional
             Time interval over which to interpolate and aggregate values
-            (the default is 'monthly').
+            The default 'custom' interval will aggregate all days within the
+            start/end dates and return an image collection with a single image.
         interp_method : {'linear}, optional
             Interpolation method (the default is 'linear').
         interp_days : int, str, optional
