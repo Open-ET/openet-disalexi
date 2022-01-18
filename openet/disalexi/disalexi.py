@@ -41,6 +41,7 @@ class Image(object):
             lai_source='projects/earthengine-legacy/assets/projects/openet/lai/landsat/c02',
             tir_source='projects/earthengine-legacy/assets/projects/openet/tir/landsat/c02',
             elevation_source='USGS/SRTMGL1_003',
+            # landcover_source='USGS/NLCD_RELEASES/2016_REL',
             landcover_source='USGS/NLCD/NLCD2016',
             ta0_source='CFSR',
             rs_daily_source='CFSR',
@@ -76,7 +77,10 @@ class Image(object):
         elevation_source: str, ee.Image
             Elevation source keyword or asset (the default is USGS/SRTMGL1_003).
             Units must be in meters.
-        landcover_source : {'NLCD2016', 'NLCD2011', 'NLCD2006', 'GLOBELAND30'}
+        landcover_source : {'USGS/NLCD_RELEASES/2016_REL',
+                            'USGS/NLCD_RELEASES/2016_REL/2011',
+                            'USGS/NLCD/2016',
+                            'NLCD2016', 'NLCD2011', 'NLCD2006', 'GLOBELAND30'}
             Land cover source keyword (the default is 'NLCD2016').
         ta0_source : {'CFSR'}
             Air temperature source keyword (the default is 'CFSR').
@@ -268,23 +272,64 @@ class Image(object):
         else:
             raise ValueError('invalid lon parameter')
 
+        # TODO: Move this into a landcover source function
         # Set default land cover image and type
         # For now default to CONUS and use default if image and type were not set
-        # GlobeLand30 values need to be set to the lowest even multiple of 10,
-        #   since that is currently what is in the landcover.xlsx file.
-        # http://www.globallandcover.com/GLC30Download/index.aspx
         if utils.is_number(self.landcover_source):
             self.lc_source = ee.Image.constant(int(self.landcover_source)) \
                 .rename(['landcover'])
             self.lc_type = 'NLCD'
         elif isinstance(self.landcover_source, ee.computedobject.ComputedObject):
+            # If the source is an ee.Image assume it is an NLCD image
             self.lc_source = self.landcover_source.rename(['landcover'])
             self.lc_type = 'NLCD'
+        elif self.landcover_source in ['USGS/NLCD_RELEASES/2016_REL']:
+            # If the image collection is passed in, assume the target is CONUS
+            #   and select a close year
+            # Making this a server side call to avoid a getInfo call on self.year
+            # Clamp the year to 1999-2016 for now
+            year_remap = ee.Dictionary({
+                '1999': 2001, '2000': 2001, '2001': 2001, '2002': 2001,
+                '2003': 2004, '2004': 2004, '2005': 2004,
+                '2006': 2006, '2007': 2006,
+                '2008': 2008, '2009': 2008,
+                '2010': 2011, '2011': 2011, '2012': 2011,
+                '2013': 2013, '2014': 2013,
+                '2015': 2016, '2016': 2016,
+            })
+            nlcd_year = year_remap.get(self.year.min(2016).max(1999).format('%d'))
+            nlcd_date = ee.Date.fromYMD(nlcd_year, 1, 1)
+            self.lc_source = ee.ImageCollection(self.landcover_source) \
+                .filterDate(nlcd_date, nlcd_date.advance(1, 'year'))\
+                .first().select(['landcover'])
+            self.lc_type = 'NLCD'
+        elif self.landcover_source.upper().startswith('USGS/NLCD_RELEASES/2016_REL/'):
+            # Assume an image was passed in and use it directly
+            self.lc_source = ee.Image(self.landcover_source.upper()) \
+                .select(['landcover'])
+            self.lc_type = 'NLCD'
+        # TODO: Test out the ESA 10m Landcover asset
+        #   Collection ID: ESA/WorldCover/v100
+        #   Only 2020 is currently available
+        # elif self.landcover_source == 'ESA/WorldCover/v100/2020':
+        #     self.lc_source = ee.Image(self.landcover_source).select(['Map'])
+        #     self.lc_type = 'ESA?'
+        # TODO: Test out the Copernicus 100m landcover asset
+        #   Collection ID: COPERNICUS/Landcover/100m/Proba-V-C3/Global
+        #   Years: 2015-2019
+        # elif self.landcover_source == 'COPERNICUS/Landcover/100m/Proba-V-C3/Global':
+        # elif self.landcover_source.startswith('COPERNICUS/Landcover/100m/Proba-V-C3/Global/2'):
+        #     self.lc_source = ee.ImageCollection(self.landcover_source)
+        #         .filterDate(ee.Date(self.year, 1, 1),
+        #                     ee.Date(self.year, 12, 31))\
+        #         .select(['discrete_classification])
+        #     self.lc_type = ''
+        # TODO: Eventually remove this option since the image collection is deprecated
         elif self.landcover_source.upper().startswith('USGS/NLCD/'):
             self.lc_source = ee.Image(self.landcover_source.upper()) \
                 .select(['landcover'])
             self.lc_type = 'NLCD'
-        # TODO: Eventually remove the landcover keyword sources
+        # TODO: Eventually remove the NLCD  keyword sources
         elif self.landcover_source.upper() == 'NLCD2016':
             self.lc_source = ee.Image('USGS/NLCD/NLCD2016').select(['landcover'])
             self.lc_type = 'NLCD'
@@ -294,7 +339,11 @@ class Image(object):
         elif self.landcover_source.upper() == 'NLCD2006':
             self.lc_source = ee.Image('USGS/NLCD/NLCD2006').select(['landcover'])
             self.lc_type = 'NLCD'
+        # TODO: Eventually remove this option
         elif self.landcover_source.upper() == 'GLOBELAND30':
+            # GlobeLand30 values need to be set to the lowest even multiple of 10,
+            #   since that is currently what is in the landcover.xlsx file.
+            # http://www.globallandcover.com/GLC30Download/index.aspx
             lc_coll = ee.ImageCollection('users/cgmorton/GlobeLand30') \
                 .filterBounds(image.geometry().bounds(1))
             self.lc_source = ee.Image(lc_coll.mosaic()) \
