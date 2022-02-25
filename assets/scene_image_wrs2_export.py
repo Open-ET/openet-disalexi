@@ -416,15 +416,14 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
         alexi_geo = [0.04, 0.0, -125.04, 0.0, -0.04, 49.8]
         alexi_cs = 0.04
         alexi_x, alexi_y = -125.04, 49.8
-    elif alexi_coll_id.upper() == 'CONUS_V002':
-        alexi_coll_id = 'projects/earthengine-legacy/assets/' \
-                        'projects/disalexi/alexi/CONUS_V002'
+    elif alexi_coll_id.upper() == 'CONUS_V005':
+        alexi_coll_id = 'projects/ee-tulipyangyun-2/assets/alexi/ALEXI_V005'
         alexi_mask = ee.Image('projects/earthengine-legacy/assets/'
-                              'projects/disalexi/alexi/conus_v002_mask')\
+                              'projects/disalexi/alexi/conus_v004_mask')\
             .double().multiply(0)
-        alexi_geo = [0.04, 0.0, -125.04, 0.0, -0.04, 49.8]
+        alexi_geo = [0.04, 0.0, -125.02, 0.0, -0.04, 49.78]
         alexi_cs = 0.04
-        alexi_x, alexi_y = -125.04, 49.8
+        alexi_x, alexi_y = -125.02, 49.78
     else:
         raise ValueError(f'unsupported ALEXI source: {alexi_coll_id}')
     # alexi_coll = ee.ImageCollection(alexi_coll_id)

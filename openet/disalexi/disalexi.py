@@ -364,13 +364,13 @@ class Image(object):
 
         # CGM - This should probably be set in et_alexi() but that wasn't working
         if type(self.alexi_source) is str:
-            if self.alexi_source.upper() == 'CONUS_V004':
+            if self.alexi_source.upper() == 'CONUS_V005':
+                self.alexi_geo = [0.04, 0, -125.02, 0, -0.04, 49.78]
+                self.alexi_crs = 'EPSG:4326'
+            elif self.alexi_source.upper() == 'CONUS_V004':
                 self.alexi_geo = [0.04, 0, -125.02, 0, -0.04, 49.78]
                 self.alexi_crs = 'EPSG:4326'
             elif self.alexi_source.upper() == 'CONUS_V003':
-                self.alexi_geo = [0.04, 0, -125.04, 0, -0.04, 49.8]
-                self.alexi_crs = 'EPSG:4326'
-            elif self.alexi_source.upper() == 'CONUS_V002':
                 self.alexi_geo = [0.04, 0, -125.04, 0, -0.04, 49.8]
                 self.alexi_crs = 'EPSG:4326'
             else:
@@ -569,7 +569,8 @@ class Image(object):
         """
         alexi_keyword_sources = {
             'CONUS_V003': 'projects/disalexi/alexi/CONUS_V003',
-            'CONUS_V004': 'projects/disalexi/alexi/CONUS_V004'
+            'CONUS_V004': 'projects/disalexi/alexi/CONUS_V004',
+            'CONUS_V005': 'projects/ee-tulipyangyun-2/alexi/ALEXI_V005'
         }
         alexi_re = re.compile('(projects/earthengine-legacy/assets/)?'
                               'projects/disalexi/alexi/CONUS_V\\w+')
@@ -743,9 +744,9 @@ class Image(object):
 
         """
         ta_keyword_sources = {
-            'CONUS_V002': 'projects/disalexi/ta/CONUS_V002_NLDAS_1K',
             'CONUS_V003': 'projects/openet/disalexi/tair/conus_v003_1k',
-            'CONUS_V004': 'projects/openet/disalexi/tair/conus_v004_1k'
+            'CONUS_V004': 'projects/openet/disalexi/tair/conus_v004_1k',
+            'CONUS_V005': 'projects/openet/disalexi/tair/conus_v005_1k'
         }
         ta_source_re = re.compile(
             '(projects/earthengine-legacy/assets/)?'
@@ -779,7 +780,7 @@ class Image(object):
             ta_img = ta_array.arrayGet(index)
 
             if self.ta_smooth_flag:
-                ta_img = ta_img.focal_mean(2, 'circle', 'pixels')\
+                ta_img = ta_img.focal_mean(1, 'circle', 'pixels')\
                     .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)\
                     .resample('bilinear')\
                     .reproject(crs=self.crs,crsTransform=self.transform)
@@ -804,7 +805,7 @@ class Image(object):
             ta_img = ta_array.arrayGet(index)
 
             if self.ta_smooth_flag:
-                ta_img = ta_img.focal_mean(2, 'circle', 'pixels')\
+                ta_img = ta_img.focal_mean(1, 'circle', 'pixels')\
                     .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)\
                     .resample('bilinear')\
                     .reproject(crs=self.crs,crsTransform=self.transform)
