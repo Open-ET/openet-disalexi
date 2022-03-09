@@ -11,7 +11,7 @@ import openet.disalexi.utils as utils
 
 # CGM - The Collection class will currently default to Collection 2 inputs
 # CGM - Scene LE07_044033_20170724 isn't loaded in collection 2 yet
-COLLECTIONS = ['LANDSAT/LC08/C02/T1_L2', 'LANDSAT/LE07/C02/T1_L2']
+C02_COLLECTIONS = ['LANDSAT/LC08/C02/T1_L2', 'LANDSAT/LE07/C02/T1_L2']
 C02_SCENE_ID_LIST = sorted(['LC08_044033_20170716', 'LE07_044033_20170708'])
 # C01_SCENE_ID_LIST = sorted(['LC08_044033_20170716', 'LE07_044033_20170708',
 #                         'LE07_044033_20170724'])
@@ -30,7 +30,7 @@ TEST_POINT = (-121.5265, 38.7399)
 
 
 default_coll_args = {
-    'collections': COLLECTIONS,
+    'collections': C02_COLLECTIONS,
     'geometry': ee.Geometry.Point(SCENE_POINT),
     'start_date': START_DATE,
     'end_date': END_DATE,
@@ -178,9 +178,36 @@ def test_Collection_build_default():
     assert {y['id'] for x in output['features'] for y in x['bands']} == VARIABLES
 
 
-def test_Collection_build_variables():
-    output = utils.getinfo(default_coll_obj()._build(variables=['ndvi']))
-    assert {y['id'] for x in output['features'] for y in x['bands']} == {'ndvi'}
+def test_Collection_build_variables_custom(variable='ndvi'):
+    # Check that setting the build variables overrides the collection variables
+    output = utils.getinfo(default_coll_obj()._build(variables=[variable])
+                           .first().bandNames())
+    assert set(output) == {variable}
+
+
+def test_Collection_build_variables_none():
+    """Test for exception if variables is set to None in method call"""
+    with pytest.raises(ValueError):
+        utils.getinfo(default_coll_obj(variables=None)._build(variables=None))
+
+
+def test_Collection_build_variables_not_set():
+    """Test for exception if variables is not set in method since default is None"""
+    with pytest.raises(ValueError):
+        utils.getinfo(default_coll_obj(variables=None)._build())
+
+
+def test_Collection_build_variables_empty_list():
+    # Setting variables to an empty list should return the merged Landsat collection
+    output = utils.getinfo(
+        default_coll_obj(variables=None)._build(variables=[]).first().bandNames())
+    assert 'SR_B3' in output
+
+
+def test_Collection_build_invalid_variable_exception():
+    """Test if Exception is raised for an invalid variable"""
+    with pytest.raises(ValueError):
+        utils.getinfo(default_coll_obj()._build(variables=['FOO']))
 
 
 def test_Collection_build_dates():
@@ -511,3 +538,19 @@ def test_Collection_interpolate_no_variables_exception():
 #     custom_args['et_fraction_max'] = 1.4
 #     output = utils.getinfo(default_coll_obj().interpolate(**custom_args))
 #     assert ?
+
+
+@pytest.mark.parametrize(
+    'collections, scene_id_list',
+    [
+        # [['LANDSAT/LC08/C01/T1_TOA', 'LANDSAT/LE07/C01/T1_TOA'], C01_SCENE_ID_LIST],
+        # [['LANDSAT/LC08/C01/T1_SR', 'LANDSAT/LE07/C01/T1_SR'], C01_SCENE_ID_LIST],
+        [['LANDSAT/LC08/C02/T1_L2', 'LANDSAT/LE07/C02/T1_L2'], C02_SCENE_ID_LIST],
+    ]
+)
+def test_Collection_get_image_ids(collections, scene_id_list):
+    # get_image_ids method makes a getInfo call internally
+    output = default_coll_obj(collections=collections, variables=None)\
+        .get_image_ids()
+    assert type(output) is list
+    assert set(x.split('/')[-1] for x in output) == set(scene_id_list)
