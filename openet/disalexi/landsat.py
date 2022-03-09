@@ -143,7 +143,8 @@ class Landsat_C01_SR(Landsat):
             'LANDSAT_4': ['B1', 'B2', 'B3', 'B4', 'B5', 'B7', 'B6', 'pixel_qa'],
             'LANDSAT_5': ['B1', 'B2', 'B3', 'B4', 'B5', 'B7', 'B6', 'pixel_qa'],
             'LANDSAT_7': ['B1', 'B2', 'B3', 'B4', 'B5', 'B7', 'B6', 'pixel_qa'],
-            'LANDSAT_8': ['B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B10', 'pixel_qa']})
+            'LANDSAT_8': ['B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B10', 'pixel_qa'],
+        })
         output_bands = [
             'blue', 'green', 'red', 'nir', 'swir1', 'swir2', 'tir', 'pixel_qa']
 
@@ -278,7 +279,8 @@ class Landsat_C02_SR(Landsat):
             'LANDSAT_7': ['SR_B1', 'SR_B2', 'SR_B3', 'SR_B4', 'SR_B5', 'SR_B7',
                           'ST_B6', 'QA_PIXEL'],
             'LANDSAT_8': ['SR_B2', 'SR_B3', 'SR_B4', 'SR_B5', 'SR_B6', 'SR_B7',
-                          'ST_B10', 'QA_PIXEL']})
+                          'ST_B10', 'QA_PIXEL'],
+        })
         # Rename bands to generic names
         output_bands = [
             'blue', 'green', 'red', 'nir', 'swir1', 'swir2', 'lst', 'QA_PIXEL']
