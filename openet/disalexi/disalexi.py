@@ -41,8 +41,7 @@ class Image(object):
             lai_source='projects/earthengine-legacy/assets/projects/openet/lai/landsat/c02',
             tir_source='projects/earthengine-legacy/assets/projects/openet/tir/landsat/c02',
             elevation_source='USGS/SRTMGL1_003',
-            # landcover_source='USGS/NLCD_RELEASES/2016_REL',
-            landcover_source='USGS/NLCD/NLCD2016',
+            landcover_source='USGS/NLCD_RELEASES/2019_REL/NLCD',
             ta0_source='CFSR',
             rs_daily_source='CFSR',
             rs_hourly_source='CFSR',
@@ -77,11 +76,13 @@ class Image(object):
         elevation_source: str, ee.Image
             Elevation source keyword or asset (the default is USGS/SRTMGL1_003).
             Units must be in meters.
-        landcover_source : {'USGS/NLCD_RELEASES/2016_REL',
+        landcover_source : {'USGS/NLCD_RELEASES/2019_REL/NLCD',
+                            'USGS/NLCD_RELEASES/2019_REL/NLCD/2016',
+                            'USGS/NLCD_RELEASES/2016_REL',
                             'USGS/NLCD_RELEASES/2016_REL/2011',
-                            'USGS/NLCD/2016',
-                            'NLCD2016', 'NLCD2011', 'NLCD2006', 'GLOBELAND30'}
-            Land cover source keyword (the default is 'NLCD2016').
+                            'GLOBELAND30'}
+            Land cover source keyword
+            (the default is 'USGS/NLCD_RELEASES/2019_REL/NLCD').
         ta0_source : {'CFSR'}
             Air temperature source keyword (the default is 'CFSR').
         rs_daily_source : {'MERRA2', 'CFSR'}
@@ -283,11 +284,36 @@ class Image(object):
             # If the source is an ee.Image assume it is an NLCD image
             self.lc_source = self.landcover_source.rename(['landcover'])
             self.lc_type = 'NLCD'
-        elif self.landcover_source in ['USGS/NLCD_RELEASES/2016_REL']:
+        elif self.landcover_source == 'USGS/NLCD_RELEASES/2019_REL/NLCD':
             # If the image collection is passed in, assume the target is CONUS
             #   and select a close year
             # Making this a server side call to avoid a getInfo call on self.year
-            # Clamp the year to 1999-2016 for now
+            # Clamp the year to 1999-2019 for now
+            year_remap = ee.Dictionary({
+                '1999': '2001', '2000': '2001', '2001': '2001', '2002': '2001',
+                '2003': '2004', '2004': '2004', '2005': '2004',
+                '2006': '2006', '2007': '2006',
+                '2008': '2008', '2009': '2008',
+                '2010': '2011', '2011': '2011', '2012': '2011',
+                '2013': '2013', '2014': '2013',
+                '2015': '2016', '2016': '2016', '2017': '2016',
+                '2018': '2019', '2019': '2019',
+            })
+            nlcd_year = year_remap.get(self.year.min(2019).max(1999).format('%d'))
+            # The timestart didn't seem quite right on the NLCD assets,
+            #   so filtering using the system:index instead
+            self.lc_source = ee.ImageCollection(self.landcover_source) \
+                .filter(ee.Filter.equals('system:index', nlcd_year))\
+                .first().select(['landcover'])
+            self.lc_type = 'NLCD'
+        elif self.landcover_source.upper().startswith('USGS/NLCD_RELEASES/2019_REL/NLCD/'):
+            # Assume an image was passed in and use it directly
+            self.lc_source = ee.Image(self.landcover_source.upper()) \
+                .select(['landcover'])
+            self.lc_type = 'NLCD'
+        elif self.landcover_source in ['USGS/NLCD_RELEASES/2016_REL']:
+            # If the image collection is passed in, assume the target is CONUS
+            #   and select a close year
             year_remap = ee.Dictionary({
                 '1999': 2001, '2000': 2001, '2001': 2001, '2002': 2001,
                 '2003': 2004, '2004': 2004, '2005': 2004,

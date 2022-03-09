@@ -115,7 +115,7 @@ def test_Image_init_default_parameters():
     assert m.lai_source == 'projects/earthengine-legacy/assets/projects/openet/lai/landsat/c02'
     assert m.tir_source == 'projects/earthengine-legacy/assets/projects/openet/tir/landsat/c02'
     assert m.elevation_source == 'USGS/SRTMGL1_003'
-    assert m.landcover_source == 'USGS/NLCD/NLCD2016'
+    assert m.landcover_source == 'USGS/NLCD_RELEASES/2019_REL/NLCD'
     assert m.airpressure_source == 'CFSR'
     assert m.rs_daily_source == 'CFSR'
     assert m.rs_hourly_source == 'CFSR'
@@ -186,19 +186,19 @@ def test_Image_init_date_properties():
 @pytest.mark.parametrize(
     'source, xy, expected',
     [
-        # ['CONUS_V005', TEST_POINT, 298.1013811163322],
-        # ['CONUS_V005', [-121.50822, 38.71776], 300.04066476402267],
+        ['CONUS_V005', TEST_POINT, 297.4977364906148],
+        ['CONUS_V005', [-121.50822, 38.71776], 296.99708009212264],
         # ['CONUS_V004', TEST_POINT, 298.1013811163322],
         # ['CONUS_V004', [-121.50822, 38.71776], 300.04066476402267],
-        ['CONUS_V003', TEST_POINT, 300.99823651442586],
-        ['CONUS_V003', [-121.50822, 38.71776], 300.4560056192083],
-        ['projects/openet/disalexi/tair/conus_v003_1k', TEST_POINT, 300.99823651442586],
-        ['projects/earthengine-legacy/assets/projects/openet/disalexi/tair/conus_v003_1k',
+        # ['CONUS_V003', TEST_POINT, 300.99823651442586],
+        # ['CONUS_V003', [-121.50822, 38.71776], 300.4560056192083],
+        # ['projects/openet/disalexi/tair/conus_v003_1k', TEST_POINT, 300.99823651442586],
+        # ['projects/earthengine-legacy/assets/projects/openet/disalexi/tair/conus_v003_1k',
         # CGM - I'm not sure why the test values below don't work anymore when
         #   Ta shouldn't have changed.
         # ['CONUS_V003', TEST_POINT, 298.1013811163322],
         # ['CONUS_V003', [-121.50822, 38.71776], 300.04066476402267],
-         TEST_POINT, 300.99823651442586],
+        # TEST_POINT, 300.99823651442586],
         [ee.Image('USGS/SRTMGL1_003').multiply(0).add(10), TEST_POINT, 10],
         ['294.8', TEST_POINT, 294.8],  # Check constant values
         [294.8, TEST_POINT, 294.8],    # Check constant values
@@ -214,18 +214,19 @@ def test_Image_ta_source(source, xy, expected, tol=0.01):
 #   smoothing radius is currently too small to change the data
 def test_Image_ta_smooth_flag(tol=0.01):
     """The smooth flag defaults to True, so set False to test"""
-    m = disalexi.Image(default_image(), ta_source='CONUS_V003',
+    m = disalexi.Image(default_image(), ta_source='CONUS_V005',
                        ta_smooth_flag=False)
     output = utils.point_image_value(ee.Image(m.ta), TEST_POINT)
-    assert abs(output['ta'] - 298.1013811163322) <= tol
+    assert abs(output['ta'] - 290) <= tol
+    # assert abs(output['ta'] - 298.1013811163322) <= tol
 
 
 def test_Image_ta_interp_flag(tol=0.01):
     """The interp flag defaults to True, so set False to test"""
-    m = disalexi.Image(default_image(), ta_source='CONUS_V003',
+    m = disalexi.Image(default_image(), ta_source='CONUS_V005',
                        ta_interp_flag=False)
     output = utils.point_image_value(ee.Image(m.ta), TEST_POINT)
-    assert abs(output['ta'] - 298) <= tol
+    assert abs(output['ta'] - 297.5) <= tol
 
 
 def test_Image_ta_source_exception():
@@ -322,10 +323,11 @@ def test_Image_elevation_band_name():
 @pytest.mark.parametrize(
     'source, xy, expected',
     [
+        ['USGS/NLCD_RELEASES/2019_REL/NLCD', TEST_POINT, 82],
+        ['USGS/NLCD_RELEASES/2019_REL/NLCD/2016', TEST_POINT, 82],
+        ['USGS/NLCD_RELEASES/2016_REL', TEST_POINT, 82],
+        ['USGS/NLCD_RELEASES/2016_REL/2016', TEST_POINT, 82],
         ['USGS/NLCD/NLCD2016', TEST_POINT, 82],
-        ['NLCD2016', TEST_POINT, 82],
-        ['NLCD2011', TEST_POINT, 82],
-        ['NLCD2006', TEST_POINT, 82],
         ['GLOBELAND30', TEST_POINT, 10],
         [ee.Image('USGS/SRTMGL1_003').multiply(0).add(82), TEST_POINT, 82],
         ['82', TEST_POINT, 82],
@@ -498,7 +500,7 @@ def test_Image_windspeed_band_name():
     assert output == 'windspeed'
 
 
-def test_Image_et_default_values(expected=5.702390169392773, tol=0.0001):
+def test_Image_et_default_values(expected=5.497461682063846, tol=0.0001):
     output = utils.point_image_value(default_image_obj().et, TEST_POINT)
     assert abs(output['et'] - expected) <= tol
 
@@ -751,7 +753,7 @@ def test_Image_from_landsat_c1_sr_et():
     image_id = 'LANDSAT/LC08/C01/T1_SR/LC08_044033_20170716'
     # Using the collection 2 inputs since the c01 inputs no longer exist
     output = utils.getinfo(disalexi.Image.from_landsat_c1_sr(
-        image_id, ta_source='CONUS_V002',
+        image_id, ta_source='CONUS_V003',
         lai_source='projects/earthengine-legacy/assets/projects/openet/lai/landsat/c02',
         tir_source='projects/earthengine-legacy/assets/projects/openet/tir/landsat/c02',
     ).et)
@@ -775,6 +777,7 @@ def test_Image_from_landsat_c2_sr_default_image():
 @pytest.mark.parametrize(
     'image_id',
     [
+        'LANDSAT/LC09/C02/T1_L2/LC09_044033_20220127',
         'LANDSAT/LC08/C02/T1_L2/LC08_044033_20170716',
         'LANDSAT/LE07/C02/T1_L2/LE07_044033_20170708',
         'LANDSAT/LT05/C02/T1_L2/LT05_044033_20110716',

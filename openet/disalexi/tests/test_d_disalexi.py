@@ -132,7 +132,7 @@ def test_Image_set_landcover_vars_default(tol=1E-6):
 
 def test_Image_set_landcover_vars_init_asset(tol=1E-6):
     """Test setting the land cover image and type as the object is initialized"""
-    d_obj = disalexi.Image(test_img, landcover_source='NLCD2011')
+    d_obj = disalexi.Image(test_img, landcover_source='USGS/NLCD_RELEASES/2019_REL/NLCD/2011')
     d_obj.set_landcover_vars()
     assert utils.point_image_value(d_obj.aleafv, ne1_xy)['aleafv'] == 0.83
     # assert utils.point_image_value(d_obj.aleafn, ne1_xy)['aleafn'] == 0.35
@@ -148,7 +148,7 @@ def test_Image_set_landcover_vars_init_asset(tol=1E-6):
 def test_Image_set_landcover_vars_set_asset(tol=1E-6):
     """Test setting the land cover image and type directly on the object"""
     d_obj = disalexi.Image(test_img)
-    d_obj.landcover_source = 'NLCD2011'
+    d_obj.landcover_source = 'USGS/NLCD_RELEASES/2019_REL/NLCD/2011'
     d_obj.set_landcover_vars()
     assert utils.point_image_value(d_obj.aleafv, ne1_xy)['aleafv'] == 0.83
     # assert utils.point_image_value(d_obj.aleafn, ne1_xy)['aleafn'] == 0.35
