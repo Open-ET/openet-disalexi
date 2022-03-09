@@ -254,7 +254,7 @@ class Landsat_C02_SR(Landsat):
         Parameters
         ----------
         raw_image : ee.Image
-            Landsat 5/7/8 Collection 2 SR image
+            Landsat 5/7/8/9 Collection 2 SR image
             (i.e. from the "LANDSAT/X/C02/T1_L2" collection)
 
         """
@@ -279,6 +279,8 @@ class Landsat_C02_SR(Landsat):
             'LANDSAT_7': ['SR_B1', 'SR_B2', 'SR_B3', 'SR_B4', 'SR_B5', 'SR_B7',
                           'ST_B6', 'QA_PIXEL'],
             'LANDSAT_8': ['SR_B2', 'SR_B3', 'SR_B4', 'SR_B5', 'SR_B6', 'SR_B7',
+                          'ST_B10', 'QA_PIXEL'],
+            'LANDSAT_9': ['SR_B2', 'SR_B3', 'SR_B4', 'SR_B5', 'SR_B6', 'SR_B7',
                           'ST_B10', 'QA_PIXEL'],
         })
         # Rename bands to generic names

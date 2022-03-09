@@ -165,6 +165,7 @@ def test_Landsat_C01_SR_ndvi(red=0.2, nir=0.7, expected=0.5556, tol=0.001):
 @pytest.mark.parametrize(
     'img_id',
     [
+        'LANDSAT/LC09/C02/T1_L2/LC09_044033_20220127',
         'LANDSAT/LC08/C02/T1_L2/LC08_028031_20140708',
         'LANDSAT/LE07/C02/T1_L2/LE07_028031_20010610',
         'LANDSAT/LT05/C02/T1_L2/LT05_028031_20010501',

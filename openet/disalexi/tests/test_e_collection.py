@@ -12,8 +12,8 @@ import openet.disalexi.utils as utils
 # CGM - The Collection class will currently default to Collection 2 inputs
 # CGM - Scene LE07_044033_20170724 isn't loaded in collection 2 yet
 COLLECTIONS = ['LANDSAT/LC08/C02/T1_L2', 'LANDSAT/LE07/C02/T1_L2']
-SCENE_ID_LIST = sorted(['LC08_044033_20170716', 'LE07_044033_20170708'])
-# SCENE_ID_LIST = sorted(['LC08_044033_20170716', 'LE07_044033_20170708',
+C02_SCENE_ID_LIST = sorted(['LC08_044033_20170716', 'LE07_044033_20170708'])
+# C01_SCENE_ID_LIST = sorted(['LC08_044033_20170716', 'LE07_044033_20170708',
 #                         'LE07_044033_20170724'])
 # TA_SOURCE = 'CONUS_V003'
 # LAI_SOURCE = 'projects/earthengine-legacy/assets/projects/openet/lai/landsat/c02'
@@ -109,6 +109,7 @@ def test_Collection_init_cloud_cover_max_str():
         ['LANDSAT/LE07/C02/T1_L2', '1998-01-01', '1999-01-01'],
         ['LANDSAT/LE07/C02/T1_L2', '2022-01-01', '2023-01-01'],
         ['LANDSAT/LC08/C02/T1_L2', '2012-01-01', '2013-01-01'],
+        ['LANDSAT/LC09/C02/T1_L2', '2021-01-01', '2022-01-01'],
     ]
 )
 def test_Collection_init_collection_filter(coll_id, start_date, end_date):
@@ -172,7 +173,7 @@ def test_Collection_init_cloud_cover_exception():
 def test_Collection_build_default():
     output = utils.getinfo(default_coll_obj()._build())
     assert output['type'] == 'ImageCollection'
-    assert parse_scene_id(output) == SCENE_ID_LIST
+    assert parse_scene_id(output) == C02_SCENE_ID_LIST
     # For the default build, check that the target variables are returned also
     assert {y['id'] for x in output['features'] for y in x['bands']} == VARIABLES
 
@@ -195,7 +196,7 @@ def test_Collection_build_landsat_c02_sr():
     coll_obj = default_coll_obj(
         collections=['LANDSAT/LC08/C02/T1_L2', 'LANDSAT/LE07/C02/T1_L2'])
     output = utils.getinfo(coll_obj._build())
-    assert parse_scene_id(output) == SCENE_ID_LIST
+    assert parse_scene_id(output) == C02_SCENE_ID_LIST
     assert {y['id'] for x in output['features'] for y in x['bands']} == VARIABLES
 
 
@@ -263,6 +264,22 @@ def test_Collection_build_filter_dates_lc08(collection, start_date, end_date):
     assert parse_scene_id(output) == []
 
 
+@pytest.mark.parametrize(
+    'collection, start_date, end_date',
+    [
+        ['LANDSAT/LC09/C02/T1_L2', '2021-11-01', '2022-01-01'],
+    ]
+)
+def test_Collection_build_filter_dates_lc09(collection, start_date, end_date):
+    """Test that Landsat 9 images before 2022-01-01 are filtered"""
+    output = utils.getinfo(default_coll_obj(
+        collections=[collection], start_date=start_date, end_date=end_date,
+        geometry=ee.Geometry.Rectangle(-125, 25, -65, 50))._build(variables=['et']))
+    assert not [x for x in parse_scene_id(output)
+                if x.split('_')[-1] < end_date.replace('-', '')]
+    assert parse_scene_id(output) == []
+
+
 def test_Collection_build_filter_args():
     # Need to test with two collections to catch bug when deepcopy isn't used
     collections = ['LANDSAT/LC08/C02/T1_L2', 'LANDSAT/LE07/C02/T1_L2']
@@ -293,7 +310,7 @@ def test_Collection_overpass_default():
     """Test overpass method with default values (variables from Class init)"""
     output = utils.getinfo(default_coll_obj().overpass())
     assert {y['id'] for x in output['features'] for y in x['bands']} == VARIABLES
-    assert parse_scene_id(output) == SCENE_ID_LIST
+    assert parse_scene_id(output) == C02_SCENE_ID_LIST
 
 
 def test_Collection_overpass_class_variables():

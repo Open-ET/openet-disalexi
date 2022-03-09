@@ -404,6 +404,7 @@ class Image(object):
         # CGM - Should the supported image collection IDs and helper
         # function mappings be set in a property or method of the Image class?
         collection_methods = {
+            'LANDSAT/LC09/C02/T1_L2': 'from_landsat_c2_sr',
             'LANDSAT/LC08/C02/T1_L2': 'from_landsat_c2_sr',
             'LANDSAT/LE07/C02/T1_L2': 'from_landsat_c2_sr',
             'LANDSAT/LT05/C02/T1_L2': 'from_landsat_c2_sr',
