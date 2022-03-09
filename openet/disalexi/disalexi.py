@@ -570,7 +570,7 @@ class Image(object):
         alexi_keyword_sources = {
             'CONUS_V003': 'projects/disalexi/alexi/CONUS_V003',
             'CONUS_V004': 'projects/disalexi/alexi/CONUS_V004',
-            'CONUS_V005': 'projects/ee-tulipyangyun-2/alexi/ALEXI_V005'
+            'CONUS_V005': 'projects/ee-tulipyangyun-2/assets/alexi/ALEXI_V005',
         }
         alexi_re = re.compile('(projects/earthengine-legacy/assets/)?'
                               'projects/disalexi/alexi/CONUS_V\\w+')

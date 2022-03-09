@@ -249,6 +249,11 @@ def test_Image_ta_properties():
     'scene_id, source, xy, expected',
     [
         # ALEXI ET is currently in MJ m-2 d-1
+        ['LC08_044033_20200708', 'CONUS_V005', TEST_POINT, 17.999324798583984 * 0.408],
+        ['LC08_044033_20200724', 'CONUS_V005', TEST_POINT, 17.819684982299805 * 0.408],
+        [None, 'CONUS_V005', TEST_POINT, 12.765579223632812 * 0.408],
+        [None, 'projects/ee-tulipyangyun-2/assets/alexi/ALEXI_V005',
+         TEST_POINT, 12.765579223632812 * 0.408],
         ['LC08_044033_20200708', 'CONUS_V004', TEST_POINT, 16.58306312561035 * 0.408],
         ['LC08_044033_20200724', 'CONUS_V004', TEST_POINT, 16.664167404174805 * 0.408],
         ['LC08_044033_20200708', 'CONUS_V003', TEST_POINT, 15.465087890625 * 0.408],
@@ -270,6 +275,7 @@ def test_Image_alexi_source(scene_id, source, xy, expected, tol=0.0001):
     output = utils.point_image_value(disalexi.Image(
         default_image(scene_id=scene_id, scene_time=scene_time),
         alexi_source=source).et_alexi, xy)
+    print(output['et_alexi']/0.408)
     assert abs(output['et_alexi'] - expected) <= tol
 
 
