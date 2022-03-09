@@ -70,7 +70,7 @@ def default_image(albedo=0.125, cfmask=0, lai=4.2, lst=306.5, ndvi=0.875,
         })
 
 def default_image_args(albedo=0.125, cfmask=0, lai=4.2, lst=306.5, ndvi=0.875,
-                       ta_source='CONUS_V003', alexi_source='CONUS_V003',
+                       ta_source='CONUS_V005', alexi_source='CONUS_V005',
                        ta_smooth_flag=False,
                        et_reference_source=10, et_reference_band=None,
                        et_reference_factor=1.0, et_reference_resample='nearest',
@@ -90,7 +90,7 @@ def default_image_args(albedo=0.125, cfmask=0, lai=4.2, lst=306.5, ndvi=0.875,
     }
 
 def default_image_obj(albedo=0.125, cfmask=0, lai=4.2, lst=306.5, ndvi=0.875,
-                      ta_source='CONUS_V003', alexi_source='CONUS_V003',
+                      ta_source='CONUS_V005', alexi_source='CONUS_V005',
                       et_reference_source=10, et_reference_band=None,
                       et_reference_factor=1.0, et_reference_resample='nearest',
                       stability_iterations=25, albedo_iterations=10,
@@ -110,8 +110,8 @@ def default_image_obj(albedo=0.125, cfmask=0, lai=4.2, lst=306.5, ndvi=0.875,
 
 def test_Image_init_default_parameters():
     m = disalexi.Image(default_image())
-    assert m.ta_source == 'CONUS_V003'
-    assert m.alexi_source == 'CONUS_V003'
+    assert m.ta_source == 'CONUS_V005'
+    assert m.alexi_source == 'CONUS_V005'
     assert m.lai_source == 'projects/earthengine-legacy/assets/projects/openet/lai/landsat/c02'
     assert m.tir_source == 'projects/earthengine-legacy/assets/projects/openet/tir/landsat/c02'
     assert m.elevation_source == 'USGS/SRTMGL1_003'
@@ -186,6 +186,8 @@ def test_Image_init_date_properties():
 @pytest.mark.parametrize(
     'source, xy, expected',
     [
+        # ['CONUS_V005', TEST_POINT, 298.1013811163322],
+        # ['CONUS_V005', [-121.50822, 38.71776], 300.04066476402267],
         # ['CONUS_V004', TEST_POINT, 298.1013811163322],
         # ['CONUS_V004', [-121.50822, 38.71776], 300.04066476402267],
         ['CONUS_V003', TEST_POINT, 300.99823651442586],

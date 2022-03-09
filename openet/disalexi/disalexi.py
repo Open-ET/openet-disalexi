@@ -36,8 +36,8 @@ class Image(object):
     def __init__(
             self,
             image,
-            ta_source='CONUS_V004',
-            alexi_source='CONUS_V004',
+            ta_source='CONUS_V005',
+            alexi_source='CONUS_V005',
             lai_source='projects/earthengine-legacy/assets/projects/openet/lai/landsat/c02',
             tir_source='projects/earthengine-legacy/assets/projects/openet/tir/landsat/c02',
             elevation_source='USGS/SRTMGL1_003',
@@ -65,11 +65,11 @@ class Image(object):
         ----------
         image : ee.Image
             Prepped image
-        ta_source : {'CONUS_V003', 'CONUS_V004'}
+        ta_source : {'CONUS_V003', 'CONUS_V004', 'CONUS_V005'}
             ALEXI scale air temperature image collection ID.
-            The default is 'CONUS_V004'.
-        alexi_source : {'CONUS_V003', 'CONUS_V004'}
-            ALEXI ET image collection ID (the default is 'CONUS_V004').
+            The default is 'CONUS_V005'.
+        alexi_source : {'CONUS_V003', 'CONUS_V004', 'CONUS_V005'}
+            ALEXI ET image collection ID (the default is 'CONUS_V005').
         lai_source : string
             LAI image collection ID.
         tir_source : string
@@ -586,9 +586,14 @@ class Image(object):
                 .filterDate(self.start_date, self.end_date)
             # TODO: Check if collection size is 0
             alexi_img = ee.Image(alexi_coll.first()).multiply(0.408)
-            # self.alexi_geo = [0.04, 0, -125.04, 0, -0.04, 49.8]
-            # self.alexi_crs = 'EPSG:4326'
         elif alexi_re.match(self.alexi_source):
+            alexi_coll = ee.ImageCollection(self.alexi_source) \
+                .filterDate(self.start_date, self.end_date)
+            alexi_img = ee.Image(alexi_coll.first()).multiply(0.408)
+        elif self.alexi_source in alexi_keyword_sources.values():
+            # CGM - Quick fix for catching if the alexi_source was to as the
+            #   collection ID, specifically for V005 since it is currently in a
+            #   different project and won't get matched by the regex.
             alexi_coll = ee.ImageCollection(self.alexi_source) \
                 .filterDate(self.start_date, self.end_date)
             alexi_img = ee.Image(alexi_coll.first()).multiply(0.408)
