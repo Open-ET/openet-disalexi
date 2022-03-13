@@ -104,6 +104,34 @@ def date_to_time_0utc(date):
     #     .divide(1000).floor().multiply(1000)
 
 
+def interpolate(coll, interp_dt, timestep=3, offset=0):
+    """
+
+    Parameters
+    ----------
+    coll : ee.ImageCollection
+        Single band image collection
+    interp_dt : ee.Date
+    timestep : int
+        Image collection time step in hours
+    offset : float
+        Not currently implemented
+
+    Returns
+    -------
+    ee.Image
+
+    """
+    # interp_dt = interp_dt.advance(offset, 'hour')
+    a_img = ee.Image(coll.filterDate(interp_dt.advance(-timestep, 'hour'), interp_dt).first())
+    b_img = ee.Image(coll.filterDate(interp_dt, interp_dt.advance(timestep, 'hour')).first())
+    a_time = ee.Number(a_img.get('system:time_start'))
+    b_time = ee.Number(b_img.get('system:time_start'))
+    return b_img.subtract(a_img) \
+        .multiply(interp_dt.millis().subtract(a_time).divide(b_time.subtract(a_time))) \
+        .add(a_img)
+
+
 def is_number(x):
     try:
         float(x)

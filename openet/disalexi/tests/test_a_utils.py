@@ -66,6 +66,19 @@ def test_date_to_time_0utc(input, expected):
     assert utils.getinfo(utils.date_to_time_0utc(input_img)) == expected
 
 
+# TODO: Test a few more parameterization and timesteps
+def test_interpolate():
+    a_dt = ee.Date('2020-07-01').advance(10, 'hour')
+    b_dt = ee.Date('2020-07-01').advance(11, 'hour')
+    coll = ee.ImageCollection([
+        ee.Image.constant(10).set('system:time_start', a_dt.millis()),
+        ee.Image.constant(20).set('system:time_start', b_dt.millis()),
+    ])
+    output = utils.constant_image_value(
+        utils.interpolate(coll, a_dt.advance(0.5, 'hour'), timestep=1))
+    assert output['constant'] == 15
+
+
 @pytest.mark.parametrize(
     # Note: These are made up values
     'input, expected',
