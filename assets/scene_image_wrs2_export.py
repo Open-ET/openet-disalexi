@@ -141,16 +141,10 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
         collections = str(ini['INPUTS']['collections'])
         collections = sorted([x.strip() for x in collections.split(',')])
     except KeyError:
-        # CGM - I don't think we want to mix the collections here
         logging.info('\nINPUTS collections parameter was net set, '
-                        'default to Landsat 5/7/8 C02 L2 collections')
-        collections = ['LANDSAT/LC08/C02/T1_L2', 'LANDSAT/LE07/C02/T1_L2',
-                       'LANDSAT/LT05/C02/T1_L2']
-        # logging.info('\nINPUTS collections parameter was net set, '
-        #                 'default to Landsat 5/7/8 C02 L2 and C01 SR collections')
-        # collections = ['LANDSAT/LC08/C02/T1_L2', 'LANDSAT/LE07/C02/T1_L2',
-        #                'LANDSAT/LT05/C02/T1_L2', 'LANDSAT/LC08/C01/T1_SR',
-        #                'LANDSAT/LE07/C01/T1_SR', 'LANDSAT/LT05/C01/T1_SR']
+                        'default to Landsat 5/7/8/9 C02 L2 collections')
+        collections = ['LANDSAT/LC09/C02/T1_L2', 'LANDSAT/LC08/C02/T1_L2',
+                       'LANDSAT/LE07/C02/T1_L2', 'LANDSAT/LT05/C02/T1_L2']
     except Exception as e:
         raise e
 
