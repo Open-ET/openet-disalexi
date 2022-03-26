@@ -355,8 +355,7 @@ def test_Image_landcover_band_name():
 @pytest.mark.parametrize(
     'source, xy, expected',
     [
-        # This parameter doesn't currently take a source and is hardcoded to:
-        #   'projects/disalexi/meteo_data/airtemperature/GLOBAL_V001'
+        ['CFSR_NEW', TEST_POINT, 306.3861390180871],
         ['CFSR', TEST_POINT, 306.3861390180871],
         ['CFSR', [-121.5265, 38.7399], 306.3861390180871],
         ['CFSR', [-121.50822, 38.71776], 306.3840757488451],
@@ -364,19 +363,19 @@ def test_Image_landcover_band_name():
         [306, [-121.50822, 38.71776], 306],
     ]
 )
-def test_Image_ta0_daily_source(source, xy, expected, tol=0.0001):
+def test_Image_ta0_source(source, xy, expected, tol=0.0001):
     output = utils.point_image_value(disalexi.Image(
         default_image(), ta0_source=source).t_air0, xy)
     assert abs(output['tair0'] - expected) <= tol
 
 
-def test_Image_ta0_daily_source_exception():
+def test_Image_ta0_source_exception():
     with pytest.raises(ValueError):
         utils.getinfo(disalexi.Image(
             default_image(), ta0_source='').t_air0)
 
 
-def test_Image_t_air0_daily_band_name():
+def test_Image_t_air0_band_name():
     output = utils.getinfo(disalexi.Image(default_image()).t_air0)['bands'][0]['id']
     assert output == 'tair0'
 
@@ -384,25 +383,26 @@ def test_Image_t_air0_daily_band_name():
 @pytest.mark.parametrize(
     'source, xy, expected',
     [
+        ['CFSR_NEW', TEST_POINT, 100.41703705955021],
+        ['CFSR', TEST_POINT, 100.41703705955021],
         ['ESTIMATE', TEST_POINT, 101.26454311195941],
-        ['CFSR', TEST_POINT, 100.41653321557092],
-        # ['100.41653321557092', TEST_POINT, 100.41653321557092],
-        # [100.41653321557092, TEST_POINT, 100.41653321557092],
+        ['100.41653321557092', TEST_POINT, 100.41653321557092],
+        [100.41653321557092, TEST_POINT, 100.41653321557092],
     ]
 )
-def test_Image_pressure_daily_source(source, xy, expected, tol=0.0001):
+def test_Image_pressure_source(source, xy, expected, tol=0.0001):
     output = utils.point_image_value(disalexi.Image(
         default_image(), airpressure_source=source).pressure, xy)
     assert abs(output['pressure'] - expected) <= tol
 
 
-def test_Image_pressure_daily_source_exception():
+def test_Image_pressure_source_exception():
     with pytest.raises(ValueError):
         utils.getinfo(disalexi.Image(
             default_image(), airpressure_source='').pressure)
 
 
-def test_Image_pressure_daily_band_name():
+def test_Image_pressure_band_name():
     output = utils.getinfo(disalexi.Image(default_image()).pressure)['bands'][0]['id']
     assert output == 'pressure'
 
@@ -410,7 +410,8 @@ def test_Image_pressure_daily_band_name():
 @pytest.mark.parametrize(
     'source, xy, expected',
     [
-        ['CFSR', TEST_POINT, 8589.406133874349],
+        ['CFSR_NEW', TEST_POINT, 8594.84901460842],
+        ['CFSR', TEST_POINT, 8589.374265816517],
         ['MERRA2', TEST_POINT, 8587.4091796875],
         [ee.Image('USGS/SRTMGL1_003').multiply(0).add(10), TEST_POINT, 10],
         ['8587.4091796875', TEST_POINT, 8587.4091796875],
@@ -437,7 +438,8 @@ def test_Image_rs_daily_band_name():
 @pytest.mark.parametrize(
     'source, xy, expected',
     [
-        ['CFSR', TEST_POINT, 936.7536],
+        ['CFSR_NEW', TEST_POINT, 936.7493916867359],
+        ['CFSR', TEST_POINT, 936.7493916867359],
         # ['MERRA2', TEST_POINT, 946.6906],
         [ee.Image('USGS/SRTMGL1_003').multiply(0).add(10), TEST_POINT, 10],
         ['946.6906', TEST_POINT, 946.6906],
@@ -454,14 +456,14 @@ def test_Image_rs_hourly_interp(tol=0.001):
     output = utils.point_image_value(disalexi.Image(
         default_image(), rs_hourly_source='CFSR',
         rs_interp_flag=True).rs1, TEST_POINT)
-    assert abs(output['rs'] - 936.7536) <= tol
+    assert abs(output['rs'] - 936.7493916867359) <= tol
 
 
 def test_Image_rs_hourly_no_interp(tol=0.001):
     output = utils.point_image_value(disalexi.Image(
         default_image(), rs_hourly_source='CFSR',
         rs_interp_flag=False).rs1, TEST_POINT)
-    assert abs(output['rs'] - 936.7536) <= tol
+    assert abs(output['rs'] - 936.7493916867359) <= tol
 
 
 def test_Image_rs_hourly_source_exception():
@@ -477,7 +479,34 @@ def test_Image_rs_hourly_band_name():
 @pytest.mark.parametrize(
     'source, xy, expected',
     [
-        ['CFSV2', TEST_POINT, 2.001476],
+        ['CFSR_NEW', TEST_POINT, 0.8393702479538856],
+        ['CFSR', TEST_POINT, 0.8393702479538856],
+        ['2.001476', TEST_POINT, 2.001476],
+        [2.001476, TEST_POINT, 2.001476],
+    ]
+)
+def test_Image_vp_source(source, xy, expected, tol=0.0001):
+    output = utils.point_image_value(disalexi.Image(
+        default_image(), vp_source=source).vp, xy)
+    assert abs(output['vp'] - expected) <= tol
+
+
+def test_Image_vp_source_exception():
+    with pytest.raises(ValueError):
+        utils.getinfo(disalexi.Image(default_image(), vp_source='').vp)
+
+
+def test_Image_vp_band_name():
+    output = utils.getinfo(disalexi.Image(default_image()).vp)['bands'][0]['id']
+    assert output == 'vp'
+
+
+@pytest.mark.parametrize(
+    'source, xy, expected',
+    [
+        ['CFSR_NEW', TEST_POINT, 2.433912],
+        ['CFSR', TEST_POINT, 2.433912],
+        ['CFSV2', TEST_POINT, 2.169500185267768],
         [ee.Image('USGS/SRTMGL1_003').multiply(0).add(10), TEST_POINT, 10],
         ['2.001476', TEST_POINT, 2.001476],
         [2.001476, TEST_POINT, 2.001476],
@@ -491,8 +520,7 @@ def test_Image_windspeed_source(source, xy, expected, tol=0.0001):
 
 def test_Image_windspeed_source_exception():
     with pytest.raises(ValueError):
-        utils.getinfo(disalexi.Image(
-            default_image(), windspeed_source='').windspeed)
+        utils.getinfo(disalexi.Image(default_image(), windspeed_source='').windspeed)
 
 
 def test_Image_windspeed_band_name():

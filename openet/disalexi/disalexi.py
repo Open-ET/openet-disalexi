@@ -848,17 +848,19 @@ class Image(object):
     @lazy_property
     def pressure(self):
         """Air pressure [kPa]"""
-        if self.airpressure_source.upper() == 'ESTIMATE':
+        if utils.is_number(self.airpressure_source):
+            ap_img = ee.Image.constant(float(self.airpressure_source))
+        elif self.airpressure_source.upper() == 'ESTIMATE':
             ap_img = self.elevation.expression(
                 '101.3 * (((293.0 - 0.0065 * z) / 293.0) ** 5.26)',
                 {'z': self.elevation})
         elif self.airpressure_source.upper() == 'CFSR_NEW':
-            ap_coll_id = 'projects/disalexi/meteo_data/global_v001'
+            ap_coll_id = 'projects/disalexi/meteo_data/global_v001_3hour'
             ap_coll = ee.ImageCollection(ap_coll_id).select(['airpressure'])
             ap_img = utils.interpolate(ap_coll, self.datetime, timestep=3)
             ap_img = ee.Image(ap_img)\
-                .expression('ap_img * (((293.0 - 0.0065 * z) / 293.0) ** 5.26)',
-                            {'z': self.elevation, 'ap_img': ap_img})\
+                .multiply(self.elevation.multiply(-0.0065).add(293)
+                          .divide(293.0).pow(5.26))\
                 .resample('bicubic')\
                 .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)\
                 .resample('bilinear')\
@@ -878,32 +880,30 @@ class Image(object):
             ap_a_img = ap_img.select([aname])
             ap_b_img = ap_img.select([bname])
             t_a = self.hour_int.divide(3).floor().multiply(3)
-            t_b = t_a.add(3)
+            # t_b = t_a.add(3)
 
             ap_img = ee.Algorithms.If(
                 self.hour_int.lt(24).And(self.hour_int.gt(0)),
                 ap_b_img.subtract(ap_a_img)\
-                .multiply(self.hour.subtract(t_a).divide(3))\
-                .add(ap_a_img).rename(['pressure']),
+                    .multiply(self.hour.subtract(t_a).divide(3))\
+                    .add(ap_a_img),
                 ap_b_img)
-            ap_img = ee.Algorithms.If(
-                self.hour_int.gte(24), ap_img_temp1, ap_img)
-            ap_img = ee.Algorithms.If(
-                self.hour_int.eq(0), ap_img_temp2, ap_img)
+            ap_img = ee.Algorithms.If(self.hour_int.gte(24), ap_img_temp1, ap_img)
+            ap_img = ee.Algorithms.If(self.hour_int.eq(0), ap_img_temp2, ap_img)
 
             ap_img = self.elevation.expression(
-                'ap_img * (((293.0 - 0.0065 * z) / 293.0) ** 5.26)',
+                'ap_img * (((293.0 - (0.0065 * z)) / 293.0) ** 5.26)',
                 {'z': self.elevation, 'ap_img': ap_img})
-            # smooth ap, with radius as 2
             ap_img = ee.Image(ap_img)\
                 .resample('bicubic')\
                 .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)\
                 .resample('bilinear')\
                 .reproject(crs=self.crs, crsTransform=self.transform)
-            #ap_img = ee.Image(ap_img).fastGaussianBlur(20000)
         else:
             raise ValueError(f'Invalid airpressure_source: '
                              f'{self.airpressure_source}\n')
+        # elif isinstance(self.airpressure_source, ee.computedobject.ComputedObject):
+        #     ap_img = self.airpressure_source
 
         return ee.Image(ap_img).rename(['pressure'])
 
@@ -915,7 +915,7 @@ class Image(object):
         elif isinstance(self.rs_hourly_source, ee.computedobject.ComputedObject):
             rs1_img = self.rs_hourly_source
         elif self.rs_hourly_source.upper() == 'CFSR_NEW':
-            rs1_coll_id = 'projects/disalexi/insol_data/gloval_v001_hourly'
+            rs1_coll_id = 'projects/disalexi/insol_data/global_v001_hourly'
             rs1_coll = ee.ImageCollection(rs1_coll_id).select(['insolation'])
             if self.rs_interp_flag:
                 # TODO: Check if the CFSR instolation are instantaneous or accumulations
@@ -939,20 +939,10 @@ class Image(object):
                 .filterDate(self.start_date, self.end_date)
             rs1_img = ee.Image(rs1_coll.first())
 
-            #rs1_img_temp1 = rs1_img.select(['b24']).fastGaussianBlur(50000)
-            #rs1_img_temp2 = rs1_img.select(['b1']).fastGaussianBlur(50000)
-
             rs1_img_temp1 = rs1_img.select(['b24'])
             rs1_img_temp2 = rs1_img.select(['b1'])
-            # CGM - temp1 and temp2 aren't used in this function?
-            # CGM - We really should not be making getInfo calls here!
-            temp1 = self.hour_int.floor().int()
-            temp2 = self.hour_int.ceil().int()
             aname = ee.String('b').cat(self.hour.floor().add(1).int().format())
             bname = ee.String('b').cat(self.hour.ceil().int().add(1).format())
-            #rs1_a_img = rs1_coll.first().select([aname]).fastGaussianBlur(50000)
-            #rs1_b_img = rs1_coll.first().select([bname]).fastGaussianBlur(50000)
-
             rs1_a_img = rs1_coll.first().select([aname])
             rs1_b_img = rs1_coll.first().select([bname])
             t_a = self.hour.floor()
@@ -964,17 +954,13 @@ class Image(object):
                     .multiply(self.hour.subtract(t_a).divide(t_b.subtract(t_a)))\
                     .add(rs1_a_img),
                 rs1_a_img)
-            rs1_img = ee.Algorithms.If(
-                self.hour_int.gte(24), rs1_img_temp1, rs1_img)
-            rs1_img = ee.Algorithms.If(
-                self.hour_int.eq(0), rs1_img_temp2, rs1_img)
-            # smooth rs1, with radius as 2
+            rs1_img = ee.Algorithms.If(self.hour_int.gte(24), rs1_img_temp1, rs1_img)
+            rs1_img = ee.Algorithms.If(self.hour_int.eq(0), rs1_img_temp2, rs1_img)
             rs1_img = ee.Image(rs1_img)\
                 .resample('bicubic')\
                 .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)\
                 .resample('bilinear')\
                 .reproject(crs=self.crs, crsTransform=self.transform)
-            rs1_img = ee.Image(rs1_img)
         elif self.rs_hourly_source.upper() == 'MERRA2':
             # Extract MERRA2 solar images for the target image time
             # Interpolate rs hourly image at image time
@@ -1022,19 +1008,16 @@ class Image(object):
                 .select(['SWGDNCLR'])\
                 .filterDate(self.start_date, self.end_date)
             rs24_img = ee.Image(rs24_coll.first())
-
         elif self.rs_daily_source.upper() == 'CFSR_NEW':
             rs24_coll_id = 'projects/disalexi/insol_data/global_v001_hourly'
-            rs24_coll = ee.ImageCollection(rs24_coll_id)
-
-            rs24_img = rs24_coll.sum()
-
-            rs24_img = ee.Image(rs24_img)\
+            rs24_coll = ee.ImageCollection(rs24_coll_id)\
+                .filterDate(self.datetime.advance(-6, 'hours'),
+                            self.datetime.advance(12, 'hours'))
+            rs24_img = ee.Image(rs24_coll.sum())\
                 .resample('bicubic')\
                 .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)\
                 .resample('bilinear')\
                 .reproject(crs=self.crs, crsTransform=self.transform)
-
         elif self.rs_daily_source.upper() == 'CFSR':
             rs24_coll_id = 'projects/disalexi/insol_data/GLOBAL_V001'
 
@@ -1104,13 +1087,11 @@ class Image(object):
                 end_hour.gt(24), rs24_img_temp1, rs24_img)
             rs24_img = ee.Algorithms.If(
                 start_hour.lt(0), rs24_img_temp2, rs24_img)
-            # smooth rs24, with radius as 2
             rs24_img = ee.Image(rs24_img)\
                 .resample('bicubic')\
                 .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)\
                 .resample('bilinear')\
                 .reproject(crs=self.crs, crsTransform=self.transform)
-            rs24_img = ee.Image(rs24_img)  # .fastGaussianBlur(50000)
         else:
             raise ValueError(f'Unsupported rs_daily_source: {self.rs_daily_source}\n')
             # rs24_img = ee.Image('users/tulipyangyun/Rsd_2015222_inhouse').multiply(278.0)
@@ -1128,7 +1109,7 @@ class Image(object):
         # elif isinstance(self.ta0_source, ee.computedobject.ComputedObject):
         #     tair0_img = self.ta0_source
         elif self.ta0_source.upper() == 'CFSR_NEW':
-            tair0_coll_id = 'projects/disalexi/meteo_data/global_v001'
+            tair0_coll_id = 'projects/disalexi/meteo_data/global_v001_3hour'
             tair0_coll = ee.ImageCollection(tair0_coll_id).select(['temperature'])
             tair0_img = utils.interpolate(tair0_coll, self.datetime, timestep=3)
             tair0_img = ee.Image(tair0_img)\
@@ -1154,21 +1135,19 @@ class Image(object):
             tair0_img = ee.Algorithms.If(
                 self.hour_int.lt(24).And(self.hour_int.gt(0)),
                 tair0_b_img.subtract(tair0_a_img)\
-                .multiply(self.hour.subtract(t_a).divide(3))\
-                .add(tair0_a_img).rename(['tair0']),
+                    .multiply(self.hour.subtract(t_a).divide(3))\
+                    .add(tair0_a_img),
                 tair0_b_img)
             tair0_img = ee.Algorithms.If(
                 self.hour_int.gte(24), tair0_img_temp1, tair0_img)
             tair0_img = ee.Algorithms.If(
                 self.hour_int.eq(0), tair0_img_temp2, tair0_img)
 
-            # Smooth ap, with radius as 16, since it is smoothed in alexi scale
             tair0_img = ee.Image(tair0_img)\
                 .resample('bicubic')\
                 .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)\
                 .resample('bilinear')\
                 .reproject(crs=self.crs, crsTransform=self.transform)
-            # tair0_img = ee.Image(tair0_img).fastGaussianBlur(20000)
         else:
             raise ValueError(f'Unsupported ta0_source: {self.ta0_source}\n')
 
@@ -1192,7 +1171,7 @@ class Image(object):
             windspeed_img = windspeed_coll.mean()\
                 .expression('sqrt(b(0) ** 2 + b(1) ** 2)')
         elif self.windspeed_source.upper() == 'CFSR_NEW':
-            windspeed_coll_id = 'projects/disalexi/meteo_data/global_v001'
+            windspeed_coll_id = 'projects/disalexi/meteo_data/global_v001_3hour'
             windspeed_coll = ee.ImageCollection(windspeed_coll_id)\
                 .select(['windspeed'])
             windspeed_img = utils.interpolate(windspeed_coll, self.datetime, timestep=3)
@@ -1216,25 +1195,23 @@ class Image(object):
             wind_a_img = windspeed_img.select([aname])
             wind_b_img = windspeed_img.select([bname])
             t_a = self.hour_int.divide(3).floor().multiply(3)
-            t_b = t_a.add(3)
+            # t_b = t_a.add(3)
 
             windspeed_img = ee.Algorithms.If(
                 self.hour_int.lt(24).gt(self.hour_int.gt(0)),
                 wind_b_img.subtract(wind_a_img)\
-                .multiply(self.hour.subtract(t_a).divide(3))\
-                .add(wind_a_img),
+                    .multiply(self.hour.subtract(t_a).divide(3))\
+                    .add(wind_a_img),
                 wind_b_img)
             windspeed_img = ee.Algorithms.If(
                 self.hour_int.gte(24), wind_img_temp1, windspeed_img)
             windspeed_img = ee.Algorithms.If(
                 self.hour_int.eq(0), wind_img_temp2, windspeed_img)
-            # smooth windspeed, with radius as 16
             windspeed_img = ee.Image(windspeed_img)\
                 .resample('bicubic')\
                 .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)\
                 .resample('bilinear')\
                 .reproject(crs=self.crs, crsTransform=self.transform)
-            windspeed_img = ee.Image(windspeed_img)#.fastGaussianBlur(20000)
         else:
             raise ValueError(f'Unsupported windspeed_source: '
                              f'{self.windspeed_source}\n')
@@ -1249,7 +1226,7 @@ class Image(object):
         elif isinstance(self.vp_source, ee.computedobject.ComputedObject):
             vp_img = self.vp_source
         elif self.vp_source.upper() == 'CFSR_NEW':
-            vp_coll_id = 'projects/disalexi/meteo_data/global_v001'
+            vp_coll_id = 'projects/disalexi/meteo_data/global_v001_3hour'
             vp_coll = ee.ImageCollection(vp_coll_id).select(['vp'])
             vp_img = utils.interpolate(vp_coll, self.datetime, timestep=3)
             vp_img = ee.Image(vp_img)\
@@ -1272,7 +1249,7 @@ class Image(object):
             vp_a_img = vp_img.select([aname])
             vp_b_img = vp_img.select([bname])
             t_a = self.hour_int.divide(3).floor().multiply(3)
-            t_b = t_a.add(3)
+            # t_b = t_a.add(3)
 
             vp_img = ee.Algorithms.If(
                 self.hour_int.lt(24).And(self.hour_int.gt(0)),
@@ -1280,17 +1257,13 @@ class Image(object):
                     .multiply(self.hour.subtract(t_a).divide(3))\
                     .add(vp_a_img),
                 vp_b_img)
-            vp_img = ee.Algorithms.If(
-                self.hour_int.gte(24), vp_img_temp1, vp_img)
-            vp_img = ee.Algorithms.If(
-                self.hour_int.eq(0), vp_img_temp2, vp_img)
-            # Smooth vp, with radius as 2
+            vp_img = ee.Algorithms.If(self.hour_int.gte(24), vp_img_temp1, vp_img)
+            vp_img = ee.Algorithms.If(self.hour_int.eq(0), vp_img_temp2, vp_img)
             vp_img = ee.Image(vp_img)\
                 .resample('bicubic')\
                 .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)\
                 .resample('bilinear')\
                 .reproject(crs=self.crs, crsTransform=self.transform)
-            vp_img = ee.Image(vp_img)#.fastGaussianBlur(20000)
         else:
             raise ValueError(f'Unsupported vp_source: {self.vp_source}\n')
 
