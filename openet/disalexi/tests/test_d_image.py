@@ -410,6 +410,8 @@ def test_Image_pressure_band_name():
 @pytest.mark.parametrize(
     'source, xy, expected',
     [
+        # CGM - I'm not sure why these two values are different
+        #   The intermediate values are identical but end up different after smoothing
         ['CFSR_NEW', TEST_POINT, 8594.84901460842],
         ['CFSR', TEST_POINT, 8589.374265816517],
         ['MERRA2', TEST_POINT, 8587.4091796875],
@@ -504,8 +506,8 @@ def test_Image_vp_band_name():
 @pytest.mark.parametrize(
     'source, xy, expected',
     [
-        ['CFSR_NEW', TEST_POINT, 2.433912],
-        ['CFSR', TEST_POINT, 2.433912],
+        ['CFSR_NEW', TEST_POINT, 2.814758509561662],
+        ['CFSR', TEST_POINT, 2.814758509561662],
         ['CFSV2', TEST_POINT, 2.169500185267768],
         [ee.Image('USGS/SRTMGL1_003').multiply(0).add(10), TEST_POINT, 10],
         ['2.001476', TEST_POINT, 2.001476],

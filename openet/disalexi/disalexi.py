@@ -850,6 +850,8 @@ class Image(object):
         """Air pressure [kPa]"""
         if utils.is_number(self.airpressure_source):
             ap_img = ee.Image.constant(float(self.airpressure_source))
+        elif isinstance(self.airpressure_source, ee.computedobject.ComputedObject):
+            ap_img = self.airpressure_source
         elif self.airpressure_source.upper() == 'ESTIMATE':
             ap_img = self.elevation.expression(
                 '101.3 * (((293.0 - 0.0065 * z) / 293.0) ** 5.26)',
@@ -902,8 +904,6 @@ class Image(object):
         else:
             raise ValueError(f'Invalid airpressure_source: '
                              f'{self.airpressure_source}\n')
-        # elif isinstance(self.airpressure_source, ee.computedobject.ComputedObject):
-        #     ap_img = self.airpressure_source
 
         return ee.Image(ap_img).rename(['pressure'])
 
@@ -1011,7 +1011,7 @@ class Image(object):
         elif self.rs_daily_source.upper() == 'CFSR_NEW':
             rs24_coll_id = 'projects/disalexi/insol_data/global_v001_hourly'
             rs24_coll = ee.ImageCollection(rs24_coll_id)\
-                .filterDate(self.datetime.advance(-6, 'hours'),
+                .filterDate(self.datetime.advance(-8, 'hours'),
                             self.datetime.advance(12, 'hours'))
             rs24_img = ee.Image(rs24_coll.sum())\
                 .resample('bicubic')\
@@ -1022,8 +1022,8 @@ class Image(object):
             rs24_coll_id = 'projects/disalexi/insol_data/GLOBAL_V001'
 
             # Hard coded for one day since no sun the rs is 0 in rs data
-            start_hour = self.hour_int.subtract(5)
-            end_hour = self.hour_int.add(10)
+            start_hour = self.hour_int.subtract(6)
+            end_hour = self.hour_int.add(12)
 
             # when gte24
             rs24_coll = ee.ImageCollection(rs24_coll_id)
@@ -1031,21 +1031,15 @@ class Image(object):
             rs24_coll_2 = rs24_coll\
                 .filterDate(self.start_date.advance(1, 'day'),
                             self.end_date.advance(1, 'day'))
-            # rs24_coll_1_array = rs24_coll_1.first().toArray()
-
             #rs24_coll_1_sm = rs24_coll_1.first().fastGaussianBlur(50000)
             rs24_coll_1_sm = rs24_coll_1.first()
             rs24_coll_1_array = rs24_coll_1_sm.toArray()
-            # CGM - Should this be rs24_coll_2 instead of rs24_coll_1?
-            # rs24_coll_2_array = rs24_coll_2.first().toArray()
-
             #rs24_coll_2_sm = rs24_coll_2.first().fastGaussianBlur(50000)
             rs24_coll_2_sm = rs24_coll_2.first()
             rs24_coll_2_array = rs24_coll_2_sm.toArray()
-            day1_array = rs24_coll_1_array.arraySlice(
-                0, start_hour.int(), 24)
-            day2_array = rs24_coll_2_array.arraySlice(
-                0, 0, end_hour.subtract(24).int())
+            day1_array = rs24_coll_1_array.arraySlice(0, start_hour.int(), 24)
+            day2_array = rs24_coll_2_array\
+                .arraySlice(0, 0, end_hour.subtract(24).int())
             day1_sum = day1_array.arrayReduce(reducer=ee.Reducer.sum(), axes=[0])
             day2_sum = day2_array.arrayReduce(reducer=ee.Reducer.sum(), axes=[0])
             rs24_img_temp1 = day1_sum.add(day2_sum).arrayFlatten([['array']])
@@ -1058,10 +1052,6 @@ class Image(object):
             #rs24_coll_1_sm = rs24_coll_1.first().fastGaussianBlur(50000)
             rs24_coll_1_sm = rs24_coll_1.first()
             rs24_coll_1_array = rs24_coll_1_sm.toArray()
-            # rs24_coll_1_array = rs24_coll_1.first().toArray()  #fastGaussianBlur(50000).
-            # CGM - Should this be rs24_coll_2 instead of rs24_coll_1?
-            # yun test smooth first
-            # rs24_coll_2_array = rs24_coll_2.first().toArray()
             #rs24_coll_2_sm = rs24_coll_2.first().fastGaussianBlur(50000)
             rs24_coll_2_sm = rs24_coll_2.first()
             rs24_coll_2_array = rs24_coll_2_sm.toArray()
@@ -1083,10 +1073,8 @@ class Image(object):
             day_sum = day_array.arrayReduce(reducer=ee.Reducer.sum(), axes=[0])
             rs24_img = day_sum.arrayFlatten([['array']])
 
-            rs24_img = ee.Algorithms.If(
-                end_hour.gt(24), rs24_img_temp1, rs24_img)
-            rs24_img = ee.Algorithms.If(
-                start_hour.lt(0), rs24_img_temp2, rs24_img)
+            rs24_img = ee.Algorithms.If(end_hour.gt(24), rs24_img_temp1, rs24_img)
+            rs24_img = ee.Algorithms.If(start_hour.lt(0), rs24_img_temp2, rs24_img)
             rs24_img = ee.Image(rs24_img)\
                 .resample('bicubic')\
                 .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)\
@@ -1094,7 +1082,7 @@ class Image(object):
                 .reproject(crs=self.crs, crsTransform=self.transform)
         else:
             raise ValueError(f'Unsupported rs_daily_source: {self.rs_daily_source}\n')
-            # rs24_img = ee.Image('users/tulipyangyun/Rsd_2015222_inhouse').multiply(278.0)
+
         return ee.Image(rs24_img).rename(['rs'])
 
     # TODO: Change the naming of this parameter, it is a little inconsistent.
@@ -1198,7 +1186,7 @@ class Image(object):
             # t_b = t_a.add(3)
 
             windspeed_img = ee.Algorithms.If(
-                self.hour_int.lt(24).gt(self.hour_int.gt(0)),
+                self.hour_int.lt(24).And(self.hour_int.gt(0)),
                 wind_b_img.subtract(wind_a_img)\
                     .multiply(self.hour.subtract(t_a).divide(3))\
                     .add(wind_a_img),

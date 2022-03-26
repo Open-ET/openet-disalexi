@@ -62,8 +62,9 @@ def point_coll_value(coll, xy, scale=1):
         col_dict[k] = i + 4
         info_dict[k] = {}
     for row in output[1:]:
-        date = datetime.datetime.utcfromtimestamp(row[3] / 1000.0).strftime(
-            '%Y-%m-%d')
+        date = datetime.datetime.utcfromtimestamp(row[3] / 1000.0)\
+            .strftime('%Y-%m-%d')
+        #     .strftime('%Y-%m-%dT%H:00')
         for k, v in col_dict.items():
             info_dict[k][date] = row[col_dict[k]]
     return info_dict
@@ -105,26 +106,36 @@ def date_to_time_0utc(date):
 
 
 def interpolate(coll, interp_dt, timestep=3, offset=0):
-    """
+    """Temporally interpolate an image collection
 
     Parameters
     ----------
     coll : ee.ImageCollection
-        Single band image collection
+        Single band image collection.
     interp_dt : ee.Date
+        The datetime to interpolate to.
     timestep : int
-        Image collection time step in hours
+        Image collection time step in hours.
     offset : float
-        Not currently implemented
+        Not currently implemented.  This parameter would be useful if the values
+        in the image collection where the average over timestep instead of the
+        instantaneous value at the time start.
 
     Returns
     -------
     ee.Image
 
+    Notes
+    -----
+    This particular implementation does not work correctly if the interpolation
+    time is exactly the time start of one of the images.
+
     """
     # interp_dt = interp_dt.advance(offset, 'hour')
-    a_img = ee.Image(coll.filterDate(interp_dt.advance(-timestep, 'hour'), interp_dt).first())
-    b_img = ee.Image(coll.filterDate(interp_dt, interp_dt.advance(timestep, 'hour')).first())
+    a_img = ee.Image(coll.filterDate(
+        interp_dt.advance(-timestep, 'hour'), interp_dt).first())
+    b_img = ee.Image(coll.filterDate(
+        interp_dt, interp_dt.advance(timestep, 'hour')).first())
     a_time = ee.Number(a_img.get('system:time_start'))
     b_time = ee.Number(b_img.get('system:time_start'))
     return b_img.subtract(a_img) \
