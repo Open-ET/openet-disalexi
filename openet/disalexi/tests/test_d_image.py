@@ -186,8 +186,8 @@ def test_Image_init_date_properties():
 @pytest.mark.parametrize(
     'source, xy, expected',
     [
-        ['CONUS_V005', TEST_POINT, 297.4977364906148],
-        ['CONUS_V005', [-121.50822, 38.71776], 296.99708009212264],
+        ['CONUS_V005', TEST_POINT, 298.047307556939],
+        ['CONUS_V005', [-121.50822, 38.71776], 297.32998269291346],
         # ['CONUS_V004', TEST_POINT, 298.1013811163322],
         # ['CONUS_V004', [-121.50822, 38.71776], 300.04066476402267],
         # ['CONUS_V003', TEST_POINT, 300.99823651442586],
@@ -226,7 +226,7 @@ def test_Image_ta_interp_flag(tol=0.01):
     m = disalexi.Image(default_image(), ta_source='CONUS_V005',
                        ta_interp_flag=False)
     output = utils.point_image_value(ee.Image(m.ta), TEST_POINT)
-    assert abs(output['ta'] - 297.5) <= tol
+    assert abs(output['ta'] - 298.047307556939) <= tol
 
 
 def test_Image_ta_source_exception():
@@ -355,10 +355,10 @@ def test_Image_landcover_band_name():
 @pytest.mark.parametrize(
     'source, xy, expected',
     [
-        ['CFSR_NEW', TEST_POINT, 306.3861390180871],
         ['CFSR', TEST_POINT, 306.3861390180871],
-        ['CFSR', [-121.5265, 38.7399], 306.3861390180871],
-        ['CFSR', [-121.50822, 38.71776], 306.3840757488451],
+        ['CFSR_MULTIBAND', TEST_POINT, 306.3861390180871],
+        ['CFSR_MULTIBAND', [-121.5265, 38.7399], 306.3861390180871],
+        ['CFSR_MULTIBAND', [-121.50822, 38.71776], 306.3840757488451],
         ['306', [-121.50822, 38.71776], 306],
         [306, [-121.50822, 38.71776], 306],
     ]
@@ -383,8 +383,8 @@ def test_Image_t_air0_band_name():
 @pytest.mark.parametrize(
     'source, xy, expected',
     [
-        ['CFSR_NEW', TEST_POINT, 100.41703705955021],
         ['CFSR', TEST_POINT, 100.41703705955021],
+        ['CFSR_MULTIBAND', TEST_POINT, 100.41703705955021],
         ['ESTIMATE', TEST_POINT, 101.26454311195941],
         ['100.41653321557092', TEST_POINT, 100.41653321557092],
         [100.41653321557092, TEST_POINT, 100.41653321557092],
@@ -412,8 +412,8 @@ def test_Image_pressure_band_name():
     [
         # CGM - I'm not sure why these two values are different
         #   The intermediate values are identical but end up different after smoothing
-        ['CFSR_NEW', TEST_POINT, 8594.84901460842],
-        ['CFSR', TEST_POINT, 8589.374265816517],
+        ['CFSR', TEST_POINT, 8594.84901460842],
+        ['CFSR_MULTIBAND', TEST_POINT, 8589.374265816517],
         ['MERRA2', TEST_POINT, 8587.4091796875],
         [ee.Image('USGS/SRTMGL1_003').multiply(0).add(10), TEST_POINT, 10],
         ['8587.4091796875', TEST_POINT, 8587.4091796875],
@@ -440,8 +440,8 @@ def test_Image_rs_daily_band_name():
 @pytest.mark.parametrize(
     'source, xy, expected',
     [
-        ['CFSR_NEW', TEST_POINT, 936.7493916867359],
         ['CFSR', TEST_POINT, 936.7493916867359],
+        ['CFSR_MULTIBAND', TEST_POINT, 936.7493916867359],
         # ['MERRA2', TEST_POINT, 946.6906],
         [ee.Image('USGS/SRTMGL1_003').multiply(0).add(10), TEST_POINT, 10],
         ['946.6906', TEST_POINT, 946.6906],
@@ -456,14 +456,14 @@ def test_Image_rs_hourly_source(source, xy, expected, tol=0.0001):
 
 def test_Image_rs_hourly_interp(tol=0.001):
     output = utils.point_image_value(disalexi.Image(
-        default_image(), rs_hourly_source='CFSR',
+        default_image(), rs_hourly_source='CFSR_MULTIBAND',
         rs_interp_flag=True).rs1, TEST_POINT)
     assert abs(output['rs'] - 936.7493916867359) <= tol
 
 
 def test_Image_rs_hourly_no_interp(tol=0.001):
     output = utils.point_image_value(disalexi.Image(
-        default_image(), rs_hourly_source='CFSR',
+        default_image(), rs_hourly_source='CFSR_MULTIBAND',
         rs_interp_flag=False).rs1, TEST_POINT)
     assert abs(output['rs'] - 936.7493916867359) <= tol
 
@@ -481,8 +481,8 @@ def test_Image_rs_hourly_band_name():
 @pytest.mark.parametrize(
     'source, xy, expected',
     [
-        ['CFSR_NEW', TEST_POINT, 0.8393702479538856],
         ['CFSR', TEST_POINT, 0.8393702479538856],
+        ['CFSR_MULTIBAND', TEST_POINT, 0.8393702479538856],
         ['2.001476', TEST_POINT, 2.001476],
         [2.001476, TEST_POINT, 2.001476],
     ]
@@ -506,8 +506,8 @@ def test_Image_vp_band_name():
 @pytest.mark.parametrize(
     'source, xy, expected',
     [
-        ['CFSR_NEW', TEST_POINT, 2.814758509561662],
         ['CFSR', TEST_POINT, 2.814758509561662],
+        ['CFSR_MULTIBAND', TEST_POINT, 2.814758509561662],
         ['CFSV2', TEST_POINT, 2.169500185267768],
         [ee.Image('USGS/SRTMGL1_003').multiply(0).add(10), TEST_POINT, 10],
         ['2.001476', TEST_POINT, 2.001476],
@@ -530,7 +530,7 @@ def test_Image_windspeed_band_name():
     assert output == 'windspeed'
 
 
-def test_Image_et_default_values(expected=5.497461682063846, tol=0.0001):
+def test_Image_et_default_values(expected=5.6261499377131985, tol=0.0001):
     output = utils.point_image_value(default_image_obj().et, TEST_POINT)
     assert abs(output['et'] - expected) <= tol
 
@@ -543,8 +543,8 @@ def test_Image_et_default_values(expected=5.497461682063846, tol=0.0001):
     [
         # [298.427, 10, 7.602516963336294],
         # [298.427, 20, 6.750980231303747],
-        [298.427, 25, 5.900454963186251],
-        [300, 25, 6.7716727187269585],
+        [298.427, 25, 5.846788738397993],
+        [300, 25, 6.726697096757634],
     ]
 )
 def test_Image_et_fixed_source(ta, iterations, expected, tol=0.001):
@@ -783,7 +783,7 @@ def test_Image_from_landsat_c1_sr_et():
     image_id = 'LANDSAT/LC08/C01/T1_SR/LC08_044033_20170716'
     # Using the collection 2 inputs since the c01 inputs no longer exist
     output = utils.getinfo(disalexi.Image.from_landsat_c1_sr(
-        image_id, ta_source='CONUS_V003',
+        image_id, ta_source='CONUS_V005',
         lai_source='projects/earthengine-legacy/assets/projects/openet/lai/landsat/c02',
         tir_source='projects/earthengine-legacy/assets/projects/openet/tir/landsat/c02',
     ).et)

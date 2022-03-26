@@ -241,50 +241,50 @@ def test_Collection_build_cloud_cover():
     assert 'LE07_044033_20170724' not in parse_scene_id(output)
 
 
-pytest.mark.parametrize(
-    'collection, start_date, end_date',
+@pytest.mark.parametrize(
+    'collection_id, start_date, end_date',
     [
         # ['LANDSAT/LT05/C01/T1_TOA', '2012-01-01', '2013-01-01'],
         ['LANDSAT/LT05/C01/T1_SR', '2012-01-01', '2013-01-01'],
         ['LANDSAT/LT05/C02/T1_L2', '2012-01-01', '2013-01-01'],
     ]
 )
-def test_Collection_build_filter_dates_lt05(collection, start_date, end_date):
+def test_Collection_build_filter_dates_lt05(collection_id, start_date, end_date):
     """Test that bad Landsat 5 images are filtered"""
     output = utils.getinfo(default_coll_obj(
-        collections=[collection], start_date=start_date, end_date=end_date,
+        collections=[collection_id], start_date=start_date, end_date=end_date,
         geometry=ee.Geometry.Rectangle(-125, 25, -65, 50))._build(variables=['et']))
     assert parse_scene_id(output) == []
 
 
 @pytest.mark.parametrize(
-    'collection, start_date, end_date',
+    'collection_id, start_date, end_date',
     [
         # ['LANDSAT/LE07/C01/T1_TOA', '2022-01-01', '2023-01-01'],
         ['LANDSAT/LE07/C01/T1_SR', '2022-01-01', '2023-01-01'],
         ['LANDSAT/LE07/C02/T1_L2', '2022-01-01', '2023-01-01'],
     ]
 )
-def test_Collection_build_filter_dates_le07(collection, start_date, end_date):
+def test_Collection_build_filter_dates_le07(collection_id, start_date, end_date):
     """Test that Landsat 7 images after 2021 are filtered"""
     output = utils.getinfo(default_coll_obj(
-        collections=[collection], start_date=start_date, end_date=end_date,
+        collections=[collection_id], start_date=start_date, end_date=end_date,
         geometry=ee.Geometry.Rectangle(-125, 25, -65, 50))._build(variables=['et']))
     assert parse_scene_id(output) == []
 
 
 @pytest.mark.parametrize(
-    'collection, start_date, end_date',
+    'collection_id, start_date, end_date',
     [
         # ['LANDSAT/LC08/C01/T1_TOA', '2013-01-01', '2013-04-01'],
         ['LANDSAT/LC08/C01/T1_SR', '2013-01-01', '2013-04-01'],
         ['LANDSAT/LC08/C02/T1_L2', '2013-01-01', '2013-04-01'],
     ]
 )
-def test_Collection_build_filter_dates_lc08(collection, start_date, end_date):
+def test_Collection_build_filter_dates_lc08(collection_id, start_date, end_date):
     """Test that pre-op Landsat 8 images before 2013-04-01 are filtered"""
     output = utils.getinfo(default_coll_obj(
-        collections=[collection], start_date=start_date, end_date=end_date,
+        collections=[collection_id], start_date=start_date, end_date=end_date,
         geometry=ee.Geometry.Rectangle(-125, 25, -65, 50))._build(variables=['et']))
     assert not [x for x in parse_scene_id(output)
                 if x.split('_')[-1] < end_date.replace('-', '')]
@@ -292,15 +292,15 @@ def test_Collection_build_filter_dates_lc08(collection, start_date, end_date):
 
 
 @pytest.mark.parametrize(
-    'collection, start_date, end_date',
+    'collection_id, start_date, end_date',
     [
         ['LANDSAT/LC09/C02/T1_L2', '2021-11-01', '2022-01-01'],
     ]
 )
-def test_Collection_build_filter_dates_lc09(collection, start_date, end_date):
+def test_Collection_build_filter_dates_lc09(collection_id, start_date, end_date):
     """Test that Landsat 9 images before 2022-01-01 are filtered"""
     output = utils.getinfo(default_coll_obj(
-        collections=[collection], start_date=start_date, end_date=end_date,
+        collections=[collection_id], start_date=start_date, end_date=end_date,
         geometry=ee.Geometry.Rectangle(-125, 25, -65, 50))._build(variables=['et']))
     assert not [x for x in parse_scene_id(output)
                 if x.split('_')[-1] < end_date.replace('-', '')]

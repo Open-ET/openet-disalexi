@@ -856,7 +856,7 @@ class Image(object):
             ap_img = self.elevation.expression(
                 '101.3 * (((293.0 - 0.0065 * z) / 293.0) ** 5.26)',
                 {'z': self.elevation})
-        elif self.airpressure_source.upper() == 'CFSR_NEW':
+        elif self.airpressure_source.upper() == 'CFSR':
             ap_coll_id = 'projects/disalexi/meteo_data/global_v001_3hour'
             ap_coll = ee.ImageCollection(ap_coll_id).select(['airpressure'])
             ap_img = utils.interpolate(ap_coll, self.datetime, timestep=3)
@@ -867,7 +867,7 @@ class Image(object):
                 .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)\
                 .resample('bilinear')\
                 .reproject(crs=self.crs, crsTransform=self.transform)
-        elif self.airpressure_source.upper() == 'CFSR':
+        elif self.airpressure_source.upper() == 'CFSR_MULTIBAND':
             ap_coll_id = 'projects/disalexi/meteo_data/airpressure/GLOBAL_V001'
             ap_coll = ee.ImageCollection(ap_coll_id)\
                 .filterDate(self.start_date, self.end_date)
@@ -914,7 +914,7 @@ class Image(object):
             rs1_img = ee.Image.constant(float(self.rs_hourly_source))
         elif isinstance(self.rs_hourly_source, ee.computedobject.ComputedObject):
             rs1_img = self.rs_hourly_source
-        elif self.rs_hourly_source.upper() == 'CFSR_NEW':
+        elif self.rs_hourly_source.upper() == 'CFSR':
             rs1_coll_id = 'projects/disalexi/insol_data/global_v001_hourly'
             rs1_coll = ee.ImageCollection(rs1_coll_id).select(['insolation'])
             if self.rs_interp_flag:
@@ -933,7 +933,7 @@ class Image(object):
                 .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)\
                 .resample('bilinear')\
                 .reproject(crs=self.crs, crsTransform=self.transform)
-        elif self.rs_hourly_source.upper() == 'CFSR':
+        elif self.rs_hourly_source.upper() == 'CFSR_MULTIBAND':
             rs1_coll_id = 'projects/disalexi/insol_data/GLOBAL_V001'
             rs1_coll = ee.ImageCollection(rs1_coll_id)\
                 .filterDate(self.start_date, self.end_date)
@@ -1008,7 +1008,7 @@ class Image(object):
                 .select(['SWGDNCLR'])\
                 .filterDate(self.start_date, self.end_date)
             rs24_img = ee.Image(rs24_coll.first())
-        elif self.rs_daily_source.upper() == 'CFSR_NEW':
+        elif self.rs_daily_source.upper() == 'CFSR':
             rs24_coll_id = 'projects/disalexi/insol_data/global_v001_hourly'
             rs24_coll = ee.ImageCollection(rs24_coll_id)\
                 .filterDate(self.datetime.advance(-8, 'hours'),
@@ -1018,7 +1018,7 @@ class Image(object):
                 .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)\
                 .resample('bilinear')\
                 .reproject(crs=self.crs, crsTransform=self.transform)
-        elif self.rs_daily_source.upper() == 'CFSR':
+        elif self.rs_daily_source.upper() == 'CFSR_MULTIBAND':
             rs24_coll_id = 'projects/disalexi/insol_data/GLOBAL_V001'
 
             # Hard coded for one day since no sun the rs is 0 in rs data
@@ -1096,7 +1096,7 @@ class Image(object):
             tair0_img = ee.Image.constant(float(self.ta0_source))
         # elif isinstance(self.ta0_source, ee.computedobject.ComputedObject):
         #     tair0_img = self.ta0_source
-        elif self.ta0_source.upper() == 'CFSR_NEW':
+        elif self.ta0_source.upper() == 'CFSR':
             tair0_coll_id = 'projects/disalexi/meteo_data/global_v001_3hour'
             tair0_coll = ee.ImageCollection(tair0_coll_id).select(['temperature'])
             tair0_img = utils.interpolate(tair0_coll, self.datetime, timestep=3)
@@ -1105,7 +1105,7 @@ class Image(object):
                 .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)\
                 .resample('bilinear')\
                 .reproject(crs=self.crs, crsTransform=self.transform)
-        elif self.ta0_source.upper() == 'CFSR':
+        elif self.ta0_source.upper() == 'CFSR_MULTIBAND':
             tair0_coll_id = 'projects/disalexi/meteo_data/airtemperature/GLOBAL_V001'
             tair0_coll = ee.ImageCollection(tair0_coll_id)\
                 .filterDate(self.start_date, self.end_date)
@@ -1158,7 +1158,7 @@ class Image(object):
                 .filterDate(self.start_date, self.end_date)
             windspeed_img = windspeed_coll.mean()\
                 .expression('sqrt(b(0) ** 2 + b(1) ** 2)')
-        elif self.windspeed_source.upper() == 'CFSR_NEW':
+        elif self.windspeed_source.upper() == 'CFSR':
             windspeed_coll_id = 'projects/disalexi/meteo_data/global_v001_3hour'
             windspeed_coll = ee.ImageCollection(windspeed_coll_id)\
                 .select(['windspeed'])
@@ -1168,7 +1168,7 @@ class Image(object):
                 .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)\
                 .resample('bilinear')\
                 .reproject(crs=self.crs, crsTransform=self.transform)
-        elif self.windspeed_source.upper() == 'CFSR':
+        elif self.windspeed_source.upper() == 'CFSR_MULTIBAND':
             windspeed_coll_id = 'projects/disalexi/meteo_data/windspeed/GLOBAL_V001'
             windspeed_coll = ee.ImageCollection(windspeed_coll_id)\
                 .filterDate(self.start_date, self.end_date)
@@ -1213,7 +1213,7 @@ class Image(object):
             vp_img = ee.Image.constant(float(self.vp_source))
         elif isinstance(self.vp_source, ee.computedobject.ComputedObject):
             vp_img = self.vp_source
-        elif self.vp_source.upper() == 'CFSR_NEW':
+        elif self.vp_source.upper() == 'CFSR':
             vp_coll_id = 'projects/disalexi/meteo_data/global_v001_3hour'
             vp_coll = ee.ImageCollection(vp_coll_id).select(['vp'])
             vp_img = utils.interpolate(vp_coll, self.datetime, timestep=3)
@@ -1222,7 +1222,7 @@ class Image(object):
                 .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)\
                 .resample('bilinear')\
                 .reproject(crs=self.crs, crsTransform=self.transform)
-        elif self.vp_source.upper() == 'CFSR':
+        elif self.vp_source.upper() == 'CFSR_MULTIBAND':
             vp_coll_id = 'projects/disalexi/meteo_data/vp/GLOBAL_V001'
             vp_coll = ee.ImageCollection(vp_coll_id)\
                 .filterDate(self.start_date, self.end_date)
