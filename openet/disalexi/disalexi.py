@@ -857,7 +857,7 @@ class Image(object):
                 '101.3 * (((293.0 - 0.0065 * z) / 293.0) ** 5.26)',
                 {'z': self.elevation})
         elif self.airpressure_source.upper() == 'CFSR':
-            ap_coll_id = 'projects/disalexi/meteo_data/global_v001_3hour'
+            ap_coll_id = 'projects/disalexi/meteo_data/airpressure/global_v001_3hour'
             ap_coll = ee.ImageCollection(ap_coll_id).select(['airpressure'])
             ap_img = utils.interpolate(ap_coll, self.datetime, timestep=3)
             ap_img = ee.Image(ap_img)\
@@ -1097,7 +1097,7 @@ class Image(object):
         # elif isinstance(self.ta0_source, ee.computedobject.ComputedObject):
         #     tair0_img = self.ta0_source
         elif self.ta0_source.upper() == 'CFSR':
-            tair0_coll_id = 'projects/disalexi/meteo_data/global_v001_3hour'
+            tair0_coll_id = 'projects/disalexi/meteo_data/airtemperature/global_v001_3hour'
             tair0_coll = ee.ImageCollection(tair0_coll_id).select(['temperature'])
             tair0_img = utils.interpolate(tair0_coll, self.datetime, timestep=3)
             tair0_img = ee.Image(tair0_img)\
@@ -1159,7 +1159,7 @@ class Image(object):
             windspeed_img = windspeed_coll.mean()\
                 .expression('sqrt(b(0) ** 2 + b(1) ** 2)')
         elif self.windspeed_source.upper() == 'CFSR':
-            windspeed_coll_id = 'projects/disalexi/meteo_data/global_v001_3hour'
+            windspeed_coll_id = 'projects/disalexi/meteo_data/windspeed/global_v001_3hour'
             windspeed_coll = ee.ImageCollection(windspeed_coll_id)\
                 .select(['windspeed'])
             windspeed_img = utils.interpolate(windspeed_coll, self.datetime, timestep=3)
@@ -1214,7 +1214,7 @@ class Image(object):
         elif isinstance(self.vp_source, ee.computedobject.ComputedObject):
             vp_img = self.vp_source
         elif self.vp_source.upper() == 'CFSR':
-            vp_coll_id = 'projects/disalexi/meteo_data/global_v001_3hour'
+            vp_coll_id = 'projects/disalexi/meteo_data/vp/global_v001_3hour'
             vp_coll = ee.ImageCollection(vp_coll_id).select(['vp'])
             vp_img = utils.interpolate(vp_coll, self.datetime, timestep=3)
             vp_img = ee.Image(vp_img)\
