@@ -19,7 +19,7 @@ import openet.core
 import openet.core.utils as utils
 
 TOOL_NAME = 'tair_image_wrs2_export'
-TOOL_VERSION = '0.1.8'
+TOOL_VERSION = '0.2.1'
 
 
 def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
@@ -79,7 +79,7 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
         'p034r039', 'p033r039',  # Mexico (by New Mexico)
         'p032r040',  # Mexico (West Texas)
         'p029r041', 'p028r042', 'p027r043', 'p026r043',  # Mexico (South Texas)
-        'p019r040',  # West Florida coast
+        'p019r040', 'p018r040', # West Florida coast
         'p016r043', 'p015r043',  # South Florida coast
         'p014r041', 'p014r042', 'p014r043',  # East Florida coast
         'p013r035', 'p013r036',  # North Carolina Outer Banks
@@ -459,34 +459,88 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
 
 
     # Process each WRS2 tile separately
-    logging.debug('\nImage Exports')
+    logging.info('\nImage Exports')
     wrs2_tiles = []
+    processed_image_ids = set()
+    # processed_wrs2_tiles = set()
     for export_info in sorted(export_list, key=lambda i: i['index'],
                               reverse=reverse_flag):
-        logging.debug(f'{export_info["index"]}')
+        logging.info(f'{export_info["index"]}')
         # logging.debug('  {} - {}'.format(
         #     export_info['index'], ', '.join(export_info['wrs2_tiles'])))
         tile_count = len(export_info['wrs2_tiles'])
         tile_list = sorted(export_info['wrs2_tiles'], reverse=not(reverse_flag))
+        tile_geom = ee.Geometry.Rectangle(export_info['extent'],
+                                          export_info['crs'], False)
 
+        # Get the available image ID list for the zone
+        # Get list of existing image assets and their properties for the zone
+        # Process date range by years to avoid requesting more than 3000 images
+        logging.debug('  Getting list of available model images and existing assets')
+        export_image_id_list = []
+        asset_props = {}
+        for year_start_dt, year_end_dt in date_range_by_year(
+                start_dt, end_dt, exclusive_end_dates=True):
+            year_start_date = year_start_dt.strftime("%Y-%m-%d")
+            year_end_date = year_end_dt.strftime("%Y-%m-%d")
+            logging.debug(f'  {year_start_date} {year_end_date}')
 
-        # TODO: Add error checking for long time periods when number of images
-        #   in getInfo call may exceed 3000 limit
-        # Get the image and asset lists for the full zone
-        # Collection end date is exclusive
-        model_obj = openet.disalexi.Collection(
-            collections=collections,
-            cloud_cover_max=float(ini['INPUTS']['cloud_cover']),
-            start_date=iter_start_dt.strftime('%Y-%m-%d'),
-            end_date=iter_end_dt.strftime('%Y-%m-%d'),
-            geometry=ee.Geometry.Rectangle(export_info['extent'],
-                                           export_info['crs'], False),
-            # model_args={},
-            # filter_args=filter_args,
-        )
-        logging.debug('  Getting image IDs from EarthEngine')
-        export_image_id_list = utils.get_info(ee.List(model_obj.overpass(
-            variables=['ndvi']).aggregate_array('image_id')))
+            # Get the image and asset lists for the full zone
+            # Collection end date is exclusive
+            model_obj = openet.disalexi.Collection(
+                collections=collections,
+                cloud_cover_max=float(ini['INPUTS']['cloud_cover']),
+                start_date=year_start_date,
+                end_date=year_end_date,
+                geometry=tile_geom.buffer(1000),
+                # model_args={},
+                # filter_args=filter_args,
+            )
+            year_image_id_list = utils.get_info(ee.List(model_obj.overpass(
+                variables=['ndvi']).aggregate_array('image_id')))
+            # try:
+            #     year_image_id_list = model_obj.get_image_ids()
+            # except Exception as e:
+            #     # Get the image ID list from an NDVI collection if get_image_ids()
+            #     #   doesn't work
+            #     logging.info('  Could not get image IDs from collection method')
+            #     year_image_id_list = utils.get_info(
+            #         ee.List(model_obj._build(variables=None)
+            #                 .aggregate_array('image_id')),
+            #         max_retries=10)
+            #     # year_image_id_list = utils.get_info(
+            #     #     ee.List(model_obj.overpass(variables=['ndvi'])
+            #     #             .aggregate_array('image_id')),
+            #     #     max_retries=10)
+
+            # Filter to the wrs2_tile list
+            # The WRS2 tile filtering should be done in the Collection call above,
+            #   but the DisALEXI model does not currently support this
+            year_image_id_list = [
+                x for x in year_image_id_list
+                if 'p{}r{}'.format(*re.findall('_(\d{3})(\d{3})_', x)[0]) in tile_list
+            ]
+
+            # Filter image_ids that have already been processed as part of a
+            #   different MGRS tile (might be faster with sets)
+            year_image_id_list = [x for x in year_image_id_list
+                                  if x not in processed_image_ids]
+            # Keep track of all the image_ids that have been processed
+            processed_image_ids.update(year_image_id_list)
+
+            export_image_id_list.extend(year_image_id_list)
+
+            # Get list of existing image assets and their properties
+            logging.debug('  Getting GEE asset list')
+            asset_coll = ee.ImageCollection(export_coll_id) \
+                .filterDate(year_start_date, year_end_date) \
+                .filter(ee.Filter.inList('wrs2_tile', tile_list)) \
+                .filterBounds(tile_geom)
+            year_asset_props = {
+                f'{export_coll_id}/{x["properties"]["system:index"]}': x['properties']
+                for x in utils.get_info(asset_coll)['features']}
+            asset_props.update(year_asset_props)
+
         if not export_image_id_list:
             logging.info('  No Landsat images in date range, skipping zone')
             continue
@@ -503,26 +557,18 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
                 continue
             image_id_lists[wrs2_tile].append(image_id)
 
-        # Get list of existing image assets and their properties
-        logging.debug('  Getting GEE asset list')
-        asset_coll = ee.ImageCollection(export_coll_id) \
-            .filterDate(iter_start_dt.strftime('%Y-%m-%d'),
-                        iter_end_dt.strftime('%Y-%m-%d')) \
-            .filterBounds(ee.Geometry.Rectangle(export_info['extent'],
-                                                export_info['crs'], False)) \
-            .filter(ee.Filter.inList('wrs2_tile', tile_list))
-        asset_props = {f'{export_coll_id}/{x["properties"]["system:index"]}':
-                           x['properties']
-                       for x in utils.get_info(asset_coll)['features']}
-
 
         for export_n, wrs2_tile in enumerate(tile_list):
             path, row = map(int, wrs2_tile_re.findall(wrs2_tile)[0])
-            if wrs2_tile in wrs2_tiles:
-                logging.debug('{} {} ({}/{}) - already processed'.format(
-                    export_info['index'], wrs2_tile, export_n + 1, tile_count))
-                continue
-            elif wrs2_skip_list and wrs2_tile in wrs2_skip_list:
+            # DEADBEEF Tracking processed image_ids instead of processed wrs2_tiles
+            # The L7 and L8 footprints are slightly different so processing the
+            #   wrs2 tile does not mean that all of the images were processed
+            # if wrs2_tile in processed_wrs2_tiles:
+            #     logging.debug('{} {} ({}/{}) - already processed'.format(
+            #         export_info['index'], wrs2_tile, export_n + 1, tile_count))
+            #     continue
+            # processed_wrs2_tiles.update(wrs2_tile)
+            if wrs2_skip_list and wrs2_tile in wrs2_skip_list:
                 logging.debug('{} {} ({}/{}) - in wrs2 skip list'.format(
                     export_info['index'], wrs2_tile, export_n + 1, tile_count))
                 continue
@@ -537,7 +583,6 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
             else:
                 logging.debug('{} {} ({}/{})'.format(
                     export_info['index'], wrs2_tile, export_n + 1, tile_count))
-            wrs2_tiles.append(wrs2_tile)
 
             # path, row = map(int, wrs2_tile_re.findall(export_info['index'])[0])
             # logging.info('WRS2 tile: {}  ({}/{})'.format(
@@ -548,7 +593,6 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
             # logging.debug(f'  Extent:    {export_info["extent"]}')
             # logging.debug(f'  MaxPixels: {export_info["maxpixels"]}')
 
-
             # Subset the image ID list to the WRS2 tile
             try:
                 image_id_list = image_id_lists[wrs2_tile]
@@ -557,7 +601,6 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
             if not image_id_list:
                 logging.debug('  No Landsat images in date range, skipping tile')
                 continue
-
 
             # filter_args = {}
             # for coll_id in collections:
@@ -650,9 +693,8 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
                     #     continue
 
                 if update_flag:
-                    logging.info(f'{image_id}')
                     if export_id in tasks.keys():
-                        logging.info('  Task already submitted, skipping')
+                        logging.info(f'  {scene_id} - Task already submitted, skipping')
                         continue
                     elif asset_props and asset_id in asset_props.keys():
                         # In update mode only overwrite if the version is old
@@ -664,14 +706,14 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
                         #     if b in ['et', 'et_reference']]
 
                         if asset_ver < model_ver:
-                            logging.info('  Existing asset model version is old, '
+                            logging.info(f'  {scene_id} - Existing asset model version is old, '
                                          'removing')
                             logging.debug(f'  asset: {asset_ver}\n'
                                           f'  model: {model_ver}')
                             try:
                                 ee.data.deleteAsset(asset_id)
                             except:
-                                logging.info('  Error removing asset, skipping')
+                                logging.info(f'  {scene_id} - Error removing asset, skipping')
                                 continue
                         # elif (asset_props[asset_id]['alexi_source'] <
                         #       model_args['alexi_source']):
@@ -717,36 +759,32 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
                         # elif 'tool_version' not in asset_props[asset_id].keys():
                         #     logging.info('  TOOL_VERSION property was not set, removing')
                         #     ee.data.deleteAsset(asset_id)
-
                         # elif asset_props[asset_id]['images'] == '':
                         #     logging.info('  Images property was not set, removing')
                         #     input('ENTER')
                         #     ee.data.deleteAsset(asset_id)
                         else:
-                            logging.info('  Asset is up to date, skipping')
+                            logging.info(f'  {scene_id} - Asset is up to date, skipping')
                             continue
                 elif overwrite_flag:
-                    logging.info(f'  {image_id}')
                     if export_id in tasks.keys():
-                        logging.info('  Task already submitted, cancelling')
+                        logging.info(f'  {scene_id} - Task already submitted, cancelling')
                         ee.data.cancelTask(tasks[export_id]['id'])
                         # ee.data.cancelOperation(tasks[export_id]['id'])
                     # This is intentionally not an "elif" so that a task can be
                     # cancelled and an existing image/file/asset can be removed
                     if asset_props and asset_id in asset_props.keys():
-                        logging.info('  Asset already exists, removing')
+                        logging.info(f'  {scene_id} - Asset already exists, removing')
                         ee.data.deleteAsset(asset_id)
                 else:
                     if export_id in tasks.keys():
-                        logging.debug(f'{image_id}\n  Task already submitted, skipping')
+                        logging.debug(f'  {scene_id} - Task already submitted, skipping')
                         continue
                     elif asset_props and asset_id in asset_props.keys():
-                        logging.debug(f'{image_id}\n  Asset already exists, skipping')
+                        logging.debug(f'  {scene_id} - Asset already exists, skipping')
                         continue
-                    else:
-                        logging.info(f'{image_id}')
 
-                # logging.info(f'{image_id}')
+                logging.debug(f'  Source: {image_id}')
                 logging.debug(f'  Date: {image_date}')
                 # logging.debug(f'  DOY:  {doy}')
                 logging.debug(f'  Export ID:  {export_id}')
@@ -912,10 +950,10 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
                 #             raise e
 
                 if not task:
-                    logging.warning('  Export task was not built, skipping')
+                    logging.warning(f'  {scene_id} - Export task was not built, skipping')
                     continue
 
-                logging.info('  Starting export task')
+                logging.info(f'  {scene_id} - Starting export task')
                 for i in range(1, max_retries):
                     try:
                         task.start()
@@ -960,123 +998,6 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
                     task_count=ready_task_count)
 
                 logging.debug('')
-
-
-    # # DEADBEEF - Old code for iteratively computing a new Tair image
-    # if iteration <= 0:
-    #      # For initial iteration compute bias at 250 and 350 K
-    #      a_img = d_obj.ta_coarse(ta_img=ee.Image.constant(250)) \
-    #          .select(['ta', 'bias'], ['ta_a', 'bias_a'])
-    #      b_img = d_obj.ta_coarse(ta_img=ee.Image.constant(350)) \
-    #          .select(['ta', 'bias'], ['ta_b', 'bias_b'])
-    #      # Applying both bias masks to the output
-    #      # This shouldn't be necessary but ta_coarse was returning
-    #      #   ta and bias images with different masks
-    #      export_img = ee.Image([a_img, b_img])\
-    #          .updateMask(a_img.select(['bias_a']).And(
-    #              b_img.select(['bias_b'])))\
-    #          .double()
-    #  # elif iteration <= 4:
-    #  #     # Interpolate new Ta from the bias and test directly
-    #  #     # Roughly equivalent to false position method
-    #  #     ta_img = ee.Image('{}/{}_{:02d}'.format(
-    #  #         ta_wrs2_coll_id, scene_id, iteration - 1))
-    #  #     # ta_img = ee.Image(ta_coll
-    #  #     #     .filterMetadata('date', 'equals', export_date)
-    #  #     #     .filterMetadata('iteration', 'equals', iteration - 1)
-    #  #     #     .first())
-    #  #     ta_a = ta_img.select(['ta_a'])
-    #  #     ta_b = ta_img.select(['ta_b'])
-    #  #     bias_a = ta_img.select(['bias_a'])
-    #  #     bias_b = ta_img.select(['bias_b'])
-    #  #
-    #  #     ta_x = bias_a.multiply(ta_b).subtract(bias_b.multiply(ta_a))\
-    #  #         .divide(bias_a.subtract(bias_b))
-    #  #     bias_x = d_obj.et_bias(d_obj.et_coarse(ta_x))
-    #  #
-    #  #     # Use the new value if it minimizes the bias and brackets 0
-    #  #     mask1 = bias_x.lt(bias_b).And(bias_x.gt(0))
-    #  #     mask2 = bias_x.gt(bias_a).And(bias_x.lt(0))
-    #  #     ta_b = ta_b.where(mask1, ta_x)
-    #  #     bias_b = bias_b.where(mask1, bias_x)
-    #  #     ta_a = ta_a.where(mask2, ta_x)
-    #  #     bias_a = bias_a.where(mask2, bias_x)
-    #  #     export_img = ee.Image([ta_a, bias_a, ta_b, bias_b])
-    #  else:
-    #      # Generate test Ta randomly from a triangular distribution
-    #      # Center the distribution on the interpolated zero bias Ta
-    #      ta_img = ee.Image('{}/{}_{:02d}'.format(
-    #          ta_wrs2_coll_id, scene_id, iteration - 1))
-    #      # ta_img = ee.Image(ta_coll
-    #      #     .filterMetadata('date', 'equals', export_date)
-    #      #     .filterMetadata('iteration', 'equals', iteration - 1)
-    #      #     .first())
-    #      ta_a = ta_img.select(['ta_a'])
-    #      ta_b = ta_img.select(['ta_b'])
-    #      bias_a = ta_img.select(['bias_a'])
-    #      bias_b = ta_img.select(['bias_b'])
-    #
-    #      ta_c = bias_a.multiply(ta_b).subtract(bias_b.multiply(ta_a))\
-    #          .divide(bias_a.subtract(bias_b))
-    #      # ta_c = ta_a.add(ta_b).multiply(0.5)
-    #
-    #      # For now use a single random number for the whole scene
-    #      # Need to check if ee.Image.random() will work though
-    #      u = ta_b.multiply(0).add(random.random())
-    #      # u = ta_b.multiply(0).add(ee.Image.random(0))
-    #
-    #      a = u.multiply(ta_b.subtract(ta_a))\
-    #          .multiply(ta_c.subtract(ta_a)).sqrt().add(ta_a)
-    #      b = u.multiply(-1).add(1)\
-    #          .multiply(ta_b.subtract(ta_a))\
-    #          .multiply(ta_b.subtract(ta_c))\
-    #          .sqrt().multiply(-1).add(ta_b)
-    #      fc = ta_c.subtract(ta_a).divide(ta_b.subtract(ta_a))
-    #      ta_x = a.where(u.gt(fc), b)
-    #      bias_x = d_obj.et_bias(d_obj.et_coarse(ta_x))
-    #
-    #      # Use the new value if it minimizes the bias and brackets 0
-    #      mask1 = bias_x.lt(bias_b).And(bias_x.gt(0))
-    #      mask2 = bias_x.gt(bias_a).And(bias_x.lt(0))
-    #      ta_b = ta_b.where(mask1, ta_x)
-    #      bias_b = bias_b.where(mask1, bias_x)
-    #      ta_a = ta_a.where(mask2, ta_x)
-    #      bias_a = bias_a.where(mask2, bias_x)
-    #      export_img = ee.Image([ta_a, bias_a, ta_b, bias_b])
-    #
-    #  # else:
-    #  #     ta_img = ee.Image('{}/{}_{}'.format(
-    #  #         ta_wrs2_coll_id, scene_id, iteration - 1))
-    #  #     # ta_img = ee.Image(ta_coll
-    #  #     #     .filterMetadata('date', 'equals', export_date)
-    #  #     #     .filterMetadata('iteration', 'equals', iteration - 1)
-    #  #     #     .first())
-    #  #     ta_a = ta_img.select(['ta_a'])
-    #  #     ta_b = ta_img.select(['ta_b'])
-    #  #     bias_a = ta_img.select(['bias_a'])
-    #  #     bias_b = ta_img.select(['bias_b'])
-    #  #     # abs_a = ta_img.select(['bias_a']).abs()
-    #  #     # abs_b = ta_img.select(['bias_b']).abs()
-    #  #
-    #  #     # Compute new test Ta and biases
-    #  #     ta_c = ta_b.subtract(ta_b.subtract(ta_a).multiply(0.618034))
-    #  #     ta_d = ta_a.add(ta_b.subtract(ta_a).multiply(0.618034))
-    #  #     bias_c = d_obj.et_bias(d_obj.et_coarse(ta_c))
-    #  #     bias_d = d_obj.et_bias(d_obj.et_coarse(ta_d))
-    #  #     abs_c = bias_c.abs()
-    #  #     abs_d = bias_d.abs()
-    #  #
-    #  #     # Use the new values if they minimize the bias
-    #  #     # If f(c) < f(d): move the data from d to b and c to d
-    #  #     mask1 = abs_c.lt(abs_d)
-    #  #     # If f(c) > f(d): move the data from c to a and d to c
-    #  #     mask2 = abs_c.gte(abs_d)
-    #  #     ta_b = ta_b.where(mask1, ta_d)
-    #  #     bias_b = bias_b.where(mask1, bias_d)
-    #  #     ta_a = ta_a.where(mask2, ta_c)
-    #  #     bias_a = bias_a.where(mask2, bias_c)
-    #  #
-    #  #     export_img = ee.Image([ta_a, bias_a, ta_b, bias_b])
 
 
 # TODO: Move this function into the model code so it can be tested
@@ -1344,6 +1265,36 @@ def mgrs_export_tiles(study_area_coll_id, mgrs_coll_id,
         if tile['wrs2_tiles']]
 
     return export_list
+
+
+# TODO: Move to openet.core.utils?
+def date_range_by_year(start_dt, end_dt, exclusive_end_dates=False):
+    """
+
+    Parameters
+    ----------
+    start_dt : datetime
+    end_dt : datetime
+    exclusive_end_dates : bool, optional
+        If True, set the end dates for each iteration range to be exclusive.
+
+    Returns
+    -------
+    list of start and end datetimes split by year
+
+    """
+    if (end_dt - start_dt).days > 366:
+        for year in range(start_dt.year, end_dt.year+1):
+            year_start_dt = max(datetime.datetime(year, 1, 1), start_dt)
+            year_end_dt = datetime.datetime(year+1, 1, 1) - datetime.timedelta(days=1)
+            year_end_dt = min(year_end_dt, end_dt)
+            if exclusive_end_dates:
+                year_end_dt = year_end_dt + datetime.timedelta(days=1)
+            yield year_start_dt, year_end_dt
+    else:
+        if exclusive_end_dates:
+            year_end_dt = end_dt + datetime.timedelta(days=1)
+        yield start_dt, year_end_dt
 
 
 # TODO: Move to openet.core.utils?
