@@ -25,6 +25,7 @@ def pytest_configure():
         ee.Initialize(EE_CREDENTIALS)
     else:
         ee.Initialize()
+        # ee.Initialize(opt_url='https://earthengine-highvolume.googleapis.com')
 
 
 @pytest.fixture(scope="session", autouse=True)
