@@ -847,6 +847,27 @@ def test_Image_from_landsat_c2_sr_exception():
         utils.getinfo(disalexi.Image.from_landsat_c2_sr(ee.Image('FOO')).ndvi)
 
 
+def test_Image_from_landsat_c2_sr_scaling():
+    """Test if Landsat SR images images are being scaled"""
+    sr_img = ee.Image('LANDSAT/LC08/C02/T1_L2/LC08_044033_20170716')
+    input_img = ee.Image.constant([10909, 10909, 10909, 14545, 10909, 10909,
+                                   44177.6, 21824, 0]) \
+        .rename(['SR_B2', 'SR_B3', 'SR_B4', 'SR_B5', 'SR_B6', 'SR_B7',
+                 'ST_B10', 'QA_PIXEL', 'QA_RADSAT']) \
+        .set({'SPACECRAFT_ID': ee.String(sr_img.get('SPACECRAFT_ID')),
+              'system:id': ee.String(sr_img.get('system:id')),
+              'system:index': ee.String(sr_img.get('system:index')),
+              'system:time_start': ee.Number(sr_img.get('system:time_start'))})
+
+    output = utils.constant_image_value(
+        disalexi.Image.from_landsat_c2_sr(input_img).ndvi)
+    assert abs(output['ndvi'] - 0.333) <= 0.001
+
+    output = utils.constant_image_value(
+        disalexi.Image.from_landsat_c2_sr(input_img).albedo)
+    assert abs(output['albedo'] - 0.137) <= 0.001
+
+
 @pytest.mark.parametrize(
     'image_id',
     [
