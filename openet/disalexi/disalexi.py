@@ -808,6 +808,7 @@ class Image(object):
             ta_img = ta_array.arrayGet(index)
 
             if self.ta_smooth_flag:
+                # CGM - The v003 calculations used a radius of 2 instead of 1
                 ta_img = ta_img.focal_mean(1, 'circle', 'pixels')\
                     .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)\
                     .resample('bilinear')\
@@ -833,6 +834,7 @@ class Image(object):
             ta_img = ta_array.arrayGet(index)
 
             if self.ta_smooth_flag:
+                # CGM - The v003 calculations used a radius of 2 instead of 1
                 ta_img = ta_img.focal_mean(1, 'circle', 'pixels')\
                     .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)\
                     .resample('bilinear')\
@@ -1022,8 +1024,11 @@ class Image(object):
             rs24_coll_id = 'projects/disalexi/insol_data/GLOBAL_V001'
 
             # Hard coded for one day since no sun the rs is 0 in rs data
-            start_hour = self.hour_int.subtract(6)
+            start_hour = self.hour_int.subtract(8)
             end_hour = self.hour_int.add(12)
+            # CGM - The v003 calculations used the shorter day range of -5/+10
+            # start_hour = self.hour_int.subtract(5)
+            # end_hour = self.hour_int.add(10)
 
             # when gte24
             rs24_coll = ee.ImageCollection(rs24_coll_id)
@@ -1185,6 +1190,8 @@ class Image(object):
             t_a = self.hour_int.divide(3).floor().multiply(3)
             # t_b = t_a.add(3)
 
+            # CGM - The v003 calculations had a .gt() instead of the .And()
+            #     self.hour_int.lt(24).gt(self.hour_int.gt(0)),
             windspeed_img = ee.Algorithms.If(
                 self.hour_int.lt(24).And(self.hour_int.gt(0)),
                 wind_b_img.subtract(wind_a_img)\
