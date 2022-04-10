@@ -1211,7 +1211,7 @@ class Image(object):
             raise ValueError(f'Unsupported windspeed_source: '
                              f'{self.windspeed_source}\n')
 
-        return ee.Image(windspeed_img).rename(['windspeed'])
+        return ee.Image(windspeed_img).max(2).rename(['windspeed'])
 
     @lazy_property
     def vp(self):
