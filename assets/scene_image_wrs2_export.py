@@ -97,6 +97,7 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
     # clip_ocean_flag = True
 
     # Read config file
+    logging.info(f'  {os.path.basename(ini_path)}')
     ini = read_ini(ini_path)
     # ini = configparser.ConfigParser(interpolation=None)
     # ini.read_file(open(ini_path, 'r'))
@@ -673,7 +674,7 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
                 asset_id = f'{export_coll_id}/{scene_id.lower()}'
 
                 if date_skip_list and image_date in date_skip_list:
-                    logging.info(f'{image_id}\n  Date in skip list, skipping')
+                    logging.info(f'  {scene_id} - Date in skip list, skipping')
                     continue
                 if ('alexi_source' in model_args.keys() and
                         type(model_args['alexi_source']) is str):
@@ -681,7 +682,7 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
                     # This is the most likely asset to be missing on updates so
                     #   check for it early
                     if image_date not in alexi_date_list:
-                        logging.info(f'{image_id}\n  No ALEXI image in source, skipping')
+                        logging.info(f'  {scene_id} - No ALEXI image in source, skipping')
                         time.sleep(0.1)
                         continue
                     # alexi_coll = ee.ImageCollection(alexi_coll_id) \
