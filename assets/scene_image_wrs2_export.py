@@ -687,7 +687,7 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
                         continue
                     # alexi_coll = ee.ImageCollection(alexi_coll_id) \
                     #     .filterDate(image_date, next_date)
-                    # if alexi_coll.size().getInfo() == 0:
+                    # if utils.get_info(alexi_coll.size()) == 0:
                     #     logging.info('  No ALEXI image in source, skipping')
                     #     time.sleep(1)
                     #     # input('ENTER')
@@ -786,8 +786,8 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
                         continue
 
                 logging.debug(f'  Source: {image_id}')
-                logging.debug(f'  Date: {image_date}')
-                # logging.debug(f'  DOY:  {doy}')
+                logging.debug(f'  Date:   {image_date}')
+                # logging.debug(f'  DOY:    {doy}')
                 logging.debug(f'  Export ID:  {export_id}')
                 logging.debug(f'  Collection: {os.path.dirname(asset_id)}')
                 logging.debug(f'  Image ID:   {os.path.basename(asset_id)}')
@@ -810,8 +810,8 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
                     logging.debug(f'  Tair source: {tair_args["source_coll"]}')
                     ta_source_coll = ee.ImageCollection(tair_args['source_coll'])\
                         .filterMetadata('image_id', 'equals', image_id)
-                    if ta_source_coll.size().getInfo() == 0:
-                        logging.info('  No Tair image in source coll, skipping')
+                    if utils.get_info(ta_source_coll.size()) == 0:
+                        logging.info(f'  {scene_id} - No Tair image in source coll, skipping')
                         # input('ENTER')
                         continue
                     ta_source_img = ta_min_bias(ee.Image(ta_source_coll.first()))
@@ -824,11 +824,11 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
                     tir_coll = ee.ImageCollection(model_args['tir_source']) \
                         .filterMetadata('scene_id', 'equals', scene_id)
                     tir_img = ee.Image(tir_coll.first())
-                    tir_info = tir_img.getInfo()
+                    tir_info = utils.get_info(tir_img)
                     try:
                         sharpen_version = tir_info['properties']['sharpen_version']
                     except:
-                        logging.info('  No TIR image in source, skipping')
+                        logging.info(f'  {scene_id} - No TIR image in source, skipping')
                         continue
                 if ('lai_source' in model_args.keys() and
                         type(model_args['lai_source']) is str):
@@ -836,11 +836,11 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
                     lai_coll = ee.ImageCollection(model_args['lai_source']) \
                         .filterMetadata('scene_id', 'equals', scene_id)
                     lai_img = ee.Image(lai_coll.first())
-                    lai_info = lai_img.getInfo()
+                    lai_info = utils.get_info(lai_img)
                     try:
                         landsat_lai_version = lai_info['properties']['landsat_lai_version']
                     except:
-                        logging.info('  No LAI image in source, skipping')
+                        logging.info(f'  {scene_id} - No LAI image in source, skipping')
                         continue
 
                 # CGM: We could pre-compute (or compute once and then save)
@@ -898,8 +898,11 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
                 #   the crs, transform, and shape since they should (will?) be
                 #   the same for each wrs2 tile
                 # Build the export transform and shape from the Landsat image
-                image_xy = landsat_img.geometry().bounds(1, 'EPSG:4326')\
-                    .coordinates().get(0).getInfo()
+                image_xy = utils.get_info(
+                    landsat_img.geometry().bounds(1, 'EPSG:4326').coordinates().get(0))
+                if image_xy is None:
+                    logging.info('  Could not get image extent, skipping')
+                    continue
                 export_extent = [min([xy[0] for xy in image_xy]),
                                  min([xy[1] for xy in image_xy]),
                                  max([xy[0] for xy in image_xy]),
