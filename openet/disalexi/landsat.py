@@ -260,8 +260,8 @@ class Landsat_C02_SR(Landsat):
         """
         scalars_multi = [
             0.0000275, 0.0000275, 0.0000275, 0.0000275, 0.0000275, 0.0000275,
-            0.00341802, 1, 1]
-        scalars_add = [-0.2, -0.2, -0.2, -0.2, -0.2, -0.2, 149.0, 0, 0]
+            0.00341802, 1]
+        scalars_add = [-0.2, -0.2, -0.2, -0.2, -0.2, -0.2, 149.0, 0]
 
         self.raw_image = ee.Image(raw_image)
         self._id = self.raw_image.get('system:id')
@@ -273,20 +273,20 @@ class Landsat_C02_SR(Landsat):
 
         input_bands = ee.Dictionary({
             'LANDSAT_4': ['SR_B1', 'SR_B2', 'SR_B3', 'SR_B4', 'SR_B5', 'SR_B7',
-                          'ST_B6', 'QA_PIXEL', 'QA_RADSAT'],
+                          'ST_B6', 'QA_PIXEL'],
             'LANDSAT_5': ['SR_B1', 'SR_B2', 'SR_B3', 'SR_B4', 'SR_B5', 'SR_B7',
-                          'ST_B6', 'QA_PIXEL', 'QA_RADSAT'],
+                          'ST_B6', 'QA_PIXEL'],
             'LANDSAT_7': ['SR_B1', 'SR_B2', 'SR_B3', 'SR_B4', 'SR_B5', 'SR_B7',
-                          'ST_B6', 'QA_PIXEL', 'QA_RADSAT'],
+                          'ST_B6', 'QA_PIXEL'],
             'LANDSAT_8': ['SR_B2', 'SR_B3', 'SR_B4', 'SR_B5', 'SR_B6', 'SR_B7',
-                          'ST_B10', 'QA_PIXEL', 'QA_RADSAT'],
+                          'ST_B10', 'QA_PIXEL'],
             'LANDSAT_9': ['SR_B2', 'SR_B3', 'SR_B4', 'SR_B5', 'SR_B6', 'SR_B7',
-                          'ST_B10', 'QA_PIXEL', 'QA_RADSAT'],
+                          'ST_B10', 'QA_PIXEL'],
         })
         # Rename bands to generic names
         output_bands = [
             'blue', 'green', 'red', 'nir', 'swir1', 'swir2',
-            'lst', 'QA_PIXEL', 'QA_RADSAT']
+            'lst', 'QA_PIXEL']
 
         self.input_image = ee.Image(self.raw_image) \
             .select(input_bands.get(self._spacecraft_id), output_bands) \

@@ -520,6 +520,19 @@ def test_Image_windspeed_source(source, xy, expected, tol=0.0001):
     assert abs(output['windspeed'] - expected) <= tol
 
 
+@pytest.mark.parametrize(
+    'source, xy, expected',
+    [
+        [1.9999, TEST_POINT, 2.0000],
+        [20.0001, TEST_POINT, 20.0000],
+    ]
+)
+def test_Image_windspeed_clamping(source, xy, expected, tol=0.0001):
+    output = utils.point_image_value(disalexi.Image(
+        default_image(), windspeed_source=source).windspeed, xy)
+    assert abs(output['windspeed'] - expected) <= tol
+
+
 def test_Image_windspeed_source_exception():
     with pytest.raises(ValueError):
         utils.getinfo(disalexi.Image(default_image(), windspeed_source='').windspeed)
