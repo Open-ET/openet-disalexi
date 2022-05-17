@@ -186,6 +186,8 @@ def test_Image_init_date_properties():
 @pytest.mark.parametrize(
     'source, xy, expected',
     [
+        # ['CONUS_V006', TEST_POINT, 298.047307556939],
+        # ['CONUS_V006', [-121.50822, 38.71776], 297.32998269291346],
         ['CONUS_V005', TEST_POINT, 298.047307556939],
         ['CONUS_V005', [-121.50822, 38.71776], 297.32998269291346],
         # ['CONUS_V004', TEST_POINT, 298.1013811163322],
@@ -252,6 +254,8 @@ def test_Image_ta_properties():
     'scene_id, source, xy, expected',
     [
         # ALEXI ET is currently in MJ m-2 d-1
+        # ['LC08_044033_20200708', 'CONUS_V006', TEST_POINT, 17.999324798583984 * 0.408],
+        # ['LC08_044033_20200724', 'CONUS_V006', TEST_POINT, 17.819684982299805 * 0.408],
         ['LC08_044033_20200708', 'CONUS_V005', TEST_POINT, 17.999324798583984 * 0.408],
         ['LC08_044033_20200724', 'CONUS_V005', TEST_POINT, 17.819684982299805 * 0.408],
         [None, 'CONUS_V005', TEST_POINT, 12.765579223632812 * 0.408],

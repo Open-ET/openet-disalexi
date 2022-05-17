@@ -64,10 +64,10 @@ class Image(object):
         ----------
         image : ee.Image
             Prepped image
-        ta_source : {'CONUS_V003', 'CONUS_V004', 'CONUS_V005'}
+        ta_source : {'CONUS_V003', 'CONUS_V004', 'CONUS_V005', 'CONUS_V006'}
             ALEXI scale air temperature image collection ID.
             The default is 'CONUS_V005'.
-        alexi_source : {'CONUS_V003', 'CONUS_V004', 'CONUS_V005'}
+        alexi_source : {'CONUS_V003', 'CONUS_V004', 'CONUS_V005', 'CONUS_V006'}
             ALEXI ET image collection ID (the default is 'CONUS_V005').
         lai_source : string
             LAI image collection ID.
@@ -390,7 +390,10 @@ class Image(object):
 
         # CGM - This should probably be set in et_alexi() but that wasn't working
         if type(self.alexi_source) is str:
-            if self.alexi_source.upper() == 'CONUS_V005':
+            if self.alexi_source.upper() == 'CONUS_V006':
+                self.alexi_geo = [0.04, 0, -125.02, 0, -0.04, 49.78]
+                self.alexi_crs = 'EPSG:4326'
+            elif self.alexi_source.upper() == 'CONUS_V005':
                 self.alexi_geo = [0.04, 0, -125.02, 0, -0.04, 49.78]
                 self.alexi_crs = 'EPSG:4326'
             elif self.alexi_source.upper() == 'CONUS_V004':
@@ -597,6 +600,7 @@ class Image(object):
             'CONUS_V003': 'projects/disalexi/alexi/CONUS_V003',
             'CONUS_V004': 'projects/disalexi/alexi/CONUS_V004',
             'CONUS_V005': 'projects/ee-tulipyangyun-2/assets/alexi/ALEXI_V005',
+            'CONUS_V006': 'projects/ee-tulipyangyun-2/assets/alexi/ALEXI_V006',
         }
         alexi_re = re.compile('(projects/earthengine-legacy/assets/)?'
                               'projects/disalexi/alexi/CONUS_V\\w+')
@@ -775,6 +779,7 @@ class Image(object):
             'CONUS_V003': 'projects/openet/disalexi/tair/conus_v003_1k',
             'CONUS_V004': 'projects/openet/disalexi/tair/conus_v004_1k',
             'CONUS_V005': 'projects/openet/disalexi/tair/conus_v005_1k',
+            'CONUS_V006': 'projects/openet/disalexi/tair/conus_v006_1k',
         }
         ta_source_re = re.compile(
             '(projects/earthengine-legacy/assets/)?'
