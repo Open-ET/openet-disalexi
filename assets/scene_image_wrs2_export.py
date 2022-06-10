@@ -24,7 +24,7 @@ TOOL_VERSION = '0.2.1'
 
 def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
          ready_task_max=-1, reverse_flag=False, tiles=None, update_flag=False,
-         log_tasks=True, recent_days=None, start_dt=None, end_dt=None):
+         log_tasks=False, recent_days=None, start_dt=None, end_dt=None):
     """Compute WRS2 Ta images
 
     Parameters
@@ -48,7 +48,7 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
     update_flag : bool, optional
         If True, only overwrite scenes with an older model version.
     log_tasks : bool, optional
-        If True, log task information to the datastore (the default is True).
+        If True, log task information to the datastore (the default is False).
     recent_days : int, optional
         Limit start/end date range to this many days before the current date
         (the default is 0 which is equivalent to not setting the parameter and
@@ -312,45 +312,65 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
 
     logging.info('\nDISALEXI Parameters')
     if 'stability_iterations' in model_args.keys():
-        logging.info('  Stabil iter: {}'.format(int(model_args['stability_iterations'])))
-    logging.info('  Albedo iter: {}'.format(int(model_args['albedo_iterations'])))
+        logging.info(f'  Stabil iter: {int(model_args["stability_iterations"])}')
+    logging.info(f'  Albedo iter: {int(model_args["albedo_iterations"])}')
 
     logging.info('\nTAIR Parameters')
-    logging.info('  Source:     {}'.format(tair_args['source_coll']))
-    logging.info('  Ta Start:   {}'.format(tair_args['ta_start']))
-    logging.info('  Cell size:  {}'.format(tair_args['cell_size']))
-    logging.info('  Retile:     {}'.format(tair_args['retile']))
-    logging.info('  Step Size:  {}'.format(tair_args['step_size']))
-    logging.info('  Step Count: {}'.format(tair_args['step_count']))
+    logging.info(f'  Source:     {tair_args["source_coll"]}')
+    logging.info(f'  Ta Start:   {tair_args["ta_start"]}')
+    logging.debug(f'  Cell size:  {tair_args["cell_size"]}')
+    logging.debug(f'  Retile:     {tair_args["retile"]}')
+    logging.info(f'  Step Size:  {tair_args["step_size"]}')
+    logging.debug(f'  Step Count: {tair_args["step_count"]}')
 
 
-    logging.info('\nInitializing Earth Engine')
+    # Initialize Earth Engine
     if gee_key_file:
-        logging.info(f'  Using service account key file: {gee_key_file}')
-        # The "EE_ACCOUNT" parameter is not used if the key file is valid
-        ee.Initialize(ee.ServiceAccountCredentials(
-            'deadbeef', key_file=gee_key_file))
-    else:
-        logging.info(f'  Using user credentials')
-        ee.Initialize()
-
-
-    # TODO: set datastore key file as a parameter?
-    datastore_key_file = 'openet-dri-datastore.json'
-    if log_tasks and not os.path.isfile(datastore_key_file):
-        logging.info('\nTask logging disabled, datastore key does not exist')
-        log_tasks = False
-        # input('ENTER')
-    if log_tasks:
-        logging.info('\nInitializing task datastore client')
-        # TODO: Move to top and add to requirements.txt and environment.yaml
-        from google.cloud import datastore
+        logging.info(f'\nInitializing GEE using user key file: {gee_key_file}')
         try:
-            datastore_client = datastore.Client.from_service_account_json(
-                datastore_key_file)
-        except Exception as e:
-            logging.error(f'{e}')
+            ee.Initialize(ee.ServiceAccountCredentials('_', key_file=gee_key_file))
+        except ee.ee_exception.EEException:
+            logging.warning('Unable to initialize GEE using user key file')
             return False
+    elif 'FUNCTION_REGION' in os.environ:
+        # Assume code is deployed to a cloud function
+        logging.debug(f'\nInitializing GEE using application default credentials')
+        import google.auth
+        credentials, project_id = google.auth.default(
+            default_scopes=['https://www.googleapis.com/auth/earthengine'])
+        ee.Initialize(credentials)
+    else:
+        logging.info('\nInitializing Earth Engine using user credentials')
+        ee.Initialize()
+    # elif project_id is not None:
+    #     logging.info(f'\nInitializing Earth Engine using project credentials'
+    #                  f'\n  Project ID: {project_id}')
+    #     try:
+    #         ee.Initialize(project=project_id)
+    #     except Exception as e:
+    #         logging.warning(f'\nUnable to initialize GEE using project ID\n  {e}')
+    #         return False
+    # elif 'GOOGLE_APPLICATION_CREDENTIALS' in os.environ:
+    #     logging.info(f'\nInitializing GEE using GOOGLE_APPLICATION_CREDENTIALS key')
+    #     try:
+    #         ee.Initialize(ee.ServiceAccountCredentials(
+    #             "_", key_file=os.environ.get('GOOGLE_APPLICATION_CREDENTIALS')))
+    #     except Exception as e:
+    #         logging.warning('Unable to initialize GEE using '
+    #                         'GOOGLE_APPLICATION_CREDENTIALS key file')
+    #         return False
+
+
+    # Setup datastore task logging
+    if log_tasks:
+        # Assume function is being run deployed as a cloud function
+        #   and use the defult credentials (should be the SA credentials)
+        logging.debug('\nInitializing task datastore client')
+        try:
+            datastore_client = datastore.Client(project='openet-dri')
+        except Exception as e:
+            logging.info('  Task logging disabled, error setting up datastore client')
+            log_tasks = False
 
 
     # Get current running tasks
@@ -392,7 +412,16 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
     logging.debug('\nALEXI ET properties')
     alexi_coll_id = model_args['alexi_source']
 
-    if (alexi_coll_id.upper() == 'CONUS_V005' or
+    if (alexi_coll_id.upper() == 'CONUS_V006' or
+            alexi_coll_id.endswith('projects/ee-tulipyangyun-2/assets/alexi/ALEXI_V006')):
+        alexi_coll_id = 'projects/ee-tulipyangyun-2/assets/alexi/ALEXI_V006'
+        alexi_mask = ee.Image('projects/earthengine-legacy/assets/'
+                              'projects/disalexi/alexi/conus_v004_mask')\
+            .double().multiply(0)
+        # alexi_geo = [0.04, 0.0, -125.02, 0.0, -0.04, 49.78]
+        alexi_cs = 0.04
+        alexi_x, alexi_y = -125.02, 49.78
+    elif (alexi_coll_id.upper() == 'CONUS_V005' or
             alexi_coll_id.endswith('projects/ee-tulipyangyun-2/assets/alexi/ALEXI_V005')):
         alexi_coll_id = 'projects/ee-tulipyangyun-2/assets/alexi/ALEXI_V005'
         alexi_mask = ee.Image('projects/earthengine-legacy/assets/'
