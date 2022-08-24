@@ -21,6 +21,11 @@ import openet.core.utils as utils
 TOOL_NAME = 'tair_image_wrs2_export'
 TOOL_VERSION = '0.2.1'
 
+logging.getLogger("earthengine-api").setLevel(logging.INFO)
+logging.getLogger("googleapiclient").setLevel(logging.INFO)
+logging.getLogger('requests').setLevel(logging.INFO)
+logging.getLogger("urllib3").setLevel(logging.INFO)
+
 
 def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
          ready_task_max=-1, reverse_flag=False, tiles=None, update_flag=False,
@@ -876,8 +881,25 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
                 #   the crs, transform, and shape since they should (will?) be
                 #   the same for each wrs2 tile
                 landsat_img = ee.Image(image_id)
-                output_info = utils.get_info(landsat_img.select([1]))
-                # output_info = utils.get_info(landsat_img.select(['SR_B2']))
+                landsat_info = utils.get_info(landsat_img.select([1]))
+                # landsat_info = utils.get_info(landsat_img.select(['SR_B2']))
+                landsat_dt = ee.Date(landsat_info['properties']['system:time_start'])
+
+                if (('windspeed_source' in model_args.keys()) and
+                        (model_args['windspeed_source'] == 'CFSR')):
+                    windspeed_coll_id = 'projects/disalexi/meteo_data/windspeed/global_v001_3hour'
+                    windspeed_coll = ee.ImageCollection(windspeed_coll_id) \
+                        .filterDate(landsat_dt.advance(-3, 'hour'),
+                                    landsat_dt.advance(3, 'hour')) \
+                        .select(['windspeed'])
+                    try:
+                        windspeed_count = utils.get_info(windspeed_coll.size())
+                    except:
+                        windspeed_count = -1
+                    if windspeed_count <= 0:
+                        logging.info(f'  {scene_id} - No windspeed images, skipping')
+                        continue
+                    input('ENTER')
 
                 d_obj = openet.disalexi.Image.from_image_id(image_id, **model_args)
                 export_img = d_obj.ta_mosaic(
@@ -905,10 +927,10 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
                     'tool_version': TOOL_VERSION,
                     'wrs2_tile': wrs2_tile_fmt.format(p, r),
                     # Source properties
-                    'CLOUD_COVER': output_info['properties']['CLOUD_COVER'],
-                    'CLOUD_COVER_LAND': output_info['properties']['CLOUD_COVER_LAND'],
+                    'CLOUD_COVER': landsat_info['properties']['CLOUD_COVER'],
+                    'CLOUD_COVER_LAND': landsat_info['properties']['CLOUD_COVER_LAND'],
                     # CGM - Should we use the Landsat time or the ALEXI time?
-                    'system:time_start': output_info['properties']['system:time_start'],
+                    'system:time_start': landsat_info['properties']['system:time_start'],
                     # 'system:time_start': utils.millis(image_dt),
                     # Other poperties
                     # 'spacecraft_id': landsat_img.get('SATELLITE'),
@@ -1003,9 +1025,10 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
                 if log_tasks:
                     logging.debug('  Writing datastore entity')
                     try:
-                        task_obj = datastore.Entity(key=datastore_client.key(
-                            'Task', task.status()['id']),
-                            exclude_from_indexes=['properties'])
+                        task_obj = datastore.Entity(
+                            key=datastore_client.key('Task', task.status()['id']),
+                            exclude_from_indexes=['properties'],
+                        )
                         for k, v in task.status().items():
                             task_obj[k] = v
                         # task_obj['date'] = datetime.datetime.today() \
@@ -1018,7 +1041,9 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
                         task_obj['start_timestamp_ms'] = 0
                         task_obj['tool_name'] = properties.pop('tool_name')
                         task_obj['properties'] = json.dumps(properties)
+                        # pprint.pprint(task_obj)
                         datastore_client.put(task_obj)
+                        # input('ENTER')
                     except Exception as e:
                         # CGM - The message/handling will probably need to be updated
                         #   We may want separate try/excepts on the create and the put
@@ -1468,6 +1493,9 @@ def arg_parse():
         '--key', type=utils.arg_valid_file, metavar='FILE',
         help='JSON key file')
     parser.add_argument(
+        '--log_tasks', default=False, action='store_true',
+        help='Log tasks to the datastore')
+    parser.add_argument(
         '--overwrite', default=False, action='store_true',
         help='Force overwrite of existing files')
     parser.add_argument(
@@ -1506,5 +1534,6 @@ if __name__ == "__main__":
     main(ini_path=args.ini, overwrite_flag=args.overwrite,
          delay_time=args.delay, gee_key_file=args.key, ready_task_max=args.ready,
          reverse_flag=args.reverse, tiles=args.tiles, update_flag=args.update,
+         log_tasks=args.log_tasks,
          recent_days=args.recent, start_dt=args.start, end_dt=args.end,
     )
