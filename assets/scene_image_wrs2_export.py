@@ -27,9 +27,12 @@ logging.getLogger('requests').setLevel(logging.INFO)
 logging.getLogger("urllib3").setLevel(logging.INFO)
 
 
-def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
-         ready_task_max=-1, reverse_flag=False, tiles=None, update_flag=False,
-         log_tasks=False, recent_days=None, start_dt=None, end_dt=None):
+def main(ini_path=None, overwrite_flag=False,
+         delay_time=0, gee_key_file=None, ready_task_max=-1,
+         reverse_flag=False, tiles=None, update_flag=False,
+         recent_days=None, start_dt=None, end_dt=None,
+         log_tasks=False, project_id=None,
+         ):
     """Compute WRS2 Ta images
 
     Parameters
@@ -52,25 +55,24 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
         List of MGRS tiles to process (the default is None).
     update_flag : bool, optional
         If True, only overwrite scenes with an older model version.
-    log_tasks : bool, optional
-        If True, log task information to the datastore (the default is False).
-    recent_days : int, optional
-        Limit start/end date range to this many days before the current date
-        (the default is 0 which is equivalent to not setting the parameter and
-         will use the INI start/end date directly).
+    recent_days : int, str, optional
+        Limit start/end date range to this many days before the current date.
+        The default is None which will use the INI start/end date directly.
     start_dt : datetime, optional
         Override the start date in the INI file
         (the default is None which will use the INI start date).
     end_dt : datetime, optional
         Override the (inclusive) end date in the INI file
         (the default is None which will use the INI end date).
+    log_tasks : bool, optional
+        If True, log task information to the datastore (the default is False).
+    project_id : str, optional
+        Google cloud project ID not currently supported for GEE initialization.
 
     """
     logging.info('\nCompute WRS2 Ta images')
 
-    # CGM - Which format should we use for the WRS2 tile?
     wrs2_tile_fmt = 'p{:03d}r{:03d}'
-    # wrs2_tile_fmt = '{:03d}{:03d}'
     wrs2_tile_re = re.compile('p?(\\d{1,3})r?(\\d{1,3})')
 
     # List of path/rows to skip
@@ -253,17 +255,21 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
 
     today_dt = datetime.datetime.now()
     today_dt = today_dt.replace(hour=0, minute=0, second=0, microsecond=0)
-    if recent_days:
-        logging.info('\nOverriding INI "start_date" and "end_date" parameters')
-        logging.info(f'  Recent days: {recent_days}')
-        end_dt = today_dt - datetime.timedelta(days=1)
-        start_dt = today_dt - datetime.timedelta(days=recent_days)
-        start_date = start_dt.strftime('%Y-%m-%d')
-        end_date = end_dt.strftime('%Y-%m-%d')
-    elif start_dt and end_dt:
+    if start_dt and end_dt:
         # Attempt to use the function start/end dates
         logging.info('\nOverriding INI "start_date" and "end_date" parameters')
         logging.info('  Custom date range')
+        start_date = start_dt.strftime('%Y-%m-%d')
+        end_date = end_dt.strftime('%Y-%m-%d')
+    elif recent_days:
+        logging.debug('\nOverriding INI "start_date" and "end_date" parameters')
+        logging.debug(f'  Recent days: {recent_days}')
+        recent_days = list(sorted(utils.parse_int_set(recent_days)))
+        # Assume that a single day value should actually be a range?
+        if len(recent_days) == 1:
+            recent_days = list(range(1, recent_days[0]))
+        end_dt = today_dt - datetime.timedelta(days=recent_days[0])
+        start_dt = today_dt - datetime.timedelta(days=recent_days[-1])
         start_date = start_dt.strftime('%Y-%m-%d')
         end_date = end_dt.strftime('%Y-%m-%d')
     else:
@@ -726,6 +732,14 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
                     #     time.sleep(1)
                     #     # input('ENTER')
                     #     continue
+                # if ('ta_source' in model_args.keys() and
+                #         model_args['ta_source'].startswith('projects/')):
+                #     ta_source_coll = ee.ImageCollection(model_args['ta_source'])\
+                #         .filterMetadata('image_id', 'equals', image_id)
+                #     if utils.get_info(ta_source_coll.size()) == 0:
+                #         logging.info(f'  {scene_id} - No Tair image in source collection, skipping')
+                #         # time.sleep(1)
+                #         continue
 
                 if update_flag:
                     if export_id in tasks.keys():
@@ -899,7 +913,6 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
                     if windspeed_count <= 0:
                         logging.info(f'  {scene_id} - No windspeed images, skipping')
                         continue
-                    input('ENTER')
 
                 d_obj = openet.disalexi.Image.from_image_id(image_id, **model_args)
                 export_img = d_obj.ta_mosaic(
