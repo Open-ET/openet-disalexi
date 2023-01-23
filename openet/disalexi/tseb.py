@@ -5,14 +5,6 @@ import ee
 from . import tseb_utils
 from . import utils
 
-# DEADBEEF
-# test_xy = [-121.50822, 38.71776] # Low NDVI
-# test_xy = [-121.5265, 38.7399] # High NDVI A
-test_xy = [-121.51465, 38.71846] # High NDVI B
-def debug(x_var, x_str, xy=test_xy, scale=1):
-    print('{:12s} {:>20.14}'.format(x_str+':', float(utils.point_image_value(
-        x_var.rename(['test']), xy=xy, scale=scale)['test'])))
-
 # added t_air0, which is the air temperature from CFSR (or other METO data)
 def tseb_pt(t_air, t_rad, t_air0, e_air, u, p, z, rs_1, rs24, vza,
             aleafv, aleafn, aleafl, adeadv, adeadn, adeadl,
@@ -110,30 +102,6 @@ def tseb_pt(t_air, t_rad, t_air0, e_air, u, p, z, rs_1, rs24, vza,
         http://dx.doi.org/10.1016/S0168-1923(99)00005-2.
 
     """
-
-    # # DEADBEEF
-    # print('\nInputs')
-    # debug(t_air, 't_air')
-    # debug(t_rad, 't_rad')
-    # debug(u, 'u')
-    # debug(p, 'p')
-    # debug(z, 'z')
-    # debug(rs_1, 'Rs_1')
-    # debug(rs24, 'Rs24')
-    # debug(albedo, 'albedo')
-    # debug(ndvi, 'ndvi')
-    # debug(lai, 'lai')
-    # debug(aleafv, 'aleafv')
-    # debug(aleafn, 'aleafn')
-    # debug(aleafl, 'aleafl')
-    # debug(adeadv, 'adeadv')
-    # debug(adeadn, 'adeadn')
-    # debug(adeadl, 'adeadl')
-    # debug(clump, 'clump')
-    # debug(leaf_width, 'leaf_width')
-    # debug(hc_min, 'hc_min')
-    # debug(hc_max, 'hc_max')
-
     mask = lai.double().multiply(0).rename(['mask'])
     # mask = albedo.multiply(0).rename(['mask'])
     # geometry = mask.geometry()
@@ -323,39 +291,6 @@ def tseb_pt(t_air, t_rad, t_air0, e_air, u, p, z, rs_1, rs24, vza,
     # H_iter = t_air.multiply(0).add(200.16)
     EF_s = t_air.multiply(0)
 
-    # # DEADBEEF
-    # debug(t_noon, 't_noon')
-    # print('{:12s} {:>20.14}'.format('time:', time.getInfo()))
-    # debug(zs, 'zs')
-    # debug(F, 'F')
-    # debug(fc, 'fc')
-    # debug(hc, 'hc')
-    # debug(lai_c, 'lai_c')
-    # debug(fc_q, 'fc_q')
-    # debug(d0, 'd0')
-    # debug(z0h, 'z0h')
-    # debug(z0m, 'z0m')
-    # debug(leaf, 'leaf')
-    # debug(leaf_c, 'leaf_c')
-    # debug(leaf_s, 'leaf_s')
-    # debug(e_s, 'e_s')
-    # debug(Ss, 'Ss')
-    # debug(lambda1, 'lambda1')
-    # debug(g, 'g')
-    # debug(Rs_c, 'Rs_c')
-    # debug(Rs_s, 'Rs_s')
-    # debug(albedo_c, 'albedo_c')
-    # debug(albedo_s, 'albedo_s')
-    # debug(e_atm, 'e_atm')
-    # debug(r_air, 'r_air')
-    # debug(u_attr, 'u_attr')
-    # debug(r_ah, 'r_ah')
-    # debug(r_s, 'r_s')
-    # debug(r_x, 'r_x')
-    # debug(T_c, 'T_c')
-    # debug(T_s, 'T_s')
-    # debug(EF_s, 'EF_s')
-
     # ************************************************************************
     # Start Loop for Stability Correction and Water Stress
     def iter_func(n, prev):
@@ -493,32 +428,6 @@ def tseb_pt(t_air, t_rad, t_air0, e_air, u, p, z, rs_1, rs24, vza,
     LE_c = ee.Image(iter_output.get('LE_c'))
     LE_s = ee.Image(iter_output.get('LE_s'))
 
-    # # DEADBEEF
-    # print('\nAfter Stability Iteration')
-    # # T_ac = ee.Image(iter_output.get('T_ac'))
-    # # T_c = ee.Image(iter_output.get('T_c'))
-    # # T_s = ee.Image(iter_output.get('T_s'))
-    # # r_ah = ee.Image(iter_output.get('r_ah'))
-    # # r_s = ee.Image(iter_output.get('r_s'))
-    # # r_x = ee.Image(iter_output.get('r_x'))
-    # # debug(T_ac, 'T_ac')
-    # # debug(T_c, 'T_c')
-    # # debug(T_s, 'T_s')
-    # # debug(r_ah, 'r_ah')
-    # # debug(r_s, 'r_s')
-    # # debug(r_x, 'r_x')
-    # debug(a_pt, 'a_pt')
-    # debug(Rn_c, 'Rn_c')
-    # debug(Rn_s, 'Rn_s')
-    # debug(Rn_c.add(Rn_s), 'Rn')
-    # debug(G, 'G')
-    # debug(H_c, 'H_c')
-    # debug(H_s, 'H_s')
-    # debug(H_c.add(H_s), 'H')
-    # debug(LE_c, 'LE_c')
-    # debug(LE_s, 'LE_s')
-    # debug(LE_c.add(LE_s), 'LE')
-
     # ************************************************************************
     # Check Energy Balance Closure
     ind = a_pt.lte(0.01)
@@ -549,14 +458,5 @@ def tseb_pt(t_air, t_rad, t_air0, e_air, u, p, z, rs_1, rs24, vza,
             {'LE_c': LE_c, 'LE_s': LE_s, 'rs_1': rs_1,
              'rs24': rs24.multiply(0.0864 / 24.0), 'scaling': 1}) \
         .max(et_min)
-
-    # # DEADBEEF
-    # print('\nAfter Checking EBC')
-    # debug(G, 'G')
-    # debug(H_c, 'H_c')
-    # debug(H_s, 'H_s')
-    # debug(LE_c, 'LE_c')
-    # debug(LE_s, 'LE_s')
-    # debug(ET, 'ET')
 
     return ET.rename(['et'])

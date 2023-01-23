@@ -16,7 +16,7 @@ C02_SCENE_ID_LIST = sorted(['LC08_044033_20170716', 'LE07_044033_20170708'])
 # C01_SCENE_ID_LIST = sorted(['LC08_044033_20170716', 'LE07_044033_20170708',
 #                         'LE07_044033_20170724'])
 # TA_SOURCE = 'CONUS_V003'
-# LAI_SOURCE = 'projects/earthengine-legacy/assets/projects/openet/lai/landsat/c02'
+# LAI_SOURCE = 'projects/earthengine-legacy/assets/projects/openet/lai/landsat/c02_unsat'
 # TIR_SOURCE = 'projects/earthengine-legacy/assets/projects/openet/tir/landsat/c02'
 
 

@@ -36,9 +36,9 @@ class Image(object):
     def __init__(
             self,
             image,
-            ta_source='CONUS_V005',
-            alexi_source='CONUS_V005',
-            lai_source='projects/earthengine-legacy/assets/projects/openet/lai/landsat/c02',
+            ta_source='CONUS_V006',
+            alexi_source='CONUS_V006',
+            lai_source='projects/earthengine-legacy/assets/projects/openet/lai/landsat/c02_unsat',
             tir_source='projects/earthengine-legacy/assets/projects/openet/tir/landsat/c02',
             elevation_source='USGS/SRTMGL1_003',
             landcover_source='USGS/NLCD_RELEASES/2019_REL/NLCD',
@@ -511,10 +511,10 @@ class Image(object):
         for v in variables:
             if v.lower() == 'et':
                 output_images.append(self.et.float())
-            elif v.lower() == 'et_fraction':
-                output_images.append(self.etf.float())
+            # elif v.lower() == 'et_fraction':
+            #     output_images.append(self.et_fraction.float())
             elif v.lower() == 'et_reference':
-                output_images.append(self.etr.float())
+                output_images.append(self.et_reference.float())
             elif v.lower() == 'lst':
                 output_images.append(self.tir.float())
             elif v.lower() == 'mask':
@@ -780,10 +780,13 @@ class Image(object):
             'CONUS_V004': 'projects/openet/disalexi/tair/conus_v004_1k',
             'CONUS_V005': 'projects/openet/disalexi/tair/conus_v005_1k',
             'CONUS_V006': 'projects/openet/disalexi/tair/conus_v006_1k',
+            'CONUS_V006B': 'projects/openet/disalexi/tair/conus_v006b_1k',
         }
         ta_source_re = re.compile(
             '(projects/earthengine-legacy/assets/)?'
-            'projects/(\w+/)?disalexi/ta(ir)?/conus_v\d{3}(_\w+)', re.IGNORECASE)
+            'projects/(\w+/)?disalexi/ta(ir)?/(conus|global)_v\d{3}\w?(_\w+)',
+            re.IGNORECASE
+        )
 
         # if self.ta_source is None:
         #     raise ValueError('ta_source must be set to compute et')
@@ -874,40 +877,6 @@ class Image(object):
                 .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)\
                 .resample('bilinear')\
                 .reproject(crs=self.crs, crsTransform=self.transform)
-        elif self.airpressure_source.upper() == 'CFSR_MULTIBAND':
-            ap_coll_id = 'projects/disalexi/meteo_data/airpressure/GLOBAL_V001'
-            ap_coll = ee.ImageCollection(ap_coll_id)\
-                .filterDate(self.start_date, self.end_date)
-            ap_img = ee.Image(ap_coll.first())
-
-            ap_img_temp1 = ap_img.select(['b8'])
-            ap_img_temp2 = ap_img.select(['b1'])
-            temp1 = self.hour_int.divide(3).floor().add(1)
-            temp2 = self.hour_int.divide(3).floor().add(2)
-            aname = ee.String('b').cat(temp1.int().format())
-            bname = ee.String('b').cat(temp2.int().format())
-            ap_a_img = ap_img.select([aname])
-            ap_b_img = ap_img.select([bname])
-            t_a = self.hour_int.divide(3).floor().multiply(3)
-            # t_b = t_a.add(3)
-
-            ap_img = ee.Algorithms.If(
-                self.hour_int.lt(24).And(self.hour_int.gt(0)),
-                ap_b_img.subtract(ap_a_img)\
-                    .multiply(self.hour.subtract(t_a).divide(3))\
-                    .add(ap_a_img),
-                ap_b_img)
-            ap_img = ee.Algorithms.If(self.hour_int.gte(24), ap_img_temp1, ap_img)
-            ap_img = ee.Algorithms.If(self.hour_int.eq(0), ap_img_temp2, ap_img)
-
-            ap_img = self.elevation.expression(
-                'ap_img * (((293.0 - (0.0065 * z)) / 293.0) ** 5.26)',
-                {'z': self.elevation, 'ap_img': ap_img})
-            ap_img = ee.Image(ap_img)\
-                .resample('bicubic')\
-                .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)\
-                .resample('bilinear')\
-                .reproject(crs=self.crs, crsTransform=self.transform)
         else:
             raise ValueError(f'Invalid airpressure_source: '
                              f'{self.airpressure_source}\n')
@@ -935,34 +904,6 @@ class Image(object):
                     .filterDate(self.datetime.advance(-1, 'hour'),
                                 self.datetime.advance(0, 'hour'))\
                     .first()
-            rs1_img = ee.Image(rs1_img)\
-                .resample('bicubic')\
-                .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)\
-                .resample('bilinear')\
-                .reproject(crs=self.crs, crsTransform=self.transform)
-        elif self.rs_hourly_source.upper() == 'CFSR_MULTIBAND':
-            rs1_coll_id = 'projects/disalexi/insol_data/GLOBAL_V001'
-            rs1_coll = ee.ImageCollection(rs1_coll_id)\
-                .filterDate(self.start_date, self.end_date)
-            rs1_img = ee.Image(rs1_coll.first())
-
-            rs1_img_temp1 = rs1_img.select(['b24'])
-            rs1_img_temp2 = rs1_img.select(['b1'])
-            aname = ee.String('b').cat(self.hour.floor().add(1).int().format())
-            bname = ee.String('b').cat(self.hour.ceil().int().add(1).format())
-            rs1_a_img = rs1_coll.first().select([aname])
-            rs1_b_img = rs1_coll.first().select([bname])
-            t_a = self.hour.floor()
-            t_b = self.hour.ceil()
-
-            rs1_img = ee.Algorithms.If(
-                self.hour_int.gt(0).And(self.hour_int.lt(24)),
-                rs1_b_img.subtract(rs1_a_img)\
-                    .multiply(self.hour.subtract(t_a).divide(t_b.subtract(t_a)))\
-                    .add(rs1_a_img),
-                rs1_a_img)
-            rs1_img = ee.Algorithms.If(self.hour_int.gte(24), rs1_img_temp1, rs1_img)
-            rs1_img = ee.Algorithms.If(self.hour_int.eq(0), rs1_img_temp2, rs1_img)
             rs1_img = ee.Image(rs1_img)\
                 .resample('bicubic')\
                 .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)\
@@ -1025,71 +966,6 @@ class Image(object):
                 .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)\
                 .resample('bilinear')\
                 .reproject(crs=self.crs, crsTransform=self.transform)
-        elif self.rs_daily_source.upper() == 'CFSR_MULTIBAND':
-            rs24_coll_id = 'projects/disalexi/insol_data/GLOBAL_V001'
-
-            # Hard coded for one day since no sun the rs is 0 in rs data
-            start_hour = self.hour_int.subtract(8)
-            end_hour = self.hour_int.add(12)
-            # CGM - The v003 calculations used the shorter day range of -5/+10
-            # start_hour = self.hour_int.subtract(5)
-            # end_hour = self.hour_int.add(10)
-
-            # when gte24
-            rs24_coll = ee.ImageCollection(rs24_coll_id)
-            rs24_coll_1 = rs24_coll.filterDate(self.start_date, self.end_date)
-            rs24_coll_2 = rs24_coll\
-                .filterDate(self.start_date.advance(1, 'day'),
-                            self.end_date.advance(1, 'day'))
-            #rs24_coll_1_sm = rs24_coll_1.first().fastGaussianBlur(50000)
-            rs24_coll_1_sm = rs24_coll_1.first()
-            rs24_coll_1_array = rs24_coll_1_sm.toArray()
-            #rs24_coll_2_sm = rs24_coll_2.first().fastGaussianBlur(50000)
-            rs24_coll_2_sm = rs24_coll_2.first()
-            rs24_coll_2_array = rs24_coll_2_sm.toArray()
-            day1_array = rs24_coll_1_array.arraySlice(0, start_hour.int(), 24)
-            day2_array = rs24_coll_2_array\
-                .arraySlice(0, 0, end_hour.subtract(24).int())
-            day1_sum = day1_array.arrayReduce(reducer=ee.Reducer.sum(), axes=[0])
-            day2_sum = day2_array.arrayReduce(reducer=ee.Reducer.sum(), axes=[0])
-            rs24_img_temp1 = day1_sum.add(day2_sum).arrayFlatten([['array']])
-
-            # when lt 0
-            rs24_coll_1 = rs24_coll\
-                .filterDate(self.start_date.advance(-1, 'day'),
-                            self.end_date.advance(-1, 'day'))
-            rs24_coll_2 = rs24_coll.filterDate(self.start_date, self.end_date)
-            #rs24_coll_1_sm = rs24_coll_1.first().fastGaussianBlur(50000)
-            rs24_coll_1_sm = rs24_coll_1.first()
-            rs24_coll_1_array = rs24_coll_1_sm.toArray()
-            #rs24_coll_2_sm = rs24_coll_2.first().fastGaussianBlur(50000)
-            rs24_coll_2_sm = rs24_coll_2.first()
-            rs24_coll_2_array = rs24_coll_2_sm.toArray()
-            day1_array = rs24_coll_1_array.arraySlice(
-                0, start_hour.subtract(24).multiply(-1).int(), 24)
-            day2_array = rs24_coll_2_array.arraySlice(
-                0, 0, end_hour.int())
-            day1_sum = day1_array.arrayReduce(reducer=ee.Reducer.sum(), axes=[0])
-            day2_sum = day2_array.arrayReduce(reducer=ee.Reducer.sum(), axes=[0])
-            rs24_img_temp2 = day1_sum.add(day2_sum).arrayFlatten([['array']])
-
-            # normal
-            rs24_coll = rs24_coll.filterDate(self.start_date, self.end_date)
-            #rs24_coll_sm = rs24_coll.first().fastGaussianBlur(50000)
-            rs24_coll_sm = rs24_coll.first()
-            rs24_coll_array = rs24_coll_sm.toArray()
-            day_array = rs24_coll_array.arraySlice(
-                0, start_hour.int(), end_hour.int())
-            day_sum = day_array.arrayReduce(reducer=ee.Reducer.sum(), axes=[0])
-            rs24_img = day_sum.arrayFlatten([['array']])
-
-            rs24_img = ee.Algorithms.If(end_hour.gt(24), rs24_img_temp1, rs24_img)
-            rs24_img = ee.Algorithms.If(start_hour.lt(0), rs24_img_temp2, rs24_img)
-            rs24_img = ee.Image(rs24_img)\
-                .resample('bicubic')\
-                .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)\
-                .resample('bilinear')\
-                .reproject(crs=self.crs, crsTransform=self.transform)
         else:
             raise ValueError(f'Unsupported rs_daily_source: {self.rs_daily_source}\n')
 
@@ -1110,37 +986,6 @@ class Image(object):
             tair0_coll_id = 'projects/disalexi/meteo_data/airtemperature/global_v001_3hour'
             tair0_coll = ee.ImageCollection(tair0_coll_id).select(['temperature'])
             tair0_img = utils.interpolate(tair0_coll, self.datetime, timestep=3)
-            tair0_img = ee.Image(tair0_img)\
-                .resample('bicubic')\
-                .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)\
-                .resample('bilinear')\
-                .reproject(crs=self.crs, crsTransform=self.transform)
-        elif self.ta0_source.upper() == 'CFSR_MULTIBAND':
-            tair0_coll_id = 'projects/disalexi/meteo_data/airtemperature/GLOBAL_V001'
-            tair0_coll = ee.ImageCollection(tair0_coll_id)\
-                .filterDate(self.start_date, self.end_date)
-            tair0_img = ee.Image(tair0_coll.first())
-            tair0_img_temp1 = tair0_img.select(['b8'])
-            tair0_img_temp2 = tair0_img.select(['b1'])
-            temp1 = self.hour_int.divide(3).floor().add(1)
-            temp2 = self.hour_int.divide(3).floor().add(2)
-            aname = ee.String('b').cat(temp1.int().format())
-            bname = ee.String('b').cat(temp2.int().format())
-            tair0_a_img = tair0_img.select([aname])
-            tair0_b_img = tair0_img.select([bname])
-            t_a = self.hour_int.divide(3).floor().multiply(3)
-
-            tair0_img = ee.Algorithms.If(
-                self.hour_int.lt(24).And(self.hour_int.gt(0)),
-                tair0_b_img.subtract(tair0_a_img)\
-                    .multiply(self.hour.subtract(t_a).divide(3))\
-                    .add(tair0_a_img),
-                tair0_b_img)
-            tair0_img = ee.Algorithms.If(
-                self.hour_int.gte(24), tair0_img_temp1, tair0_img)
-            tair0_img = ee.Algorithms.If(
-                self.hour_int.eq(0), tair0_img_temp2, tair0_img)
-
             tair0_img = ee.Image(tair0_img)\
                 .resample('bicubic')\
                 .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)\
@@ -1178,40 +1023,6 @@ class Image(object):
                 .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)\
                 .resample('bilinear')\
                 .reproject(crs=self.crs, crsTransform=self.transform)
-        elif self.windspeed_source.upper() == 'CFSR_MULTIBAND':
-            windspeed_coll_id = 'projects/disalexi/meteo_data/windspeed/GLOBAL_V001'
-            windspeed_coll = ee.ImageCollection(windspeed_coll_id)\
-                .filterDate(self.start_date, self.end_date)
-            windspeed_img = ee.Image(windspeed_coll.first())
-
-            wind_img_temp1 = windspeed_img.select(['b8'])
-            wind_img_temp2 = windspeed_img.select(['b1'])
-            temp1 = self.hour_int.divide(3).floor().add(1)
-            temp2 = self.hour_int.divide(3).floor().add(2)
-            aname = ee.String('b').cat(temp1.int().format())
-            bname = ee.String('b').cat(temp2.int().format())
-            wind_a_img = windspeed_img.select([aname])
-            wind_b_img = windspeed_img.select([bname])
-            t_a = self.hour_int.divide(3).floor().multiply(3)
-            # t_b = t_a.add(3)
-
-            # CGM - The v003 calculations had a .gt() instead of the .And()
-            #     self.hour_int.lt(24).gt(self.hour_int.gt(0)),
-            windspeed_img = ee.Algorithms.If(
-                self.hour_int.lt(24).And(self.hour_int.gt(0)),
-                wind_b_img.subtract(wind_a_img)\
-                    .multiply(self.hour.subtract(t_a).divide(3))\
-                    .add(wind_a_img),
-                wind_b_img)
-            windspeed_img = ee.Algorithms.If(
-                self.hour_int.gte(24), wind_img_temp1, windspeed_img)
-            windspeed_img = ee.Algorithms.If(
-                self.hour_int.eq(0), wind_img_temp2, windspeed_img)
-            windspeed_img = ee.Image(windspeed_img)\
-                .resample('bicubic')\
-                .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)\
-                .resample('bilinear')\
-                .reproject(crs=self.crs, crsTransform=self.transform)
         else:
             raise ValueError(f'Unsupported windspeed_source: '
                              f'{self.windspeed_source}\n')
@@ -1229,36 +1040,6 @@ class Image(object):
             vp_coll_id = 'projects/disalexi/meteo_data/vp/global_v001_3hour'
             vp_coll = ee.ImageCollection(vp_coll_id).select(['vp'])
             vp_img = utils.interpolate(vp_coll, self.datetime, timestep=3)
-            vp_img = ee.Image(vp_img)\
-                .resample('bicubic')\
-                .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)\
-                .resample('bilinear')\
-                .reproject(crs=self.crs, crsTransform=self.transform)
-        elif self.vp_source.upper() == 'CFSR_MULTIBAND':
-            vp_coll_id = 'projects/disalexi/meteo_data/vp/GLOBAL_V001'
-            vp_coll = ee.ImageCollection(vp_coll_id)\
-                .filterDate(self.start_date, self.end_date)
-            vp_img = ee.Image(vp_coll.first())
-
-            vp_img_temp1 = vp_img.select(['b8'])
-            vp_img_temp2 = vp_img.select(['b1'])
-            temp1 = self.hour_int.divide(3).floor().add(1)
-            temp2 = self.hour_int.divide(3).floor().add(2)
-            aname = ee.String('b').cat(temp1.int().format())
-            bname = ee.String('b').cat(temp2.int().format())
-            vp_a_img = vp_img.select([aname])
-            vp_b_img = vp_img.select([bname])
-            t_a = self.hour_int.divide(3).floor().multiply(3)
-            # t_b = t_a.add(3)
-
-            vp_img = ee.Algorithms.If(
-                self.hour_int.lt(24).And(self.hour_int.gt(0)),
-                vp_b_img.subtract(vp_a_img)\
-                    .multiply(self.hour.subtract(t_a).divide(3))\
-                    .add(vp_a_img),
-                vp_b_img)
-            vp_img = ee.Algorithms.If(self.hour_int.gte(24), vp_img_temp1, vp_img)
-            vp_img = ee.Algorithms.If(self.hour_int.eq(0), vp_img_temp2, vp_img)
             vp_img = ee.Image(vp_img)\
                 .resample('bicubic')\
                 .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)\
