@@ -399,12 +399,15 @@ def main(ini_path=None, overwrite_flag=False,
         if logging.getLogger().getEffectiveLevel() == logging.DEBUG:
             utils.print_ee_tasks(tasks)
             input('ENTER')
-        ready_task_count = len(tasks.keys())
-        logging.info(f'  Tasks: {ready_task_count}')
+        running_task_count = sum([1 for v in tasks.values() if v['state'] == 'RUNNING'])
+        ready_task_count = sum([1 for v in tasks.values() if v['state'] == 'READY'])
+        logging.info(f'  Running Tasks: {running_task_count}')
+        logging.info(f'  Ready Tasks:   {ready_task_count}')
         # CGM - I'm still not sure if it makes sense to hold here or after the
         #   first task is started.
         ready_task_count = delay_task(
-            delay_time=0, task_max=ready_task_max, task_count=ready_task_count)
+            delay_time=0, task_max=ready_task_max, task_count=ready_task_count
+        )
 
 
     if not ee.data.getInfo(export_coll_id.rsplit('/', 1)[0]):
@@ -579,7 +582,8 @@ def main(ini_path=None, overwrite_flag=False,
                 .filterBounds(tile_geom)
             year_asset_props = {
                 f'{export_coll_id}/{x["properties"]["system:index"]}': x['properties']
-                for x in utils.get_info(asset_coll)['features']}
+                for x in utils.get_info(asset_coll)['features']
+            }
             asset_props.update(year_asset_props)
 
         if not export_image_id_list:
@@ -593,7 +597,8 @@ def main(ini_path=None, overwrite_flag=False,
         image_id_lists = defaultdict(list)
         for image_id in export_image_id_list:
             wrs2_tile = 'p{}r{}'.format(
-                *wrs2_tile_re.findall(image_id.split('/')[-1].split('_')[1])[0])
+                *wrs2_tile_re.findall(image_id.split('/')[-1].split('_')[1])[0]
+            )
             if wrs2_tile not in tile_list:
                 continue
             image_id_lists[wrs2_tile].append(image_id)
@@ -702,13 +707,15 @@ def main(ini_path=None, overwrite_flag=False,
                 coll_id, scene_id = image_id.rsplit('/', 1)
                 l, p, r, year, month, day = parse_landsat_id(scene_id)
                 image_dt = datetime.datetime.strptime(
-                    '{:04d}{:02d}{:02d}'.format(year, month, day), '%Y%m%d')
+                    '{:04d}{:02d}{:02d}'.format(year, month, day), '%Y%m%d'
+                )
                 image_date = image_dt.strftime('%Y-%m-%d')
                 next_date = (image_dt + datetime.timedelta(days=1)).strftime('%Y-%m-%d')
 
                 export_id = export_id_fmt.format(
                     model=ini['INPUTS']['et_model'].lower(),
-                    index=image_id.lower().replace('/', '_'))
+                    index=image_id.lower().replace('/', '_'),
+                )
                 export_id = export_id.replace('-', '')
                 export_id += export_id_name
                 asset_id = f'{export_coll_id}/{scene_id.lower()}'
@@ -748,8 +755,7 @@ def main(ini_path=None, overwrite_flag=False,
                     elif asset_props and asset_id in asset_props.keys():
                         # In update mode only overwrite if the version is old
                         model_ver = version_number(openet.disalexi.__version__)
-                        asset_ver = version_number(
-                            asset_props[asset_id]['model_version'])
+                        asset_ver = version_number(asset_props[asset_id]['model_version'])
                         # asset_flt = [
                         #     t == 'float' for b, t in asset_types.items()
                         #     if b in ['et', 'et_reference']]
@@ -918,7 +924,8 @@ def main(ini_path=None, overwrite_flag=False,
                 export_img = d_obj.ta_mosaic(
                     ta_img=ta_source_img,
                     step_size=tair_args['step_size'],
-                    step_count=tair_args['step_count'])
+                    step_count=tair_args['step_count']
+                )
                 # pprint.pprint(export_img.getInfo())
                 # input('ENTER')
 
@@ -985,7 +992,8 @@ def main(ini_path=None, overwrite_flag=False,
                               -alexi_cs, export_extent[3]]
                 export_shape = [
                     int(abs(export_extent[2] - export_extent[0]) / alexi_cs),
-                    int(abs(export_extent[3] - export_extent[1]) / alexi_cs)]
+                    int(abs(export_extent[3] - export_extent[1]) / alexi_cs)
+                ]
                 logging.debug(f'  CRS:    {alexi_crs}')
                 logging.debug(f'  Extent: {export_extent}')
                 logging.debug(f'  Geo:    {export_geo}')
