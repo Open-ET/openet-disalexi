@@ -12,7 +12,6 @@ import re
 import time
 
 import ee
-from google.cloud import datastore
 
 import openet.disalexi
 import openet.core
@@ -378,6 +377,7 @@ def main(ini_path=None, overwrite_flag=False,
         #   and use the defult credentials (should be the SA credentials)
         logging.debug('\nInitializing task datastore client')
         try:
+            from google.cloud import datastore
             datastore_client = datastore.Client(project='openet-dri')
         except Exception as e:
             logging.info('  Task logging disabled, error setting up datastore client')
@@ -394,7 +394,7 @@ def main(ini_path=None, overwrite_flag=False,
         tasks = {}
         ready_task_count = 0
     else:
-        logging.info('\nRequesting Task List')
+        logging.info('\nChecking Task List')
         tasks = utils.get_ee_tasks()
         if logging.getLogger().getEffectiveLevel() == logging.DEBUG:
             utils.print_ee_tasks(tasks)
@@ -403,8 +403,8 @@ def main(ini_path=None, overwrite_flag=False,
         ready_task_count = sum([1 for v in tasks.values() if v['state'] == 'READY'])
         logging.info(f'  Running Tasks: {running_task_count}')
         logging.info(f'  Ready Tasks:   {ready_task_count}')
-        # CGM - I'm still not sure if it makes sense to hold here or after the
-        #   first task is started.
+
+        # Hold the job here if the ready task count is already over the max
         ready_task_count = delay_task(
             delay_time=0, task_max=ready_task_max, task_count=ready_task_count
         )
@@ -429,37 +429,31 @@ def main(ini_path=None, overwrite_flag=False,
     if (alexi_coll_id.upper() == 'CONUS_V006' or
             alexi_coll_id.endswith('projects/ee-tulipyangyun-2/assets/alexi/ALEXI_V006')):
         alexi_coll_id = 'projects/ee-tulipyangyun-2/assets/alexi/ALEXI_V006'
-        alexi_mask = ee.Image('projects/earthengine-legacy/assets/'
-                              'projects/disalexi/alexi/conus_v004_mask')\
-            .double().multiply(0)
+        alexi_mask_id = 'projects/earthengine-legacy/assets/projects/disalexi/alexi/conus_v004_mask'
+        alexi_mask = ee.Image(alexi_mask_id).double().multiply(0)
         # alexi_geo = [0.04, 0.0, -125.02, 0.0, -0.04, 49.78]
         alexi_cs = 0.04
         alexi_x, alexi_y = -125.02, 49.78
     elif (alexi_coll_id.upper() == 'CONUS_V005' or
             alexi_coll_id.endswith('projects/ee-tulipyangyun-2/assets/alexi/ALEXI_V005')):
         alexi_coll_id = 'projects/ee-tulipyangyun-2/assets/alexi/ALEXI_V005'
-        alexi_mask = ee.Image('projects/earthengine-legacy/assets/'
-                              'projects/disalexi/alexi/conus_v004_mask')\
-            .double().multiply(0)
+        alexi_mask_id = 'projects/earthengine-legacy/assets/projects/disalexi/alexi/conus_v004_mask'
+        alexi_mask = ee.Image(alexi_mask_id).double().multiply(0)
         # alexi_geo = [0.04, 0.0, -125.02, 0.0, -0.04, 49.78]
         alexi_cs = 0.04
         alexi_x, alexi_y = -125.02, 49.78
     elif (alexi_coll_id.upper() == 'CONUS_V004' or
             alexi_coll_id.endswith('projects/disalexi/alexi/CONUS_V004')):
-        alexi_coll_id = 'projects/earthengine-legacy/assets/' \
-                        'projects/disalexi/alexi/CONUS_V004'
-        alexi_mask = ee.Image('projects/earthengine-legacy/assets/'
-                              'projects/disalexi/alexi/conus_v004_mask')\
-            .double().multiply(0)
+        alexi_coll_id = 'projects/earthengine-legacy/assets/projects/disalexi/alexi/CONUS_V004'
+        alexi_mask_id = 'projects/earthengine-legacy/assets/projects/disalexi/alexi/conus_v004_mask'
+        alexi_mask = ee.Image(alexi_mask_id).double().multiply(0)
         # alexi_geo = [0.04, 0.0, -125.02, 0.0, -0.04, 49.78]
         alexi_cs = 0.04
         alexi_x, alexi_y = -125.02, 49.78
     elif alexi_coll_id.upper() == 'CONUS_V003':
-        alexi_coll_id = 'projects/earthengine-legacy/assets/' \
-                        'projects/disalexi/alexi/CONUS_V003'
-        alexi_mask = ee.Image('projects/earthengine-legacy/assets/'
-                              'projects/disalexi/alexi/conus_v002_mask')\
-            .double().multiply(0)
+        alexi_coll_id = 'projects/earthengine-legacy/assets/projects/disalexi/alexi/CONUS_V003'
+        alexi_mask_id = 'projects/earthengine-legacy/assets/projects/disalexi/alexi/conus_v002_mask'
+        alexi_mask = ee.Image(alexi_mask_id).double().multiply(0)
         # alexi_geo = [0.04, 0.0, -125.04, 0.0, -0.04, 49.8]
         alexi_cs = 0.04
         alexi_x, alexi_y = -125.04, 49.8
@@ -514,8 +508,9 @@ def main(ini_path=None, overwrite_flag=False,
         #     export_info['index'], ', '.join(export_info['wrs2_tiles'])))
         tile_count = len(export_info['wrs2_tiles'])
         tile_list = sorted(export_info['wrs2_tiles'], reverse=not(reverse_flag))
-        tile_geom = ee.Geometry.Rectangle(export_info['extent'],
-                                          export_info['crs'], False)
+        tile_geom = ee.Geometry.Rectangle(
+            export_info['extent'], export_info['crs'], False
+        )
 
         # Get the available image ID list for the zone
         # Get list of existing image assets and their properties for the zone
@@ -567,8 +562,9 @@ def main(ini_path=None, overwrite_flag=False,
 
             # Filter image_ids that have already been processed as part of a
             #   different MGRS tile (might be faster with sets)
-            year_image_id_list = [x for x in year_image_id_list
-                                  if x not in processed_image_ids]
+            year_image_id_list = [
+                x for x in year_image_id_list if x not in processed_image_ids
+            ]
             # Keep track of all the image_ids that have been processed
             processed_image_ids.update(year_image_id_list)
 
@@ -763,8 +759,7 @@ def main(ini_path=None, overwrite_flag=False,
                         if asset_ver < model_ver:
                             logging.info(f'  {scene_id} - Existing asset model version is old, '
                                          'removing')
-                            logging.debug(f'  asset: {asset_ver}\n'
-                                          f'  model: {model_ver}')
+                            logging.debug(f'  asset: {asset_ver}\n  model: {model_ver}')
                             try:
                                 ee.data.deleteAsset(asset_id)
                             except:
@@ -830,7 +825,11 @@ def main(ini_path=None, overwrite_flag=False,
                     # cancelled and an existing image/file/asset can be removed
                     if asset_props and asset_id in asset_props.keys():
                         logging.info(f'  {scene_id} - Asset already exists, removing')
-                        ee.data.deleteAsset(asset_id)
+                        try:
+                            ee.data.deleteAsset(asset_id)
+                        except:
+                            logging.info('  Error removing asset, skipping')
+                            continue
                 else:
                     if export_id in tasks.keys():
                         logging.debug(f'  {scene_id} - Task already submitted, skipping')
@@ -1074,7 +1073,8 @@ def main(ini_path=None, overwrite_flag=False,
                 ready_task_count += 1
                 ready_task_count = delay_task(
                     delay_time=delay_time, task_max=ready_task_max,
-                    task_count=ready_task_count)
+                    task_count=ready_task_count
+                )
 
                 logging.debug('')
 
