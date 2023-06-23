@@ -923,7 +923,7 @@ def main(ini_path=None, overwrite_flag=False,
                 export_img = d_obj.ta_mosaic(
                     ta_img=ta_source_img,
                     step_size=tair_args['step_size'],
-                    step_count=tair_args['step_count']
+                    step_count=tair_args['step_count'],
                 )
                 # pprint.pprint(export_img.getInfo())
                 # input('ENTER')
@@ -969,7 +969,8 @@ def main(ini_path=None, overwrite_flag=False,
                 #   the same for each wrs2 tile
                 # Build the export transform and shape from the Landsat image
                 image_xy = utils.get_info(
-                    landsat_img.geometry().bounds(1, 'EPSG:4326').coordinates().get(0))
+                    landsat_img.geometry().bounds(1, 'EPSG:4326').coordinates().get(0)
+                )
                 if image_xy is None:
                     logging.info('  Could not get image extent, skipping')
                     continue
@@ -1001,28 +1002,29 @@ def main(ini_path=None, overwrite_flag=False,
                 # Build export tasks
                 max_retries = 4
                 logging.debug('  Building export task')
-                # TODO: Move into try/except if getting EEException
-                # for i in range(1, max_retries):
-                #     try:
-                task = ee.batch.Export.image.toAsset(
-                    image=export_img,
-                    description=export_id,
-                    assetId=asset_id,
-                    crs=alexi_crs,
-                    crsTransform='[' + ','.join(list(map(str, export_geo))) + ']',
-                    dimensions='{0}x{1}'.format(*export_shape),
-                )
-                #     # except ee.ee_exception.EEException as e:
-                #     except Exception as e:
-                #         if ('Earth Engine memory capacity exceeded' in str(e) or
-                #                 'Earth Engine capacity exceeded' in str(e)):
-                #             logging.info(f'  Rebuilding task ({i}/{max_retries})')
-                #             logging.debug(f'  {e}')
-                #             time.sleep(i ** 2)
-                #         else:
-                #             logging.warning(f'Unhandled exception\n{e}')
-                #             break
-                #             raise e
+                task = None
+                for i in range(1, max_retries):
+                    try:
+                        task = ee.batch.Export.image.toAsset(
+                            image=export_img,
+                            description=export_id,
+                            assetId=asset_id,
+                            crs=alexi_crs,
+                            crsTransform='[' + ','.join(list(map(str, export_geo))) + ']',
+                            dimensions='{0}x{1}'.format(*export_shape),
+                        )
+                        break
+                    # except ee.ee_exception.EEException as e:
+                    except Exception as e:
+                        if ('Earth Engine memory capacity exceeded' in str(e) or
+                                'Earth Engine capacity exceeded' in str(e)):
+                            logging.info(f'  Rebuilding task ({i}/{max_retries})')
+                            logging.debug(f'  {e}')
+                            time.sleep(i ** 3)
+                        else:
+                            logging.warning(f'Unhandled exception\n{e}')
+                            break
+                            raise e
 
                 if not task:
                     logging.warning(f'  {scene_id} - Export task was not built, skipping')
@@ -1036,7 +1038,7 @@ def main(ini_path=None, overwrite_flag=False,
                     except Exception as e:
                         logging.info(f'  Resending query ({i}/{max_retries})')
                         logging.debug(f'  {e}')
-                        time.sleep(i ** 2)
+                        time.sleep(i ** 3)
                 # # Not using ee_task_start since it doesn't return the task object
                 # utils.ee_task_start(task)
                 # input('ENTER')
