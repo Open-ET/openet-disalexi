@@ -401,7 +401,7 @@ class Collection():
             #     variable_coll = variable_coll.merge(input_coll)
 
             else:
-                raise ValueError('unsupported collection: {}'.format(coll_id))
+                raise ValueError(f'unsupported collection: {coll_id}')
 
         return variable_coll
 
@@ -433,9 +433,15 @@ class Collection():
 
         return self._build(variables=variables)
 
-    def interpolate(self, variables=None, t_interval='custom',
-                    interp_method='linear', interp_days=32,
-                    **kwargs):
+    def interpolate(
+            self,
+            variables=None,
+            t_interval='custom',
+            interp_method='linear',
+            interp_days=32,
+            use_joins=False,
+            **kwargs
+    ):
         """
 
         Parameters
@@ -453,6 +459,10 @@ class Collection():
         interp_days : int, str, optional
             Number of extra days before the start date and after the end date
             to include in the interpolation calculation. (the default is 32).
+        use_joins : bool, optional
+            If True, use joins to link the target and source collections.
+            If False, the source collection will be filtered for each target image.
+            This parameter is passed through to interpolate.daily().
         kwargs : dict, optional
 
         Returns
@@ -472,10 +482,9 @@ class Collection():
         """
         # Check that the input parameters are valid
         if t_interval.lower() not in ['daily', 'monthly', 'annual', 'custom']:
-            raise ValueError('unsupported t_interval: {}'.format(t_interval))
+            raise ValueError(f'unsupported t_interval: {t_interval}')
         elif interp_method.lower() not in ['linear']:
-            raise ValueError('unsupported interp_method: {}'.format(
-                interp_method))
+            raise ValueError(f'unsupported interp_method: {interp_method}')
 
         if type(interp_days) is str and utils.is_number(interp_days):
             interp_days = int(interp_days)
@@ -541,7 +550,7 @@ class Collection():
                                        'et_reference_factor']:
                 if (et_reference_param not in self.model_args.keys() or
                         not self.model_args[et_reference_param]):
-                    raise ValueError('{} was not set'.format(et_reference_param))
+                    raise ValueError(f'{et_reference_param} was not set')
 
             if type(self.model_args['et_reference_source']) is str:
                 # Assume a string source is an single image collection ID
@@ -610,14 +619,18 @@ class Collection():
 
         # Build initial scene image collection
         scene_coll = self._build(
-            variables=interp_vars, start_date=interp_start_date,
-            end_date=interp_end_date)
+            variables=interp_vars,
+            start_date=interp_start_date,
+            end_date=interp_end_date,
+        )
 
         # For count, compute the composite/mosaic image for the mask band only
         if 'count' in variables:
             aggregate_coll = interpolate.aggregate_to_daily(
                 image_coll=scene_coll.select(['mask']),
-                start_date=start_date, end_date=end_date)
+                start_date=start_date,
+                end_date=end_date,
+            )
 
             # The following is needed because the aggregate collection can be
             #   empty if there are no scenes in the target date range but there
@@ -626,7 +639,8 @@ class Collection():
             #   bands will be which causes a non-homogenous image collection.
             aggregate_coll = aggregate_coll.merge(
                 ee.Image.constant(0).rename(['mask'])
-                    .set({'system:time_start': ee.Date(start_date).millis()}))
+                    .set({'system:time_start': ee.Date(start_date).millis()})
+            )
 
         # Including count/mask causes problems in interpolate.daily() function.
         # Issues with mask being an int but the values need to be double.
@@ -639,15 +653,15 @@ class Collection():
             img_date = ee.Date(img.get('system:time_start')) \
                 .update(hour=0, minute=0, second=0)
             img_date = ee.Date(img_date.millis().divide(1000).floor().multiply(1000))
-            target_img = ee.Image(daily_target_coll \
-                .filterDate(img_date, img_date.advance(1, 'day')).first())
+            target_img = ee.Image(
+                daily_target_coll.filterDate(img_date, img_date.advance(1, 'day')).first()
+            )
 
             # CGM - Resampling isn't working correctly, commenting out for now
             # if kwargs['interp_resample'].lower() in ['bilinear', 'bicubic']:
             #     target_img = target_img.resample(kwargs['interp_resample'])
 
-            et_norm_img = img.select(['et']).divide(target_img).rename(
-                ['et_norm'])
+            et_norm_img = img.select(['et']).divide(target_img).rename(['et_norm'])
 
             # Clamp the normalized ET image (et_fraction)
             if 'et_fraction_max' in kwargs.keys():
@@ -660,8 +674,7 @@ class Collection():
             #         float(kwargs['et_fraction_min']),
             #         float(kwargs['et_fraction_max']))
 
-            return img.addBands([
-                et_norm_img.double(), target_img.rename(['norm'])])
+            return img.addBands([et_norm_img.double(), target_img.rename(['norm'])])
 
         # The time band is always needed for interpolation
         scene_coll = scene_coll \
@@ -670,12 +683,12 @@ class Collection():
             .map(normalize_et)
 
         # Interpolate to a daily time step
-        # TODO: Get use_joins from kwargs
         daily_coll = interpolate.daily(
             target_coll=daily_target_coll.filterDate(start_date, end_date),
             source_coll=scene_coll.select(['et_norm', 'time']),
-            interp_method=interp_method,  interp_days=interp_days,
-            # use_joins=use_joins,
+            interp_method=interp_method,
+            interp_days=interp_days,
+            use_joins=use_joins,
             compute_product=True,
         )
         # pprint.pprint(daily_coll.first().getInfo())
@@ -762,7 +775,8 @@ class Collection():
                 return aggregate_image(
                     agg_start_date=agg_start_date,
                     agg_end_date=ee.Date(agg_start_date).advance(1, 'day'),
-                    date_format='YYYYMMdd')
+                    date_format='YYYYMMdd',
+                )
 
             return ee.ImageCollection(daily_coll.map(aggregate_daily))
 
@@ -779,7 +793,8 @@ class Collection():
                 return aggregate_image(
                     agg_start_date=agg_start_date,
                     agg_end_date=ee.Date(agg_start_date).advance(1, 'month'),
-                    date_format='YYYYMM')
+                    date_format='YYYYMM',
+                )
 
             return ee.ImageCollection(month_list.map(aggregate_monthly))
 
@@ -795,15 +810,18 @@ class Collection():
                 return aggregate_image(
                     agg_start_date=agg_start_date,
                     agg_end_date=ee.Date(agg_start_date).advance(1, 'year'),
-                    date_format='YYYY')
+                    date_format='YYYY',
+                )
 
             return ee.ImageCollection(year_list.map(aggregate_annual))
 
         elif t_interval.lower() == 'custom':
             # Returning an ImageCollection to be consistent
             return ee.ImageCollection(aggregate_image(
-                agg_start_date=start_date, agg_end_date=end_date,
-                date_format='YYYYMMdd'))
+                agg_start_date=start_date,
+                agg_end_date=end_date,
+                date_format='YYYYMMdd',
+            ))
 
     def get_image_ids(self):
         """Return image IDs of the input images

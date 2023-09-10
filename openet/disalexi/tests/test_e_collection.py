@@ -371,6 +371,14 @@ def test_Collection_overpass_no_variables_exception():
         utils.getinfo(default_coll_obj(variables=[]).overpass())
 
 
+@pytest.mark.parametrize('use_joins', [True, False])
+def test_Collection_interpolate_use_joins(use_joins):
+    """Only checking if the parameter is accepted and runs for now"""
+    output = utils.getinfo(default_coll_obj().interpolate(use_joins=use_joins))
+    assert output['type'] == 'ImageCollection'
+    assert parse_scene_id(output) == ['20170701']
+
+
 # CGM - These all have memory errors
 # def test_Collection_interpolate_default():
 #     """Default t_interval should be custom"""
