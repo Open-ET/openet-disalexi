@@ -284,10 +284,14 @@ class Image(object):
             # If the source is an ee.Image assume it is an NLCD image
             self.lc_source = self.landcover_source.rename(['landcover'])
             self.lc_type = 'NLCD'
-        elif self.landcover_source == 'USGS/NLCD_RELEASES/2019_REL/NLCD':
+        elif re.match('USGS/NLCD_RELEASES/2019_REL/NLCD/\d{4}', self.landcover_source.upper()):
+            # Assume an image was passed in and use it directly
+            self.lc_source = ee.Image(self.landcover_source.upper()).select(['landcover'])
+            self.lc_type = 'NLCD'
+        elif self.landcover_source.upper().startswith('USGS/NLCD_RELEASES/2019_REL/NLCD'):
+            # Use startswith to catch trailing slash in collection ID
             # If the image collection is passed in, assume the target is CONUS
             #   and select a close year
-            # Making this a server side call to avoid a getInfo call on self.year
             # Clamp the year to 1999-2019 for now
             year_remap = ee.Dictionary({
                 '1999': '2001', '2000': '2001', '2001': '2001', '2002': '2001',
@@ -302,16 +306,17 @@ class Image(object):
             nlcd_year = year_remap.get(self.year.min(2019).max(1999).format('%d'))
             # The timestart didn't seem quite right on the NLCD assets,
             #   so filtering using the system:index instead
-            self.lc_source = ee.ImageCollection(self.landcover_source) \
-                .filter(ee.Filter.equals('system:index', nlcd_year))\
+            self.lc_source = (
+                ee.ImageCollection(self.landcover_source)
+                .filter(ee.Filter.equals('system:index', nlcd_year))
                 .first().select(['landcover'])
+            )
             self.lc_type = 'NLCD'
-        elif self.landcover_source.upper().startswith('USGS/NLCD_RELEASES/2019_REL/NLCD/'):
+        elif re.match('USGS/NLCD_RELEASES/2016_REL/\d{4}', self.landcover_source.upper()):
             # Assume an image was passed in and use it directly
-            self.lc_source = ee.Image(self.landcover_source.upper()) \
-                .select(['landcover'])
+            self.lc_source = ee.Image(self.landcover_source.upper()).select(['landcover'])
             self.lc_type = 'NLCD'
-        elif self.landcover_source in ['USGS/NLCD_RELEASES/2016_REL']:
+        elif self.landcover_source.upper().startswith('USGS/NLCD_RELEASES/2016_REL'):
             # If the image collection is passed in, assume the target is CONUS
             #   and select a close year
             year_remap = ee.Dictionary({
@@ -325,14 +330,11 @@ class Image(object):
             })
             nlcd_year = year_remap.get(self.year.min(2016).max(1999).format('%d'))
             nlcd_date = ee.Date.fromYMD(nlcd_year, 1, 1)
-            self.lc_source = ee.ImageCollection(self.landcover_source)\
-                .filterDate(nlcd_date, nlcd_date.advance(1, 'year'))\
+            self.lc_source = (
+                ee.ImageCollection(self.landcover_source)
+                .filterDate(nlcd_date, nlcd_date.advance(1, 'year'))
                 .first().select(['landcover'])
-            self.lc_type = 'NLCD'
-        elif self.landcover_source.upper().startswith('USGS/NLCD_RELEASES/2016_REL/'):
-            # Assume an image was passed in and use it directly
-            self.lc_source = ee.Image(self.landcover_source.upper())\
-                .select(['landcover'])
+            )
             self.lc_type = 'NLCD'
         # TODO: Test out the ESA 10m Landcover asset
         #   Collection ID: ESA/WorldCover/v100
@@ -352,8 +354,7 @@ class Image(object):
         #     self.lc_type = ''
         # TODO: Eventually remove this option since the image collection is deprecated
         elif self.landcover_source.upper().startswith('USGS/NLCD/'):
-            self.lc_source = ee.Image(self.landcover_source.upper())\
-                .select(['landcover'])
+            self.lc_source = ee.Image(self.landcover_source.upper()).select(['landcover'])
             self.lc_type = 'NLCD'
         # TODO: Eventually remove the NLCD  keyword sources
         elif self.landcover_source.upper() == 'NLCD2016':
