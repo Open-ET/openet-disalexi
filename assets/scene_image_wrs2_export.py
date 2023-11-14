@@ -4,10 +4,10 @@ from collections import defaultdict
 import configparser
 from datetime import datetime, timedelta, timezone
 import json
-import logging
+# import logging
 import math
 import os
-import pprint
+# import pprint
 import re
 import time
 
@@ -20,10 +20,25 @@ import openet.core.utils as utils
 TOOL_NAME = 'tair_image_wrs2_export'
 TOOL_VERSION = '0.2.3'
 
-logging.getLogger('earthengine-api').setLevel(logging.INFO)
-logging.getLogger('googleapiclient').setLevel(logging.INFO)
-logging.getLogger('requests').setLevel(logging.INFO)
-logging.getLogger('urllib3').setLevel(logging.INFO)
+if 'FUNCTION_REGION' in os.environ:
+    # Logging is not working correctly in cloud functions for Python 3.8+
+    # Following workflow suggested in this issue:
+    # https://issuetracker.google.com/issues/124403972
+    import google.cloud.logging
+    log_client = google.cloud.logging.Client(project='openet')
+    log_client.setup_logging(log_level=20)
+    import logging
+    # CGM - Not sure if these lines are needed or not
+    logging.basicConfig(level=logging.INFO)
+    logger = logging.getLogger(__name__)
+    logger.setLevel(logging.INFO)
+else:
+    import logging
+    logging.basicConfig(level=logging.INFO, format='%(message)s')
+    logging.getLogger('earthengine-api').setLevel(logging.INFO)
+    logging.getLogger('googleapiclient').setLevel(logging.INFO)
+    logging.getLogger('requests').setLevel(logging.INFO)
+    logging.getLogger('urllib3').setLevel(logging.INFO)
 
 
 def main(
@@ -39,7 +54,7 @@ def main(
         start_dt=None,
         end_dt=None,
         log_tasks=False,
-        project_id=None,
+        # project_id=None,
         ):
     """Compute WRS2 Ta images
 
@@ -80,6 +95,8 @@ def main(
     """
     logging.info('\nCompute WRS2 Ta images')
 
+    ee.data.setWorkloadTag('disalexi-tair-scene-export')
+
     wrs2_tile_fmt = 'p{:03d}r{:03d}'
     wrs2_tile_re = re.compile('p?(\\d{1,3})r?(\\d{1,3})')
 
@@ -104,7 +121,7 @@ def main(
     wrs2_path_skip_list = [9, 49]
     wrs2_row_skip_list = [25, 24, 43]
     mgrs_skip_list = []
-    date_skip_list = []
+    date_skip_list = ['2023-06-16']
 
     export_id_fmt = '{model}_{index}'
 
@@ -385,7 +402,7 @@ def main(
     # Setup datastore task logging
     if log_tasks:
         # Assume function is being run deployed as a cloud function
-        #   and use the defult credentials (should be the SA credentials)
+        #   and use the default credentials (should be the SA credentials)
         logging.debug('\nInitializing task datastore client')
         try:
             from google.cloud import datastore
@@ -1345,8 +1362,7 @@ def mgrs_export_tiles(
         )
 
     logging.debug('Building MGRS tile list')
-    tiles_coll = ee.FeatureCollection(mgrs_coll_id) \
-        .filterBounds(study_area_coll.geometry())
+    tiles_coll = ee.FeatureCollection(mgrs_coll_id).filterBounds(study_area_coll.geometry())
 
     # Filter collection by user defined lists
     if utm_zones:
