@@ -48,7 +48,7 @@ class Collection():
             #             'et_reference_factor': 0.85
             #             'et_reference_resample': 'nearest},
             # **kwargs
-        ):
+            ):
         """Earth Engine based DisALEXI Image Collection
 
         Parameters
@@ -441,7 +441,7 @@ class Collection():
             interp_days=32,
             use_joins=False,
             **kwargs
-    ):
+            ):
         """
 
         Parameters
@@ -833,7 +833,6 @@ class Collection():
         """
         # CGM - Setting variables to None bypasses the Image class, so image_id
         #   is not set and merge indices must be removed from the system:index
-        return list(utils.getinfo(self._build(variables=[])
-                                  .aggregate_array('system:id')))
+        return list(utils.getinfo(self._build(variables=[]).aggregate_array('system:id')))
         # return list(utils.getinfo(self._build(variables=['ndvi'])
         #                           .aggregate_array('image_id')))

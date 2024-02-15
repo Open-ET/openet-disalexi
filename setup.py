@@ -44,11 +44,11 @@ setup(
 		model_name.lower(), version),
     install_requires=['earthengine-api', 'openet-core', 'python-dateutil'],
     setup_requires=['pytest-runner'],
-    tests_require=['pytest', 'pytest-cov'],
+    tests_require=['pytest'],
     packages=['openet.{}'.format(model_name.lower())],
     keywords='{} OpenET Evapotranspiration Earth Engine'.format(model_name),
-    classifiers = [
+    classifiers=[
         'License :: OSI Approved :: Apache Software License',
-        'Programming Language :: Python :: 3.6'],
+        'Programming Language :: Python :: 3.7'],
     zip_safe=False,
 )
