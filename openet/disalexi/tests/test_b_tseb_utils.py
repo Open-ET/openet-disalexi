@@ -192,8 +192,7 @@ def test_emissivity(T_air, expected, tol=1E-8):
     ]
 )
 def test_albedo_separation(albedo, Rs_1, F, fc, aleafv, aleafn, aleafl, adeadv,
-                           adeadn, adeadl, zs, albedo_iter, expected,
-                           tol=1E-10):
+                           adeadn, adeadl, zs, albedo_iter, expected, tol=1E-10):
     output_images = tseb_utils.albedo_separation(
         ee.Image.constant(albedo), ee.Image.constant(Rs_1),
         ee.Image.constant(F), ee.Image.constant(fc), ee.Image.constant(aleafv),
@@ -201,7 +200,7 @@ def test_albedo_separation(albedo, Rs_1, F, fc, aleafv, aleafn, aleafl, adeadv,
         ee.Image.constant(adeadv), ee.Image.constant(adeadn),
         ee.Image.constant(adeadl), ee.Image.constant(zs), albedo_iter)
     output = utils.constant_image_value(ee.Image(output_images).rename(
-        ['Rs_c', 'Rs_s', 'albedo_c', 'albedo_s']))
+        ['Rs_c', 'Rs_s', 'albedo_c', 'albedo_s', 'taudl', 'tausolar']))
 
     for k in expected.keys():
         logging.debug('\n  {}'.format(k))

@@ -241,6 +241,8 @@ def albedo_separation(albedo, Rs_1, F, fc, aleafv, aleafn, aleafl, adeadv,
     Rs_s : ee.Image
     albedo_c : ee.Image
     albedo_s : ee.Image
+    taudl : ee.Image
+    tausolar : ee.Image
 
     References
     ----------
@@ -257,50 +259,60 @@ def albedo_separation(albedo, Rs_1, F, fc, aleafv, aleafn, aleafl, adeadv,
 
     # Correct for curvature of atmos in airmas
     airmas = zs.expression(
-        '(sqrt(cos(zs) ** 2 + 0.0025) - cos(zs)) / 0.00125', {'zs': zs})
+        '(sqrt(cos(zs) ** 2 + 0.0025) - cos(zs)) / 0.00125', {'zs': zs}
+    )
 
     # Correct for refraction(good up to 89.5 deg.)
     airmas = airmas.where(
         zs.multiply(rad2deg).lt(89.5),
         zs.expression(
             'airmas - (2.8 / (90.0 - zs_temp) ** 2)',
-            {'airmas': airmas, 'zs_temp': zs.multiply(rad2deg)}))
+            {'airmas': airmas, 'zs_temp': zs.multiply(rad2deg)})
+    )
 
-    potbm1 = zs.expression(
-        '600.0 * exp(-0.160 * airmas)', {'airmas': airmas})
+    potbm1 = zs.expression('600.0 * exp(-0.160 * airmas)', {'airmas': airmas})
     potvis = zs.expression(
         '(potbm1 + (600.0 - potbm1) * 0.4) * cos(zs)',
-        {'potbm1': potbm1, 'zs': zs})
+        {'potbm1': potbm1, 'zs': zs}
+    )
     # CGM - Not used
     # potdif = zs.expression(
     #     '(600.0 - potbm1) * 0.4 * cos(zs)', {'potbm1': potbm1, 'zs': zs})
     uu = zs.expression('1.0 / cos(zs)', {'zs': zs}).max(0.01)
     a = zs.expression(
         '10 ** (-1.195 + 0.4459 * axlog - 0.0345 * axlog * axlog)',
-        {'axlog': uu.log10()})
+        {'axlog': uu.log10()}
+    )
     watabs = a.multiply(1320.0)
     potbm2 = zs.expression(
         '720.0 * exp(-0.05 * airmas) - watabs',
-        {'airmas': airmas, 'watabs': watabs})
+        {'airmas': airmas, 'watabs': watabs}
+    )
     evaL = zs.expression(
         '(720.0 - potbm2 - watabs) * 0.54 * cos(zs)',
-        {'potbm2': potbm2, 'watabs': watabs, 'zs': zs})
+        {'potbm2': potbm2, 'watabs': watabs, 'zs': zs}
+    )
     potnir = zs.expression(
         'evaL + potbm2 * cos(zs)',
-        {'evaL': evaL, 'potbm2': potbm2, 'zs': zs})
+        {'evaL': evaL, 'potbm2': potbm2, 'zs': zs}
+    )
 
-    fclear = zs \
+    fclear = (
+        zs
         .expression(
             'Rs_1 / (potvis + potnir)',
-            {'potvis': potvis, 'potnir': potnir, 'Rs_1': Rs_1}) \
-        .clamp(0.01, 1.0) \
+            {'potvis': potvis, 'potnir': potnir, 'Rs_1': Rs_1})
+        .clamp(0.01, 1.0)
         .where(zs.cos().lte(0.01), 1)
+    )
   
     # Partition SDN into VIS and NIR
     fvis = zs.expression(
-        'potvis / (potvis + potnir)', {'potvis': potvis, 'potnir': potnir})
+        'potvis / (potvis + potnir)', {'potvis': potvis, 'potnir': potnir}
+    )
     fnir = zs.expression(
-        'potnir / (potvis + potnir)', {'potvis': potvis, 'potnir': potnir})
+        'potnir / (potvis + potnir)', {'potvis': potvis, 'potnir': potnir}
+    )
   
     # Estimate direct beam and diffuse fraction in VIS and NIR wavebands
     fb1 = zs.expression(
@@ -311,16 +323,20 @@ def albedo_separation(albedo, Rs_1, F, fc, aleafv, aleafn, aleafl, adeadv,
     #     'potbm2 * cos(zs) / potnir',
     #     {'potbm2': potbm2, 'potnir': potnir, 'zs': zs})
 
-    dirvis = zs \
+    dirvis = (
+        zs
         .expression(
             'fb1 * (1.0 - ((0.9 - ratiox) / 0.7) ** 0.6667)',
-            {'fb1': fb1, 'ratiox': fclear.min(0.9)}) \
+            {'fb1': fb1, 'ratiox': fclear.min(0.9)})
         .min(fb1)
-    dirnir = zs \
+    )
+    dirnir = (
+        zs
         .expression(
             'fb1 * (1.0 - ((0.88 - ratiox) / 0.68) ** 0.6667)',
-            {'fb1': fb1, 'ratiox': fclear.min(0.88)}) \
+            {'fb1': fb1, 'ratiox': fclear.min(0.88)})
         .min(fb1)
+    )
 
     dirvis = dirvis.where(dirvis.lt(0.01).And(dirnir.gt(0.01)), 0.011)
     dirnir = dirnir.where(dirnir.lt(0.01).And(dirvis.gt(0.01)), 0.011)
@@ -375,13 +391,16 @@ def albedo_separation(albedo, Rs_1, F, fc, aleafv, aleafn, aleafl, adeadv,
         # Weighted live/dead leaf average properties
         ameanv = aleafv.expression(
             'aleafv * fg + adeadv * (1.0 - fg)',
-            {'adeadv': adeadv, 'aleafv': aleafv, 'fg': fg_iter})
+            {'adeadv': adeadv, 'aleafv': aleafv, 'fg': fg_iter}
+        )
         ameann = aleafn.expression(
             'aleafn * fg + adeadn * (1.0 - fg)',
-            {'adeadn': adeadn, 'aleafn': aleafn, 'fg': fg_iter})
+            {'adeadn': adeadn, 'aleafn': aleafn, 'fg': fg_iter}
+        )
         ameanl = aleafl.expression(
             'aleafl * fg + adeadl * (1.0 - fg)',
-            {'adeadl': adeadl, 'aleafl': aleafl, 'fg': fg_iter})
+            {'adeadl': adeadl, 'aleafl': aleafl, 'fg': fg_iter}
+        )
 
         # DIFFUSE COMPONENT
         #*******************************
@@ -391,77 +410,87 @@ def albedo_separation(albedo, Rs_1, F, fc, aleafv, aleafn, aleafl, adeadv,
 
         # Eq 15.7
         rcpyn = ameann.expression(
-            '(1.0 - sqrt(ameann)) / (1.0 + sqrt(ameann))', {'ameann': ameann})
+            '(1.0 - sqrt(ameann)) / (1.0 + sqrt(ameann))', {'ameann': ameann}
+        )
         rcpyv = ameanv.expression(
-            '(1.0 - sqrt(ameanv)) / (1.0 + sqrt(ameanv))', {'ameanv': ameanv})
+            '(1.0 - sqrt(ameanv)) / (1.0 + sqrt(ameanv))', {'ameanv': ameanv}
+        )
         # rcpyl = ameanl.expression(
-        #     '(1.0 - sqrt(ameanl)) / (1.0 + sqrt(ameanl))', {'ameanl': ameanl})
+        #     '(1.0 - sqrt(ameanl)) / (1.0 + sqrt(ameanl))', {'ameanl': ameanl}
+        # )
 
         # Eq 15.8
         rdcpyn = akd.expression(
-            '2.0 * akd * rcpyn / (akd + 1.0)', {'akd': akd, 'rcpyn': rcpyn})
+            '2.0 * akd * rcpyn / (akd + 1.0)', {'akd': akd, 'rcpyn': rcpyn}
+        )
         rdcpyv = akd.expression(
-            '2.0 * akd * rcpyv / (akd + 1.0)', {'akd': akd, 'rcpyv': rcpyv})
+            '2.0 * akd * rcpyv / (akd + 1.0)', {'akd': akd, 'rcpyv': rcpyv}
+        )
         # rdcpyl = akd.expression(
-        #     '2.0 * akd * rcpyl / (akd + 1.0)', {'akd': akd, 'rcpyl': rcpyl})
+        #     '2.0 * akd * rcpyl / (akd + 1.0)', {'akd': akd, 'rcpyl': rcpyl}
+        # )
 
         # Canopy transmission (VIS)
         expfac = F.expression(
-            'sqrt(ameanv) * akd * F', {'akd': akd, 'ameanv': ameanv, 'F': F})
+            'sqrt(ameanv) * akd * F', {'akd': akd, 'ameanv': ameanv, 'F': F}
+        )
         expfac = expfac.max(0.001)
         # expfac = expfac.where(expfac.lt(0.001), 0.001)
         xnum = F.expression(
             '(rdcpyv * rdcpyv - 1.0) * exp(-expfac)',
-            {'rdcpyv': rdcpyv, 'expfac': expfac})
+            {'rdcpyv': rdcpyv, 'expfac': expfac}
+        )
         xden = F.expression(
-            '(rdcpyv * rsoilv - 1.0) + '
-            'rdcpyv * (rdcpyv - rsoilv) * exp(-2.0 * expfac)',
-            {'expfac': expfac, 'rdcpyv': rdcpyv, 'rsoilv': rsoilv_iter})
+            '(rdcpyv * rsoilv - 1.0) + rdcpyv * (rdcpyv - rsoilv) * exp(-2.0 * expfac)',
+            {'expfac': expfac, 'rdcpyv': rdcpyv, 'rsoilv': rsoilv_iter}
+        )
         # Eq 15.11
         taudv = F.expression('xnum / xden', {'xden': xden, 'xnum': xnum})
         # taudv = xnum.divide(xden)
 
         # Canopy transmission (NIR)
         expfac = F.expression(
-            'sqrt(ameann) * akd * F', {'akd': akd, 'ameann': ameann, 'F': F})
+            'sqrt(ameann) * akd * F', {'akd': akd, 'ameann': ameann, 'F': F}
+        )
         expfac = expfac.max(0.001)
         # expfac = expfac.where(expfac.lt(0.001), 0.001)
         xnum = F.expression(
             '(rdcpyn * rdcpyn - 1.0) * exp(-expfac)',
-            {'expfac': expfac, 'rdcpyn': rdcpyn})
+            {'expfac': expfac, 'rdcpyn': rdcpyn}
+        )
         xden = F.expression(
-            '(rdcpyn * rsoiln - 1.0) + '
-            'rdcpyn * (rdcpyn - rsoiln) * exp(-2.0 * expfac)',
-            {'expfac': expfac, 'rdcpyn': rdcpyn, 'rsoiln': rsoiln})
+            '(rdcpyn * rsoiln - 1.0) + rdcpyn * (rdcpyn - rsoiln) * exp(-2.0 * expfac)',
+            {'expfac': expfac, 'rdcpyn': rdcpyn, 'rsoiln': rsoiln}
+        )
         # Eq 15.11
         taudn = F.expression('xnum / xden', {'xden': xden, 'xnum': xnum})
         # taudn = xnum.divide(nden)
 
         # Canopy transmission (LW)
         taudl = F.expression(
-            'exp(-sqrt(ameanl) * akd * F)',
-            {'akd': akd, 'ameanl': ameanl, 'F': F})
+            'exp(-sqrt(ameanl) * akd * F)', {'akd': akd, 'ameanl': ameanl, 'F': F}
+        )
 
         # Diffuse albedo for generic canopy
         # Eq 15.9
         fact = F.expression(
             '((rdcpyn - rsoiln) / (rdcpyn * rsoiln - 1.0)) * '
             'exp(-2.0 * sqrt(ameann) * akd * F)',
-            {'akd': akd, 'ameann': ameann, 'F': F, 'rdcpyn': rdcpyn,
-             'rsoiln': rsoiln})
+            {'akd': akd, 'ameann': ameann, 'F': F, 'rdcpyn': rdcpyn, 'rsoiln': rsoiln}
+        )
         albdn = F.expression(
-            '(rdcpyn + fact) / (1.0 + rdcpyn * fact)',
-            {'fact': fact, 'rdcpyn': rdcpyn})
+            '(rdcpyn + fact) / (1.0 + rdcpyn * fact)', {'fact': fact, 'rdcpyn': rdcpyn}
+        )
 
         # Eq 15.9
         fact = F.expression(
             '((rdcpyv - rsoilv) / (rdcpyv * rsoilv - 1.0)) * '
             'exp(-2.0 * sqrt(ameanv) * akd * F)',
-            {'akd': akd, 'ameanv': ameanv, 'F': F, 'rdcpyv': rdcpyv,
-             'rsoilv': rsoilv_iter})
+            {'akd': akd, 'ameanv': ameanv, 'F': F, 'rdcpyv': rdcpyv, 'rsoilv': rsoilv_iter}
+        )
         albdv = F.expression(
-            '(rdcpyv + fact) / (1.0 + rdcpyv * fact)',
-            {'fact': fact, 'rdcpyv': rdcpyv})
+            '(rdcpyv + fact) / (1.0 + rdcpyv * fact)', {'fact': fact, 'rdcpyv': rdcpyv}
+        )
 
         # BEAM COMPONENT
         #*******************************
@@ -471,61 +500,77 @@ def albedo_separation(albedo, Rs_1, F, fc, aleafv, aleafn, aleafl, adeadv,
 
         # Eq 15.7
         rcpyn = ameann.expression(
-            '(1.0 - sqrt(ameann)) / (1.0 + sqrt(ameann))',
-            {'ameann': ameann})
+            '(1.0 - sqrt(ameann)) / (1.0 + sqrt(ameann))', {'ameann': ameann}
+        )
         rcpyv = ameanv.expression(
-            '(1.0 - sqrt(ameanv)) / (1.0 + sqrt(ameanv))',
-            {'ameanv': ameanv})
+            '(1.0 - sqrt(ameanv)) / (1.0 + sqrt(ameanv))', {'ameanv': ameanv}
+        )
 
         # Eq 15.8
         rbcpyn = rcpyn.expression(
-            '2.0 * akb * rcpyn / (akb + 1.0)', {'akb': akb, 'rcpyn': rcpyn})
+            '2.0 * akb * rcpyn / (akb + 1.0)', {'akb': akb, 'rcpyn': rcpyn}
+        )
         rbcpyv = rcpyv.expression(
-            '2.0 * akb * rcpyv / (akb + 1.0)', {'akb': akb, 'rcpyv': rcpyv})
+            '2.0 * akb * rcpyv / (akb + 1.0)', {'akb': akb, 'rcpyv': rcpyv}
+        )
 
         # Beam albedo for generic canopy
         # Eq 15.9
         fact = F.expression(
             '((rbcpyn - rsoiln) / (rbcpyn * rsoiln - 1.0)) * '
             'exp(-2.0 * sqrt(ameann) * akb * F)',
-            {'akb': akb, 'ameann': ameann, 'F': F, 'rbcpyn': rbcpyn,
-             'rsoiln': rsoiln})
+            {'akb': akb, 'ameann': ameann, 'F': F, 'rbcpyn': rbcpyn, 'rsoiln': rsoiln}
+        )
         albbn = F.expression(
             '(rbcpyn + fact) / (1.0 + rbcpyn * fact)',
-            {'fact': fact, 'rbcpyn': rbcpyn})
+            {'fact': fact, 'rbcpyn': rbcpyn}
+        )
 
         # Eq 15.9
         fact = F.expression(
             '((rbcpyv - rsoilv) / (rbcpyv * rsoilv - 1.0)) * '
             'exp(-2.0 * sqrt(ameanv) * akb * F)',
-            {'akb': akb, 'ameanv': ameanv, 'F': F, 'rbcpyv': rbcpyv,
-             'rsoilv': rsoilv_iter})
+            {
+                'akb': akb, 'ameanv': ameanv, 'F': F, 'rbcpyv': rbcpyv,
+                'rsoilv': rsoilv_iter
+            }
+        )
         albbv = F.expression(
             '(rbcpyv + fact) / (1.0 + rbcpyv * fact)',
-            {'fact': fact, 'rbcpyv': rbcpyv})
+            {'fact': fact, 'rbcpyv': rbcpyv}
+        )
 
         # CGM - finish
         # Weighted albedo (canopy)
         albedo_c = F.expression(
             'fvis * (dirvis * albbv + difvis * albdv) + '
             'fnir * (dirnir * albbn + difnir * albdn)',
-            {'albbn': albbn, 'albbv': albbv, 'albdn': albdn, 'albdv': albdv,
-             'difnir': difnir, 'difvis': difvis, 'dirvis': dirvis,
-             'dirnir': dirnir, 'fnir': fnir, 'fvis': fvis, })
+            {
+                'albbn': albbn, 'albbv': albbv, 'albdn': albdn, 'albdv': albdv,
+                'difnir': difnir, 'difvis': difvis, 'dirvis': dirvis,
+                'dirnir': dirnir, 'fnir': fnir, 'fvis': fvis,
+            }
+        )
         albedo_c = albedo_c.where(
             zs.cos().lte(0.01),
             F.expression(
                 'fvis * (difvis * albdv) + fnir * (difnir * albdn)',
-                {'albdn': albdn, 'albdv': albdv, 'difnir': difnir,
-                 'difvis': difvis, 'fnir': fnir, 'fvis': fvis}))
+                {
+                    'albdn': albdn, 'albdv': albdv, 'difnir': difnir,
+                    'difvis': difvis, 'fnir': fnir, 'fvis': fvis,
+                }
+            )
+        )
 
         albedo_s = rsoilv.expression(
             'fvis * rsoilv + fnir * rsoiln',
-            {'fnir': fnir, 'fvis': fvis, 'rsoiln': rsoiln, 'rsoilv': rsoilv_iter})
+            {'fnir': fnir, 'fvis': fvis, 'rsoiln': rsoiln, 'rsoilv': rsoilv_iter}
+        )
 
         albedo_avg = fc.expression(
             '(fc * albedo_c) + ((1 - fc) * albedo_s)',
-            {'albedo_c': albedo_c, 'albedo_s': albedo_s, 'fc': fc})
+            {'albedo_c': albedo_c, 'albedo_s': albedo_s, 'fc': fc}
+        )
         diff = albedo_avg.subtract(albedo)
         # diff = albedo_avg.expression(
         #     'albedo_avg - albedo',
@@ -535,9 +580,11 @@ def albedo_separation(albedo, Rs_1, F, fc, aleafv, aleafn, aleafl, adeadv,
         # Extra select call is needed if LAI is multiband
         # Added fc_mask call
         fc_mask = fc.select([0]).lt(0.75)
-        rsoilv_iter = rsoilv_iter \
-            .where(fc_mask.And(diff.lte(-0.01)), rsoilv_iter.add(0.01)) \
+        rsoilv_iter = (
+            rsoilv_iter
+            .where(fc_mask.And(diff.lte(-0.01)), rsoilv_iter.add(0.01))
             .where(fc_mask.And(diff.gt(0.01)), rsoilv_iter.add(-0.01))
+        )
         # # CGM - IDL function
         # rsoilv = ((fc lt 0.75) * (
         #             ((abs(diff) le 0.01) * rsoilv) +
@@ -547,10 +594,12 @@ def albedo_separation(albedo, Rs_1, F, fc, aleafv, aleafn, aleafl, adeadv,
 
         # CGM - Extra select call is needed since fc is multiband
         fc_mask = fc.select([0]).gte(0.75)
-        fg_iter = fg_iter \
-            .where(fc_mask.And(diff.lte(-0.01)), fg_iter.subtract(0.05)) \
-            .where(fc_mask.And(diff.gt(0.01)), fg_iter.add(0.05)) \
+        fg_iter = (
+            fg_iter
+            .where(fc_mask.And(diff.lte(-0.01)), fg_iter.subtract(0.05))
+            .where(fc_mask.And(diff.gt(0.01)), fg_iter.add(0.05))
             .clamp(0.01, 1)
+        )
         # # CGM - IDL function
         # fg = ((fc ge 0.75) * (
         #          ((abs(diff) le 0.01)*fg) +
@@ -563,7 +612,7 @@ def albedo_separation(albedo, Rs_1, F, fc, aleafv, aleafn, aleafl, adeadv,
             'ameann': ameann, 'ameanv': ameanv, 'diff': diff, 'fg': fg_iter,
             'rbcpyn': rbcpyn, 'rbcpyv': rbcpyv,
             'rsoiln': rsoiln, 'rsoilv': rsoilv_iter,
-            'taudn': taudn, 'taudv': taudv
+            'taudn': taudn, 'taudv': taudv, 'taudl': taudl,
         })
 
     # Iterate the function n times
@@ -572,12 +621,12 @@ def albedo_separation(albedo, Rs_1, F, fc, aleafv, aleafn, aleafl, adeadv,
         'ameann': None, 'ameanv': None, 'diff': None, 'fg': fg,
         'rbcpyn': None, 'rbcpyv': None,
         'rsoiln': None, 'rsoilv': rsoilv,
-        'taudn': None, 'taudv': None
+        'taudn': None, 'taudv': None, 'taudl': None
     })
     iter_output = ee.Dictionary(
-        # ee.List.sequence(1, iterations) \
-        ee.List.repeat(input_images, iterations) \
-            .iterate(iter_func, input_images))
+        ee.List.repeat(input_images, iterations).iterate(iter_func, input_images)
+        # ee.List.sequence(1, iterations).iterate(iter_func, input_images)
+    )
 
     # Unpack the iteration output
     akb = ee.Image(iter_output.get('akb'))
@@ -593,6 +642,7 @@ def albedo_separation(albedo, Rs_1, F, fc, aleafv, aleafn, aleafl, adeadv,
     # rsoiln = rsoilv.multiply(ratio_soil)
     taudn = ee.Image(iter_output.get('taudn'))
     taudv = ee.Image(iter_output.get('taudv'))
+    taudl = ee.Image(iter_output.get('taudl'))
 
     # if a solution is not reached, alb_c=alb_s=alb
     albedo_c = albedo_c.where(diff.abs().gt(0.05), albedo)
@@ -601,28 +651,32 @@ def albedo_separation(albedo, Rs_1, F, fc, aleafv, aleafn, aleafl, adeadv,
     # Direct beam+scattered canopy transmission coefficient (visible)
     expfac = F.expression(
         'sqrt(ameanv) * akb * F',
-        {'ameanv': ameanv, 'akb': akb, 'F': F})
+        {'ameanv': ameanv, 'akb': akb, 'F': F}
+    )
     xnum = F.expression(
         '(rbcpyv * rbcpyv - 1.0) * exp(-expfac)',
-        {'rbcpyv': rbcpyv, 'expfac': expfac})
+        {'rbcpyv': rbcpyv, 'expfac': expfac}
+    )
     xden = F.expression(
-        '(rbcpyv * rsoilv - 1.0) + '
-        'rbcpyv * (rbcpyv - rsoilv) * exp(-2.0 * expfac)',
-        {'rbcpyv': rbcpyv, 'rsoilv': rsoilv, 'expfac': expfac})
+        '(rbcpyv * rsoilv - 1.0) + rbcpyv * (rbcpyv - rsoilv) * exp(-2.0 * expfac)',
+        {'rbcpyv': rbcpyv, 'rsoilv': rsoilv, 'expfac': expfac}
+    )
     # Eq 15.11
     taubtv = F.expression('xnum / xden', {'xnum': xnum, 'xden': xden})
 
     # Direct beam+scattered canopy transmission coefficient (NIR)
     expfac = F.expression(
         'sqrt(ameann) * akb * F',
-        {'ameann': ameann, 'akb': akb, 'F': F})
+        {'ameann': ameann, 'akb': akb, 'F': F}
+    )
     xnum = F.expression(
         '(rbcpyn * rbcpyn - 1.0) * exp(-expfac)',
-        {'rbcpyn': rbcpyn, 'expfac': expfac})
+        {'rbcpyn': rbcpyn, 'expfac': expfac}
+    )
     xden = F.expression(
-        '(rbcpyn * rsoiln - 1.0) + '
-        'rbcpyn * (rbcpyn - rsoiln) * exp(-2.0 * expfac)',
-        {'rbcpyn': rbcpyn, 'rsoiln': rsoiln, 'expfac': expfac})
+        '(rbcpyn * rsoiln - 1.0) + rbcpyn * (rbcpyn - rsoiln) * exp(-2.0 * expfac)',
+        {'rbcpyn': rbcpyn, 'rsoiln': rsoiln, 'expfac': expfac}
+    )
     # Eq 15.11
     taubtn = F.expression('xnum / xden', {'xnum': xnum, 'xden': xden})
 
@@ -630,18 +684,20 @@ def albedo_separation(albedo, Rs_1, F, fc, aleafv, aleafn, aleafl, adeadv,
     tausolar = F.expression(
         'fvis * (difvis * taudv + dirvis * taubtv) + '
         'fnir * (difnir * taudn + dirnir * taubtn)',
-        {'difnir': difnir, 'difvis': difvis,
-         'dirnir': dirnir, 'dirvis': dirvis,
-         'fnir': fnir, 'fvis': fvis,
-         'taubtn': taubtn, 'taubtv': taubtv,
-         'taudn': taudn, 'taudv': taudv})
+        {
+            'difnir': difnir, 'difvis': difvis,
+            'dirnir': dirnir, 'dirvis': dirvis,
+            'fnir': fnir, 'fvis': fvis,
+            'taubtn': taubtn, 'taubtv': taubtv,
+            'taudn': taudn, 'taudv': taudv,
+        })
 
     Rs_c = Rs_1.expression(
-        'Rs_1 * (1.0 - tausolar)', {'Rs_1': Rs_1, 'tausolar': tausolar})
-    Rs_s = Rs_1.expression(
-        'Rs_1 * tausolar', {'Rs_1': Rs_1, 'tausolar': tausolar})
+        'Rs_1 * (1.0 - tausolar)', {'Rs_1': Rs_1, 'tausolar': tausolar}
+    )
+    Rs_s = Rs_1.expression('Rs_1 * tausolar', {'Rs_1': Rs_1, 'tausolar': tausolar})
 
-    return Rs_c, Rs_s, albedo_c, albedo_s
+    return Rs_c, Rs_s, albedo_c, albedo_s, taudl, tausolar
 
 
 def compute_G0(Rn, Rn_s, albedo, ndvi, t_noon, time, EF_s):
@@ -670,11 +726,13 @@ def compute_G0(Rn, Rn_s, albedo, ndvi, t_noon, time, EF_s):
     t_g = w.expression('(w * 100000.0) + ((1 - w) * 74000.0)', {'w': w})
 
     t_g0 = t_noon.expression(
-        '(time - t_noon) * 3600.0', {'time': time, 't_noon': t_noon})
+        '(time - t_noon) * 3600.0', {'time': time, 't_noon': t_noon}
+    )
       
     G0 = Rn_s.expression(
         'c_g * cos(2 * pi * (t_g0 + 10800.0) / t_g) * Rn_s',
-        {'c_g': c_g, 'pi': math.pi, 'Rn_s': Rn_s, 't_g': t_g, 't_g0': t_g0})
+        {'c_g': c_g, 'pi': math.pi, 'Rn_s': Rn_s, 't_g': t_g, 't_g0': t_g0}
+    )
 
     water_mask = ndvi.lte(0).And(albedo.lte(0.05))
     G0 = G0.where(water_mask, Rn.multiply(0.5))
@@ -682,8 +740,10 @@ def compute_G0(Rn, Rn_s, albedo, ndvi, t_noon, time, EF_s):
     return G0
 
 
-def compute_resistance(u, T_s, T_c, hc, F, d0, z0m, z0h, z_u, z_t, xl,
-                       leaf, leaf_s, leaf_c, fm, fh, fm_h):
+def compute_resistance(
+        u, T_s, T_c, hc, F, d0, z0m, z0h, z_u, z_t, xl, leaf, leaf_s, leaf_c,
+        fm, fh, fm_h
+        ):
     """
 
     Parameters
@@ -748,7 +808,8 @@ def compute_resistance(u, T_s, T_c, hc, F, d0, z0m, z0h, z_u, z_t, xl,
     # Computation of the resistance of the air between soil and canopy space
     u_c = u.expression(
         '(u_attr / 0.41) * ((log((hc - d0) / z0m)) - fm_h)',
-        {'d0': d0, 'fm_h': fm_h, 'hc': hc, 'u_attr': u_attr, 'z0m': z0m})
+        {'d0': d0, 'fm_h': fm_h, 'hc': hc, 'u_attr': u_attr, 'z0m': z0m}
+    )
     u_c = u_c.where(u_c.lte(0), 0.1)
     u_s = u.expression(
         'u_c * exp(-leaf * (1 - (0.05 / hc)))',
@@ -756,14 +817,18 @@ def compute_resistance(u, T_s, T_c, hc, F, d0, z0m, z0h, z_u, z_t, xl,
 
     r_ss = u.expression(
         '1.0 / (c_a + (c_b * (u_c * exp(-leaf_s * (1.0 - (0.05 / hc))))))',
-        {'c_a': c_a, 'c_b': c_b, 'hc': hc, 'leaf_s': leaf_s, 'u_c': u_c})
+        {'c_a': c_a, 'c_b': c_b, 'hc': hc, 'leaf_s': leaf_s, 'u_c': u_c}
+    )
     r_s1 = T_s.expression(
         '1.0 / ((((abs(T_s - T_c)) ** (1.0 / 3.0)) * c_c) + (c_b * u_s))',
-        {'c_b': c_b, 'c_c': c_c, 'T_c': T_c, 'T_s': T_s, 'u_s': u_s})
+        {'c_b': c_b, 'c_c': c_c, 'T_c': T_c, 'T_s': T_s, 'u_s': u_s}
+    )
     r_s2 = u.expression(
-        '1.0 / (c_a + (c_b * u_s))', {'c_a': c_a, 'c_b': c_b, 'u_s': u_s})
+        '1.0 / (c_a + (c_b * u_s))', {'c_a': c_a, 'c_b': c_b, 'u_s': u_s}
+    )
     r_s = u.expression(
-        '(((r_ss - 1.0) / 0.09 * (F - 0.01)) + 1.0)', {'F': F, 'r_ss': r_ss})
+        '(((r_ss - 1.0) / 0.09 * (F - 0.01)) + 1.0)', {'F': F, 'r_ss': r_ss}
+    )
 
     # Linear function between 0 (bare soil) and the value at F=0.1
     r_s = r_s.where(F.gt(0.1), r_s1)
@@ -776,11 +841,13 @@ def compute_resistance(u, T_s, T_c, hc, F, d0, z0m, z0h, z_u, z_t, xl,
     # Computation of the canopy boundary layer resistance
     u_d = u.expression(
         'u_c * exp(-leaf_c * (1 - ((d0 + z0m) / hc)))',
-        {'d0': d0, 'hc': hc, 'leaf_c': leaf_c, 'u_c': u_c, 'z0m': z0m})
+        {'d0': d0, 'hc': hc, 'leaf_c': leaf_c, 'u_c': u_c, 'z0m': z0m}
+    )
     u_d = u_d.where(u_d.lte(0), 100)
 
     r_x = u.expression(
-        'C / F * ((xl / u_d) ** 0.5)', {'C': C, 'F': F, 'u_d': u_d, 'xl': xl})
+        'C / F * ((xl / u_d) ** 0.5)', {'C': C, 'F': F, 'u_d': u_d, 'xl': xl}
+    )
     r_x = r_x.where(u_d.eq(100), 0.1)
 
     return r_ah, r_s, r_x, u_attr
@@ -804,7 +871,8 @@ def compute_u_attr(u, d0, z0m, z_u, fm):
     """
     u_attr = u.expression(
         '0.41 * u / ((log((z_u - d0) / z0m)) - fm)',
-        {'d0': d0, 'fm': fm, 'u': u, 'z0m': z0m, 'z_u': z_u})
+        {'d0': d0, 'fm': fm, 'u': u, 'z0m': z0m, 'z_u': z_u}
+    )
     u_attr = u_attr.where(u_attr.eq(0), 10)
     u_attr = u_attr.where(u_attr.lte(0), 0.01)
     return u_attr
@@ -828,7 +896,8 @@ def compute_r_ah(u_attr, d0, z0h, z_t, fh):
     """
     r_ah = u_attr.expression(
         '(log((z_t - d0) / z0h) - fh) / u_attr / 0.41',
-        {'d0': d0, 'fh': fh, 'u_attr': u_attr, 'z0h': z0h, 'z_t': z_t})
+        {'d0': d0, 'fh': fh, 'u_attr': u_attr, 'z0h': z0h, 'z_t': z_t}
+    )
     r_ah = r_ah.where(r_ah.eq(0), 500)
     # r_ah = r_ah.max(1)
     r_ah = r_ah.where(r_ah.lte(1.0), 1.0)
@@ -870,22 +939,28 @@ def compute_r_s(u_attr, T_s, T_c, hc, F, d0, z0m, leaf, leaf_s, fm_h):
     # Computation of the resistance of the air between soil and canopy space
     u_c = u_attr.expression(
         '(u_attr / 0.41) * ((log((hc - d0) / z0m)) - fm_h)',
-        {'d0': d0, 'fm_h': fm_h, 'hc': hc, 'u_attr': u_attr, 'z0m': z0m})
+        {'d0': d0, 'fm_h': fm_h, 'hc': hc, 'u_attr': u_attr, 'z0m': z0m}
+    )
     u_c = u_c.where(u_c.lte(0), 0.1)
     u_s = u_attr.expression(
         'u_c * exp(-leaf * (1 - (0.05 / hc)))',
-        {'hc': hc, 'leaf': leaf, 'u_c': u_c})
+        {'hc': hc, 'leaf': leaf, 'u_c': u_c}
+    )
 
     r_ss = u_attr.expression(
         '1.0 / (c_a + (c_b * (u_c * exp(-leaf_s * (1.0 - (0.05 / hc))))))',
-        {'c_a': c_a, 'c_b': c_b, 'hc': hc, 'leaf_s': leaf_s, 'u_c': u_c})
+        {'c_a': c_a, 'c_b': c_b, 'hc': hc, 'leaf_s': leaf_s, 'u_c': u_c}
+    )
     r_s1 = T_s.expression(
         '1.0 / ((((abs(T_s - T_c)) ** (1.0 / 3.0)) * c_c) + (c_b * Us))',
-        {'c_b': c_b, 'c_c': c_c, 'T_c': T_c, 'T_s': T_s, 'Us': u_s})
+        {'c_b': c_b, 'c_c': c_c, 'T_c': T_c, 'T_s': T_s, 'Us': u_s}
+    )
     r_s2 = u_attr.expression(
-        '1.0 / (c_a + (c_b * Us))', {'c_a': c_a, 'c_b': c_b, 'Us': u_s})
+        '1.0 / (c_a + (c_b * Us))', {'c_a': c_a, 'c_b': c_b, 'Us': u_s}
+    )
     r_s = u_attr.expression(
-        '(((r_ss - 1.0) / 0.09 * (F - 0.01)) + 1.0)', {'F': F, 'r_ss': r_ss})
+        '(((r_ss - 1.0) / 0.09 * (F - 0.01)) + 1.0)', {'F': F, 'r_ss': r_ss}
+    )
 
     # Linear function between 0 (bare soil) and the value at F=0.1
     r_s = r_s.where(F.gt(0.1), r_s1)
@@ -925,17 +1000,20 @@ def compute_r_x(u_attr, hc, F, d0, z0m, xl, leaf_c, fm_h):
     # Computation of the resistance of the air between soil and canopy space
     u_c = u_attr.expression(
         '(u_attr / 0.41) * ((log((hc - d0) / z0m)) - fm_h)',
-        {'d0': d0, 'fm_h': fm_h, 'hc': hc, 'u_attr': u_attr, 'z0m': z0m})
+        {'d0': d0, 'fm_h': fm_h, 'hc': hc, 'u_attr': u_attr, 'z0m': z0m}
+    )
     u_c = u_c.where(u_c.lte(0), 0.1)
 
     # Computation of the canopy boundary layer resistance
     u_d = u_attr.expression(
         'u_c * exp(-leaf_c * (1 - ((d0 + z0m) / hc)))',
-        {'d0': d0, 'hc': hc, 'leaf_c': leaf_c, 'u_c': u_c, 'z0m': z0m})
+        {'d0': d0, 'hc': hc, 'leaf_c': leaf_c, 'u_c': u_c, 'z0m': z0m}
+    )
     u_d = u_d.where(u_d.lte(0), 100)
 
     r_x = u_attr.expression(
-        'C / F * ((xl / u_d) ** 0.5)', {'C': C, 'F': F, 'u_d': u_d, 'xl': xl})
+        'C / F * ((xl / u_d) ** 0.5)', {'C': C, 'F': F, 'u_d': u_d, 'xl': xl}
+    )
     r_x = r_x.where(u_d.eq(100), 0.1)
     return r_x
 
@@ -976,24 +1054,31 @@ def compute_Rn(albedo_c, albedo_s, T_air, T_c, T_s, e_atm, Rs_c, Rs_s, F):
     eps_c = 0.99
       
     L_c = T_c.expression(
-        'eps_c * 0.0000000567 * (T_c ** 4)', {'eps_c': eps_c, 'T_c': T_c})
+        'eps_c * 0.0000000567 * (T_c ** 4)', {'eps_c': eps_c, 'T_c': T_c}
+    )
     L_s = T_s.expression(
-        'eps_s * 0.0000000567 * (T_s ** 4)', {'eps_s': eps_s, 'T_s': T_s})
+        'eps_s * 0.0000000567 * (T_s ** 4)', {'eps_s': eps_s, 'T_s': T_s}
+    )
     Rle = T_air.expression(
-        'e_atm * 0.0000000567 * (T_air ** 4)',
-        {'e_atm': e_atm, 'T_air': T_air})
+        'e_atm * 0.0000000567 * (T_air ** 4)', {'e_atm': e_atm, 'T_air': T_air}
+    )
     Rn_c = albedo_c.expression(
         '((1 - albedo_c) * Rs_c) + '
         '((1 - exp(-kL * F)) * (Rle + Ls - 2 * L_c))',
-        {'albedo_c': albedo_c, 'F': F, 'kL': kL, 'L_c': L_c, 'L_s': L_s,
-         'Rle': Rle, 'Rs_c': Rs_c})
+        {
+            'albedo_c': albedo_c, 'F': F, 'kL': kL, 'L_c': L_c, 'L_s': L_s,
+            'Rle': Rle, 'Rs_c': Rs_c,
+        }
+    )
     Rn_s = albedo_s.expression(
         '((1 - albedo_s) * Rs_s) + '
         '((exp(-kL * F)) * Rle) + ((1 - exp(-kL * F)) * L_c) - L_s',
-        {'albedo_s': albedo_s, 'F': F, 'kL': kL, 'Lc': L_c, 'Ls': L_s,
-         'Rle': Rle, 'Rs_s': Rs_s})
-    Rn = Rn_s.expression(
-        'Rn_s + Rn_c', {'Rn_s': Rn_s, 'Rn_c': Rn_c})
+        {
+            'albedo_s': albedo_s, 'F': F, 'kL': kL, 'Lc': L_c, 'Ls': L_s,
+            'Rle': Rle, 'Rs_s': Rs_s,
+        }
+    )
+    Rn = Rn_s.expression('Rn_s + Rn_c', {'Rn_s': Rn_s, 'Rn_c': Rn_c})
 
     return Rn_s, Rn_c, Rn
 
@@ -1028,18 +1113,19 @@ def compute_Rn_c(albedo_c, T_air, T_c, T_s, e_atm, Rs_c, F):
 
     # Stephan Boltzmann constant (W m-2 K-4)
     # sb = 5.670373e-8
-    Lc = T_c.expression(
-        'eps_c * 5.67E-8 * (T_c ** 4)', {'eps_c': eps_c, 'T_c': T_c})
-    Ls = T_s.expression(
-        'eps_s * 5.67E-8 * (T_s ** 4)', {'eps_s': eps_s, 'T_s': T_s})
+    Lc = T_c.expression('eps_c * 5.67E-8 * (T_c ** 4)', {'eps_c': eps_c, 'T_c': T_c})
+    Ls = T_s.expression('eps_s * 5.67E-8 * (T_s ** 4)', {'eps_s': eps_s, 'T_s': T_s})
     Rle = T_air.expression(
-        'e_atm * 5.67E-8 * (T_air ** 4)',
-        {'e_atm': e_atm, 'T_air': T_air})
+        'e_atm * 5.67E-8 * (T_air ** 4)', {'e_atm': e_atm, 'T_air': T_air}
+    )
     Rn_c = albedo_c.expression(
         '((1 - albedo_c) * Rs_c) + '
         '((1 - exp(-kL * F)) * (Rle + Ls - 2 * Lc))',
-        {'albedo_c': albedo_c, 'F': F, 'kL': kL, 'Lc': Lc, 'Ls': Ls,
-         'Rle': Rle, 'Rs_c': Rs_c})
+        {
+            'albedo_c': albedo_c, 'F': F, 'kL': kL, 'Lc': Lc, 'Ls': Ls,
+            'Rle': Rle, 'Rs_c': Rs_c,
+        }
+    )
     return Rn_c
 
 
@@ -1072,17 +1158,22 @@ def compute_Rn_s(albedo_s, T_air, T_c, T_s, e_atm, Rs_s, F):
     eps_c = 0.99
 
     L_c = T_c.expression(
-        'eps_c * 0.0000000567 * (T_c ** 4)', {'eps_c': eps_c, 'T_c': T_c})
+        'eps_c * 0.0000000567 * (T_c ** 4)', {'eps_c': eps_c, 'T_c': T_c}
+    )
     L_s = T_s.expression(
-        'eps_s * 0.0000000567 * (T_s ** 4)', {'eps_s': eps_s, 'T_s': T_s})
+        'eps_s * 0.0000000567 * (T_s ** 4)', {'eps_s': eps_s, 'T_s': T_s}
+    )
     Rle = T_air.expression(
-        'e_atm * 0.0000000567 * (T_air ** 4)',
-        {'e_atm': e_atm, 'T_air': T_air})
+        'e_atm * 0.0000000567 * (T_air ** 4)', {'e_atm': e_atm, 'T_air': T_air}
+    )
     Rn_s = albedo_s.expression(
         '((1 - albedo_s) * Rs_s) + '
         '((exp(-kL * F)) * Rle) + ((1 - exp(-kL * F)) * L_c) - L_s',
-        {'albedo_s': albedo_s, 'F': F, 'kL': kL, 'L_c': L_c, 'L_s': L_s,
-         'Rle': Rle, 'Rs_s': Rs_s})
+        {
+            'albedo_s': albedo_s, 'F': F, 'kL': kL, 'L_c': L_c, 'L_s': L_s,
+            'Rle': Rle, 'Rs_s': Rs_s
+        }
+    )
     return Rn_s
 
 
@@ -1200,24 +1291,32 @@ def temp_separation_tc(H_c, fc, T_air, t0, r_ah, r_s, r_x, r_air, cp=1004.16):
         ' (t0 / r_s / (1 - fc)) + '
         ' (H_c * r_x / r_air / cp * ((1 / r_ah) + (1 / r_s) + (1 / r_x)))) / '
         '((1 / r_ah) + (1 / r_s) + (fc / r_s / (1 - fc)))',
-        {'cp': cp, 'fc': fc, 'H_c': H_c, 'r_ah': r_ah, 'r_air': r_air,
-         'r_s': r_s, 'r_x': r_x, 't0': t0, 'T_air': T_air})
+        {
+            'cp': cp, 'fc': fc, 'H_c': H_c, 'r_ah': r_ah, 'r_air': r_air,
+            'r_s': r_s, 'r_x': r_x, 't0': t0, 'T_air': T_air,
+        }
+    )
     Td = fc.expression(
         '(T_c_lin * (1 + (r_s / r_ah))) - '
         '(H_c * r_x / r_air / cp * (1 + (r_s / r_x) + (r_s / r_ah))) - '
         '(T_air * r_s / r_ah)',
-        {'cp': cp, 'H_c': H_c, 'r_ah': r_ah, 'r_air': r_air, 'r_s': r_s,
-         'r_x': r_x, 'T_air': T_air, 'T_c_lin': T_c_lin})
+        {
+            'cp': cp, 'H_c': H_c, 'r_ah': r_ah, 'r_air': r_air, 'r_s': r_s,
+            'r_x': r_x, 'T_air': T_air, 'T_c_lin': T_c_lin,
+        }
+    )
     delta_T_c = fc.expression(
         '((t0 ** 4) - (fc * (T_c_lin ** 4)) - ((1 - fc) * (Td ** 4))) / '
         '((4 * (1 - fc) * (Td ** 3) * (1 + (r_s / r_ah))) + (4 * fc * (T_c_lin ** 3)))',
-        {'fc': fc, 'r_ah': r_ah, 'r_s': r_s, 't0': t0, 'Td': Td,
-         'T_c_lin': T_c_lin})
-    T_c = fc \
-        .expression(
-        'T_c_lin + delta_T_c', {'T_c_lin': T_c_lin, 'delta_T_c': delta_T_c}) \
-        .where(fc.lt(0.10), t0) \
+        {'fc': fc, 'r_ah': r_ah, 'r_s': r_s, 't0': t0, 'Td': Td, 'T_c_lin': T_c_lin})
+    T_c = (
+        fc.expression(
+            'T_c_lin + delta_T_c', {'T_c_lin': T_c_lin, 'delta_T_c': delta_T_c}
+        )
+        .where(fc.lt(0.10), t0)
         .where(fc.gt(0.90), t0)
+    )
+
     return T_c.max(T_air.subtract(10.0)).min(T_air.add(50.0))
     # T_c = T_c.where(T_c.lte(T_air.subtract(10.0)), T_air.subtract(10.0))
     # T_c = T_c.where(T_c.gte(T_air.add(50.0)), T_air.add(50.0))
@@ -1242,21 +1341,24 @@ def temp_separation_ts(T_c, fc, T_air, t0):
 
     """
     Delta = fc.expression(
-        '(t0 ** 4) - (fc * (T_c ** 4))', {'fc': fc, 't0': t0, 'T_c': T_c})
+        '(t0 ** 4) - (fc * (T_c ** 4))', {'fc': fc, 't0': t0, 'T_c': T_c}
+    )
     Delta = Delta.where(Delta.lte(0), 10)
 
     # CGM - This could probably be simplified
-    T_s = fc \
-        .expression('(Delta / (1 - fc)) ** 0.25', {'Delta': Delta, 'fc': fc}) \
+    T_s = (
+        fc.expression('(Delta / (1 - fc)) ** 0.25', {'Delta': Delta, 'fc': fc})
         .where(
             fc.expression(
                 '((t0 ** 4) - (fc * T_c ** 4)) <= 0.',
                 {'fc': fc, 't0': t0, 'T_c': T_c}),
             fc.expression(
                 '(t0 - (fc * T_c)) / (1 - fc)',
-                {'fc': fc, 't0': t0, 'T_c': T_c})) \
-        .where(fc.lt(0.1), t0) \
+                {'fc': fc, 't0': t0, 'T_c': T_c}))
+        .where(fc.lt(0.1), t0)
         .where(fc.gt(0.9), t0)
+    )
+
     return T_s.max(T_air.subtract(10.0)).min(T_air.add(50.0))
     # T_s = T_s.where(T_s.lte(T_air.subtract(10.0)), T_air.subtract(10.0))
     # T_s = T_s.where(T_s.gte(T_air.add(50.0)), T_air.add(50.0))
@@ -1287,14 +1389,14 @@ def temp_separation_tac(T_c, T_s, fc, T_air, r_ah, r_s, r_x):
     T_ac = fc.expression(
         '((T_air / r_ah) + (T_s / r_s) + (T_c / r_x)) / '
         '((1 / r_ah) + (1 / r_s) + (1 / r_x))',
-        {'r_ah': r_ah, 'r_s': r_s, 'r_x': r_x, 'T_c': T_c, 'T_s': T_s,
-         'T_air': T_air})
+        {'r_ah': r_ah, 'r_s': r_s, 'r_x': r_x, 'T_c': T_c, 'T_s': T_s, 'T_air': T_air}
+    )
+
     return T_ac
 
 
 # CGM - z0h is not used in this function, should it be?
-def compute_stability(H, t0, r_air, u_attr, z_u, z_t, hc, d0, z0m, z0h,
-                      cp=1004.16):
+def compute_stability(H, t0, r_air, u_attr, z_u, z_t, hc, d0, z0m, z0h, cp=1004.16):
     """
 
     Parameters
@@ -1349,16 +1451,19 @@ def compute_stability(H, t0, r_air, u_attr, z_u, z_t, hc, d0, z0m, z0h,
         H.expression(
             '2.0 * log((1.0 + mm) / 2.0) + log((1.0 + (mm ** 2)) / 2.0) - '
             '2.0 * atan(mm) + (pi / 2)',
-            {'mm': mm, 'pi': math.pi}))
+            {'mm': mm, 'pi': math.pi})
+    )
     fm_h = mh.where(
         L_mask,
         H.expression(
             '2.0 * log((1.0 + mm_h) / 2.0) + log((1.0 + (mm_h ** 2)) / 2.0) - '
             '2.0 * atan(mm_h) + (pi / 2)',
-            {'mm_h': mm_h, 'pi': math.pi}))
+            {'mm_h': mm_h, 'pi': math.pi})
+    )
     fh = mh.where(
-        L_mask, H.expression(
-            '(2.0 * log((1.0 + (mh ** 2.0)) / 2.0))', {'mh': mh}))
+        L_mask,
+        H.expression('(2.0 * log((1.0 + (mh ** 2.0)) / 2.0))', {'mh': mh})
+    )
 
     # CGM - Swapped order of calc since d0 is an image compute from hc and
     #   z_u is being set as a constant number (for now).
@@ -1391,18 +1496,21 @@ def compute_stability_fh(H, t0, u_attr, r_air, z_t, d0, cp=1004.16):
     fh : ee.Image
 
     """
-    L_ob = H .expression(
+    L_ob = H.expression(
         '-(r_air * cp * t0 * (u_attr ** 3.0) / 0.41 / 9.806 / H)',
-        {'cp': cp, 'H': H, 'r_air': r_air, 't0': t0, 'u_attr': u_attr})
+        {'cp': cp, 'H': H, 'r_air': r_air, 't0': t0, 'u_attr': u_attr}
+    )
     L_ob = L_ob.where(L_ob.gte(0), -99)
-    mh = H \
-        .expression(
+    mh = (
+        H.expression(
             '((1 - (16.0 * (z_t - d0) / L_ob)) ** 0.25)',
-            {'d0': d0, 'L_ob': L_ob, 'z_t': z_t}) \
+            {'d0': d0, 'L_ob': L_ob, 'z_t': z_t})
         .where(L_ob.eq(-99), 0.0)
-    fh = H \
-        .expression('(2.0 * log((1.0 + (mh ** 2.0)) / 2.0))', {'mh': mh}) \
+    )
+    fh = (
+        H.expression('(2.0 * log((1.0 + (mh ** 2.0)) / 2.0))', {'mh': mh})
         .where(L_ob.lte(-100).Or(L_ob.gte(100)), 0)
+    )
 
     return fh
 
@@ -1431,24 +1539,28 @@ def compute_stability_fm(H, t0, u_attr, r_air, z_u, d0, z0m, cp=1004.16):
     """
     L_ob = H.expression(
         '-(r_air * cp * t0 * (u_attr ** 3.0) / 0.41 / 9.806 / H)',
-        {'cp': cp, 'H': H, 'r_air': r_air, 't0': t0, 'u_attr': u_attr})
+        {'cp': cp, 'H': H, 'r_air': r_air, 't0': t0, 'u_attr': u_attr}
+    )
     L_ob = L_ob.where(L_ob.gte(0), -99.0)
-    mh = H \
-        .expression(
+    mh = (
+        H.expression(
             '((1 - (16.0 * (z_u - d0) / L_ob)) ** 0.25)',
-            {'d0': d0, 'L_ob': L_ob, 'z_u': z_u}) \
+            {'d0': d0, 'L_ob': L_ob, 'z_u': z_u})
         .where(L_ob.eq(-99.0), 0.0)
-    fm = H \
-        .expression(
+    )
+    fm = (
+        H.expression(
             '2.0 * log((1.0 + mh) / 2.0) + log((1.0 + (mh ** 2)) / 2.0) - '
             '2.0 * atan(mh) + (pi / 2)',
-            {'mh': mh, 'pi': math.pi}) \
+            {'mh': mh, 'pi': math.pi})
         .where(L_ob.lte(-100).Or(L_ob.gte(100)), 0)
+    )
 
     # CGM - Swapped order of calc since d0 is an image compute from hc and
     #   z_u is being set as a constant number (for now).
     fm = fm.where(fm.eq(d0.multiply(-1).add(z_u).divide(z0m).log()), fm.add(1.0))
     # fm = fm.where(fm.eq(z_u.subtract(d0).divide(z0m).log()), fm.add(1.0))
+
     return fm
 
 
@@ -1476,22 +1588,26 @@ def compute_stability_fm_h(H, t0, u_attr, r_air, hc, d0, z0m, cp=1004.16):
     """
     L_ob = H.expression(
         '-(r_air * cp * t0 * (u_attr ** 3.0) / 0.41 / 9.806 / H)',
-        {'cp': cp, 'H': H, 'r_air': r_air, 't0': t0, 'u_attr': u_attr})
+        {'cp': cp, 'H': H, 'r_air': r_air, 't0': t0, 'u_attr': u_attr}
+    )
     L_ob = L_ob.where(L_ob.gte(0), -99.0)
-    mm_h = H \
-        .expression(
+    mm_h = (
+        H.expression(
             '((1 - (16.0 * (hc - d0) / L_ob)) ** 0.25)',
-            {'d0': d0, 'hc': hc, 'L_ob': L_ob}) \
+            {'d0': d0, 'hc': hc, 'L_ob': L_ob})
         .where(L_ob.eq(-99.0), 0.0)
-    fm_h = H \
-        .expression(
+    )
+    fm_h = (
+        H.expression(
             '2.0 * log((1.0 + mm_h) / 2.0) + log((1.0 + (mm_h ** 2)) / 2.0) - '
             '2.0 * atan(mm_h) + (pi / 2)',
-            {'mm_h': mm_h, 'pi': math.pi}) \
+            {'mm_h': mm_h, 'pi': math.pi})
         .where(L_ob.lte(-100).Or(L_ob.gte(100)), 0)
+    )
 
     # CGM - Swapped order of calc since d0 is an image compute from hc and
     #   z_u is being set as a constant number (for now).
     fm_h = fm_h.where(fm_h.eq(hc.subtract(d0).divide(z0m).log()), fm_h.add(1.0))
     # fm_h = fm_h.where(fm_h.eq(hc.subtract(d0).divide(z0m).log()), fm_h.add(1.0))
+
     return fm_h

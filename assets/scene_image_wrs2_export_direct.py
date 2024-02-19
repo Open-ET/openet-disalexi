@@ -18,7 +18,7 @@ import openet.core
 import openet.core.utils as utils
 
 TOOL_NAME = 'tair_image_wrs2_export'
-TOOL_VERSION = '0.2.3'
+TOOL_VERSION = '0.3.0'
 
 if 'FUNCTION_REGION' in os.environ:
     # Logging is not working correctly in cloud functions for Python 3.8+
@@ -123,7 +123,7 @@ def main(
     wrs2_path_skip_list = [9, 49]
     wrs2_row_skip_list = [25, 24, 43]
     mgrs_skip_list = []
-    date_skip_list = ['2023-06-16']
+    date_skip_list = []
 
     export_id_fmt = '{model}_{index}'
 
@@ -986,14 +986,54 @@ def main(
 
                 d_obj = openet.disalexi.Image.from_image_id(image_id, **model_args)
 
-                export_img = d_obj.ta_mosaic(
-                    ta_img=ta_source_img,
+                export_img = d_obj.ta_coarse(
                     step_size=tair_args['step_size'],
                     step_count=tair_args['step_count'],
                 )
-                # pprint.pprint(export_img.getInfo())
+
+                # # Compute the initial Ta from the meteorology
+                # ta_direct_img = d_obj.ta_direct()
+                #
+                # # print(ta_direct_img.reduceRegion(ee.Reducer.first(), ee.Geometry.Point(-121.56, 38.2), 4000).getInfo())
+                # # print(ta_direct_img.reduceRegion(ee.Reducer.first(), ee.Geometry.Point(-121.52, 38.2), 4000).getInfo())
+                # # print(ta_direct_img.reduceRegion(ee.Reducer.first(), ee.Geometry.Point(-122.16, 39.48), 4000).getInfo())
+                # # print(ta_direct_img.reduceRegion(ee.Reducer.first(), ee.Geometry.Point(-122.72, 39.00), 4000).getInfo())
+                # # input('ENTER')
+                #
+                # # Compute the Ta 1k steps from the initial Ta image
+                # ta_1k_steps_img = d_obj.ta_mosaic(
+                #     ta_img=ta_direct_img,
+                #     step_size=tair_args['step_size'],
+                #     step_count=tair_args['step_count'],
+                # )
+                #
+                # # import pprint
+                # # pprint.pprint(ta_1k_steps_img.reduceRegion(ee.Reducer.first(), ee.Geometry.Point(-121.56, 38.2), 4000).getInfo())
+                # # pprint.pprint(ta_1k_steps_img.reduceRegion(ee.Reducer.first(), ee.Geometry.Point(-121.52, 38.2), 4000).getInfo())
+                # # pprint.pprint(ta_1k_steps_img.reduceRegion(ee.Reducer.first(), ee.Geometry.Point(-122.16, 39.48), 4000).getInfo())
+                # # pprint.pprint(ta_1k_steps_img.reduceRegion(ee.Reducer.first(), ee.Geometry.Point(-122.72, 39.00), 4000).getInfo())
+                # # input('ENTER')
+                #
+                # ta_img = d_obj.ta_min_bias(ta_1k_steps_img)
+                #
+                # # print(ta_img.reduceRegion(ee.Reducer.first(), ee.Geometry.Point(-121.56, 38.2), 4000).getInfo())
+                # # print(ta_img.reduceRegion(ee.Reducer.first(), ee.Geometry.Point(-121.52, 38.2), 4000).getInfo())
+                # # print(ta_img.reduceRegion(ee.Reducer.first(), ee.Geometry.Point(-122.16, 39.48), 4000).getInfo())
+                # # print(ta_img.reduceRegion(ee.Reducer.first(), ee.Geometry.Point(-122.72, 39.00), 4000).getInfo())
+                # # input('ENTER')
+                #
+                # export_img = (
+                #     ee.Image([ta_img, ta_direct_img])
+                #     .rename(['ta', 'ta_direct'])
+                # )
+
+                # print(export_img.reduceRegion(ee.Reducer.first(), ee.Geometry.Point(-121.56, 38.2), 4000).getInfo())
+                # print(export_img.reduceRegion(ee.Reducer.first(), ee.Geometry.Point(-121.52, 38.2), 4000).getInfo())
+                # print(export_img.reduceRegion(ee.Reducer.first(), ee.Geometry.Point(-122.16, 39.48), 4000).getInfo())
+                # print(export_img.reduceRegion(ee.Reducer.first(), ee.Geometry.Point(-122.72, 39.00), 4000).getInfo())
                 # input('ENTER')
 
+                # TODO: Test if the retile is still needed
                 if tair_args['retile'] and tair_args['retile'] > 1:
                     export_img = export_img.retile(tair_args['retile'])
 
@@ -1065,47 +1105,61 @@ def main(
                 logging.debug(f'  Shape:  {export_shape}')
 
                 # Build export tasks
-                max_retries = 4
+                # max_retries = 4
                 logging.debug('  Building export task')
-                task = None
-                for i in range(1, max_retries):
-                    try:
-                        task = ee.batch.Export.image.toAsset(
-                            image=export_img,
-                            description=export_id,
-                            assetId=asset_id,
-                            crs=alexi_crs,
-                            crsTransform='[' + ','.join(list(map(str, export_geo))) + ']',
-                            dimensions='{0}x{1}'.format(*export_shape),
-                        )
-                        break
-                    # except ee.ee_exception.EEException as e:
-                    except Exception as e:
-                        if ('Earth Engine memory capacity exceeded' in str(e) or
-                                'Earth Engine capacity exceeded' in str(e)):
-                            logging.info(f'  Rebuilding task ({i}/{max_retries})')
-                            logging.debug(f'  {e}')
-                            time.sleep(i ** 3)
-                        else:
-                            logging.warning(f'Unhandled exception\n{e}')
-                            break
-                            raise e
+                # TODO: Move into try/except if getting EEException
+                # for i in range(1, max_retries):
+                #     try:
+                task = ee.batch.Export.image.toAsset(
+                   image=export_img,
+                   description=export_id,
+                   assetId=asset_id,
+                   crs=alexi_crs,
+                   crsTransform='[' + ','.join(list(map(str, export_geo))) + ']',
+                   dimensions='{0}x{1}'.format(*export_shape),
+                )
+                #     # except ee.ee_exception.EEException as e:
+                #     except Exception as e:
+                #         if ('Earth Engine memory capacity exceeded' in str(e) or
+                #                 'Earth Engine capacity exceeded' in str(e)):
+                #             logging.info(f'  Rebuilding task ({i}/{max_retries})')
+                #             logging.debug(f'  {e}')
+                #             time.sleep(i ** 2)
+                #         else:
+                #             logging.warning(f'Unhandled exception\n{e}')
+                #             break
+                #             raise e
 
                 if not task:
                     logging.warning(f'  {scene_id} - Export task was not built, skipping')
                     continue
 
                 logging.info(f'  {scene_id} - Starting export task')
-                for i in range(1, max_retries):
-                    try:
-                        task.start()
-                        break
-                    except Exception as e:
-                        logging.info(f'  Resending query ({i}/{max_retries})')
-                        logging.debug(f'  {e}')
-                        time.sleep(i ** 3)
+                # TODO: We should not blindly keeping starting the task
+                #   Need to only retry on specific errors, otherwise exit
+                try:
+                    task.start()
+                except:
+                    logging.warning(f'  {scene_id} - Export task was not started, skipping')
+                    continue
+                # for i in range(1, max_retries):
+                #     try:
+                #         task.start()
+                #         break
+                #     except Exception as e:
+                #         logging.info(f'  Resending query ({i}/{max_retries})')
+                #         logging.debug(f'  {e}')
+                #         time.sleep(i ** 2)
+
                 # # Not using ee_task_start since it doesn't return the task object
                 # utils.ee_task_start(task)
+
+                try:
+                    task_id = task.status()['id']
+                    logging.info(f'  {scene_id} - {task_id}')
+                except:
+                    logging.warning(f'  {scene_id} - No task ID')
+                    continue
 
                 # Write the export task info the openet-dri project datastore
                 if log_tasks:
@@ -1146,75 +1200,75 @@ def main(
                 logging.debug('')
 
 
-# TODO: Move this function into the model code so it can be tested
-def ta_min_bias(input_img):
-    """
-
-    Parameters
-    ----------
-    input_img
-
-    Returns
-    -------
-
-    """
-    input_img = ee.Image(input_img)
-
-    # Reverse the band order so that we can find the last transition
-    #   from decreasing to increasing with a positive bias
-    ta_bands = input_img.select('step_\\d+_ta').bandNames().reverse()
-    bias_bands = input_img.select('step_\\d+_bias').bandNames().reverse()
-    ta_array = input_img.select(ta_bands).toArray()
-    bias_array = input_img.select(bias_bands).toArray()
-    #Assign the bias that are very similar a very large value that they will not be selected
-    diff = bias_array.arraySlice(0, 1).subtract(bias_array.arraySlice(0, 0, -1))
-    bias_array_mask = diff.abs().lt(0.001)
-    #repeat the last value to make the array the same length. array is reversed order.
-    bias_array_mask = bias_array_mask.arrayCat(bias_array_mask.arraySlice(0, -1), 0)
-    bias_array = bias_array.add(bias_array_mask.multiply(99))
-
-    # Identify the "last" transition from a negative to positive bias
-    # CGM - Having problems with .ceil() limiting result to the image data range
-    #   Multiplying by a big number seemed to fix the issue but this could still
-    #     be a problem with the bias ranges get really small
-    sign_array = bias_array.multiply(1000).ceil().max(0).min(1).int()
-    transition_array = sign_array.arraySlice(0, 0, -1)\
-        .subtract(sign_array.arraySlice(0, 1))
-    # Insert an extra value at the beginning (of reverse, so actually at end)
-    #   of the transition array so the indexing lines up for all steps
-    transition_array = bias_array.arraySlice(0, 0, 1).multiply(0)\
-        .arrayCat(transition_array, 0)
-    transition_index = transition_array.arrayArgmax().arrayFlatten([['index']])
-    # Get the max transition value in order to know if there was a transition
-    transition_max = transition_array\
-        .arrayReduce(ee.Reducer.max(), [0]).arrayFlatten([['max']])
-
-    # Identify the position of minimum absolute bias
-    min_bias_index = bias_array.abs().multiply(-1).arrayArgmax()\
-        .arrayFlatten([['index']])
-
-    # Identify the "bracketing" Ta and bias values
-    # If there is a transition, use the "last" transition
-    # If there is not a transition, use the minimum absolute bias for both
-    # Note, the index is for the reversed arrays
-    index_b = transition_index.subtract(1).max(0)\
-        .where(transition_max.eq(0), min_bias_index)
-    index_a = transition_index.min(ta_bands.size().subtract(1))\
-        .where(transition_max.eq(0), min_bias_index)
-    ta_b = ta_array.arrayGet(index_b)
-    ta_a = ta_array.arrayGet(index_a)
-    bias_b = bias_array.arrayGet(index_b)
-    bias_a = bias_array.arrayGet(index_a)
-
-    # For now, compute the target Ta as the average of the bracketing Ta values
-    # Eventually Ta could be linearly interpolated or computed
-    #   as some sort of weighted average (based on the biases)
-    ta_source_img = ta_a.add(ta_b).multiply(0.5).rename(['ta'])
-
-    # Mask out Ta cells with all negative biases
-    ta_source_img = ta_source_img.updateMask(bias_b.lt(0).And(bias_a.lt(0)).Not())
-
-    return ta_source_img
+# # TODO: Move this function into the model code so it can be tested
+# def ta_min_bias(input_img):
+#     """
+#
+#     Parameters
+#     ----------
+#     input_img
+#
+#     Returns
+#     -------
+#
+#     """
+#     input_img = ee.Image(input_img)
+#
+#     # Reverse the band order so that we can find the last transition
+#     #   from decreasing to increasing with a positive bias
+#     ta_bands = input_img.select('step_\\d+_ta').bandNames().reverse()
+#     bias_bands = input_img.select('step_\\d+_bias').bandNames().reverse()
+#     ta_array = input_img.select(ta_bands).toArray()
+#     bias_array = input_img.select(bias_bands).toArray()
+#     #Assign the bias that are very similar a very large value that they will not be selected
+#     diff = bias_array.arraySlice(0, 1).subtract(bias_array.arraySlice(0, 0, -1))
+#     bias_array_mask = diff.abs().lt(0.001)
+#     #repeat the last value to make the array the same length. array is reversed order.
+#     bias_array_mask = bias_array_mask.arrayCat(bias_array_mask.arraySlice(0, -1), 0)
+#     bias_array = bias_array.add(bias_array_mask.multiply(99))
+#
+#     # Identify the "last" transition from a negative to positive bias
+#     # CGM - Having problems with .ceil() limiting result to the image data range
+#     #   Multiplying by a big number seemed to fix the issue but this could still
+#     #     be a problem with the bias ranges get really small
+#     sign_array = bias_array.multiply(1000).ceil().max(0).min(1).int()
+#     transition_array = sign_array.arraySlice(0, 0, -1)\
+#         .subtract(sign_array.arraySlice(0, 1))
+#     # Insert an extra value at the beginning (of reverse, so actually at end)
+#     #   of the transition array so the indexing lines up for all steps
+#     transition_array = bias_array.arraySlice(0, 0, 1).multiply(0)\
+#         .arrayCat(transition_array, 0)
+#     transition_index = transition_array.arrayArgmax().arrayFlatten([['index']])
+#     # Get the max transition value in order to know if there was a transition
+#     transition_max = transition_array\
+#         .arrayReduce(ee.Reducer.max(), [0]).arrayFlatten([['max']])
+#
+#     # Identify the position of minimum absolute bias
+#     min_bias_index = bias_array.abs().multiply(-1).arrayArgmax()\
+#         .arrayFlatten([['index']])
+#
+#     # Identify the "bracketing" Ta and bias values
+#     # If there is a transition, use the "last" transition
+#     # If there is not a transition, use the minimum absolute bias for both
+#     # Note, the index is for the reversed arrays
+#     index_b = transition_index.subtract(1).max(0)\
+#         .where(transition_max.eq(0), min_bias_index)
+#     index_a = transition_index.min(ta_bands.size().subtract(1))\
+#         .where(transition_max.eq(0), min_bias_index)
+#     ta_b = ta_array.arrayGet(index_b)
+#     ta_a = ta_array.arrayGet(index_a)
+#     bias_b = bias_array.arrayGet(index_b)
+#     bias_a = bias_array.arrayGet(index_a)
+#
+#     # For now, compute the target Ta as the average of the bracketing Ta values
+#     # Eventually Ta could be linearly interpolated or computed
+#     #   as some sort of weighted average (based on the biases)
+#     ta_source_img = ta_a.add(ta_b).multiply(0.5).rename(['ta'])
+#
+#     # Mask out Ta cells with all negative biases
+#     ta_source_img = ta_source_img.updateMask(bias_b.lt(0).And(bias_a.lt(0)).Not())
+#
+#     return ta_source_img
 
 
 # import pytest
