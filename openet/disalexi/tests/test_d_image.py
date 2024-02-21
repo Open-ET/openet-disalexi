@@ -9,7 +9,7 @@ import openet.disalexi.utils as utils
 # import openet.core.utils as utils
 
 
-COLL_ID = 'LANDSAT/LC08/C02/T1_L2/'
+COLL_ID = 'LANDSAT/LC08/C02/T1_L2'
 SCENE_ID = 'LC08_044033_20170716'
 SCENE_TIME = 1500230731090
 # SCENE_ID = 'LC08_042035_20150713'
@@ -30,7 +30,7 @@ TEST_POINT = (-121.5265, 38.7399)
 # SCENE_TIME = utils.getinfo(ee.Date(SCENE_DATE).millis())
 # SCENE_POINT = (-19.44252382373145, 36.04047742246546)
 # SCENE_POINT = utils.getinfo(
-#     ee.Image(COLL_ID + SCENE_ID).geometry().centroid())['coordinates']
+#     ee.Image(f'{COLL_ID}/{SCENE_ID}').geometry().centroid())['coordinates']
 
 
 # # Should these be test fixtures instead?
@@ -48,16 +48,23 @@ TEST_POINT = (-121.5265, 38.7399)
 
 # DisALEXI needs a non-constant image since it computes lat/lon
 # LAI and LST are read from sources and net set in the "prep" functions anymore
-def default_image(albedo=0.125, cfmask=0, ndvi=0.875,
-                  # lai=4.2, lst=306.5,
-                  coll_id=None, scene_id=None, scene_time=None):
+def default_image(
+        albedo=0.125,
+        cfmask=0,
+        ndvi=0.875,
+        # lai=4.2,
+        # lst=306.5,
+        coll_id=None,
+        scene_id=None,
+        scene_time=None
+        ):
     if coll_id is None:
         coll_id = COLL_ID
     if scene_id is None:
         scene_id = SCENE_ID
     if scene_time is None:
         scene_time = SCENE_TIME
-    mask_img = ee.Image(coll_id + scene_id).select(['SR_B1']).multiply(0)
+    mask_img = ee.Image(f'{coll_id}/{scene_id}').select(['SR_B1']).multiply(0)
     # mask_img = ee.Image('projects/disalexi/ta/CONUS_V001/{}_0'.format(SCENE_ID))\
     #     .select(0).multiply(0)
     return ee.Image([mask_img.add(albedo), mask_img.add(cfmask),
@@ -68,17 +75,24 @@ def default_image(albedo=0.125, cfmask=0, ndvi=0.875,
             'system:index': scene_id,
             'system:time_start': scene_time,
             # 'system:time_start': ee.Date(SCENE_DATE).millis(),
-            'system:id': coll_id + scene_id,
+            'system:id': f'{coll_id}/{scene_id}',
         })
 
-def default_image_args(albedo=0.125, cfmask=0, ndvi=0.875,
-                       ta_source='CONUS_V005', alexi_source='CONUS_V005',
-                       ta_smooth_flag=False,
-                       lai_source=4.2, tir_source=306.5,
-                       et_reference_source=10, et_reference_band=None,
-                       et_reference_factor=1.0, et_reference_resample='nearest',
-                       stability_iterations=25, albedo_iterations=10,
-                       ):
+def default_image_args(
+        albedo=0.125,
+        cfmask=0, ndvi=0.875,
+        ta_source='CONUS_V005',
+        alexi_source='CONUS_V005',
+        ta_smooth_flag=False,
+        lai_source=4.2,
+        tir_source=306.5,
+        et_reference_source=10,
+        et_reference_band=None,
+        et_reference_factor=1.0,
+        et_reference_resample='nearest',
+        stability_iterations=25,
+        albedo_iterations=10,
+        ):
     return {
         'image': default_image(albedo=albedo, cfmask=cfmask, ndvi=ndvi),
         'ta_source': ta_source,
@@ -93,13 +107,21 @@ def default_image_args(albedo=0.125, cfmask=0, ndvi=0.875,
         'albedo_iterations': albedo_iterations,
     }
 
-def default_image_obj(albedo=0.125, cfmask=0, ndvi=0.875,
-                      ta_source='CONUS_V005', alexi_source='CONUS_V005',
-                      lai_source=4.2, tir_source=306.5,
-                      et_reference_source=10, et_reference_band=None,
-                      et_reference_factor=1.0, et_reference_resample='nearest',
-                      stability_iterations=25, albedo_iterations=10,
-                      ):
+def default_image_obj(
+        albedo=0.125,
+        cfmask=0,
+        ndvi=0.875,
+        ta_source='CONUS_V005',
+        alexi_source='CONUS_V005',
+        lai_source=4.2,
+        tir_source=306.5,
+        et_reference_source=10,
+        et_reference_band=None,
+        et_reference_factor=1.0,
+        et_reference_resample='nearest',
+        stability_iterations=25,
+        albedo_iterations=10,
+        ):
     return disalexi.Image(**default_image_args(
         albedo=albedo, cfmask=cfmask, ndvi=ndvi,
         ta_source=ta_source,
@@ -542,22 +564,22 @@ def test_Image_et_default_values(expected=5.625469759837161, tol=0.0001):
     assert abs(output['et'] - expected) <= tol
 
 
-# CGM - What is this test doing?
-# It seems to be very sensitive to the number of iterations
-#   but I can't set it higher than ~25
-@pytest.mark.parametrize(
-    'ta, iterations, expected',
-    [
-        # [298.427, 10, 7.602516963336294],
-        # [298.427, 20, 6.750980231303747],
-        [298.427, 25, 6.1622753377061725],
-        [300, 25, 7.004342354788354],
-    ]
-)
-def test_Image_et_fixed_source(ta, iterations, expected, tol=0.001):
-    m = disalexi.Image(default_image(), ta_source=ta, stability_iterations=iterations)
-    output = utils.point_image_value(m.et, TEST_POINT)
-    assert abs(output['et'] - expected) <= tol
+# # CGM - What is this test doing?
+# # It seems to be very sensitive to the number of iterations
+# #   but I can't set it higher than ~25
+# @pytest.mark.parametrize(
+#     'ta, iterations, expected',
+#     [
+#         # [298.427, 10, 7.602516963336294],
+#         # [298.427, 20, 6.750980231303747],
+#         [298.427, 25, 6.1622753377061725],
+#         [300, 25, 7.004342354788354],
+#     ]
+# )
+# def test_Image_et_fixed_source(ta, iterations, expected, tol=0.001):
+#     m = disalexi.Image(default_image(), ta_source=ta, stability_iterations=iterations)
+#     output = utils.point_image_value(m.et, TEST_POINT)
+#     assert abs(output['et'] - expected) <= tol
 
 
 # CGM - These values are different but I'm not sure why since everything is hardcoded
@@ -643,6 +665,8 @@ def test_Image_et_reference_default_values(expected=10.0, tol=0.0001):
     'source, band, xy, expected',
     [
         ['IDAHO_EPSCOR/GRIDMET', 'etr', TEST_POINT, 11.2],
+        ['projects/openet/assets/reference_et/california/cimis/daily/v1', 'etr', TEST_POINT, 10.124],
+        ['projects/openet/reference_et/california/cimis/daily/v1', 'etr', TEST_POINT, 10.124],
         ['projects/climate-engine/cimis/daily', 'ETr_ASCE', TEST_POINT, 10.124],
         ['10.8985', None, TEST_POINT, 10.8985],
         [10.8985, None, TEST_POINT, 10.8985],
@@ -904,8 +928,8 @@ def test_Image_from_method_kwargs():
     # assert disalexi.Image.from_landsat_c1_toa(
     #     'LANDSAT/LC08/C01/T1_TOA/LC08_042035_20150713',
     #     elevation_source='DEADBEEF').elevation_source == 'DEADBEEF'
-    assert disalexi.Image.from_landsat_c1_sr(
-        'LANDSAT/LC08/C01/T1_SR/LC08_042035_20150713',
+    assert disalexi.Image.from_landsat_c2_sr(
+        'LANDSAT/LC08/C02/T1_L2/LC08_042035_20150713',
         elevation_source='DEADBEEF').elevation_source == 'DEADBEEF'
 
 

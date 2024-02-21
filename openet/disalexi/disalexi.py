@@ -66,9 +66,9 @@ class Image(object):
             Prepped image
         ta_source : {'CONUS_V003', 'CONUS_V004', 'CONUS_V005', 'CONUS_V006'}
             ALEXI scale air temperature image collection ID.
-            The default is 'CONUS_V005'.
+            The default is 'CONUS_V006'.
         alexi_source : {'CONUS_V003', 'CONUS_V004', 'CONUS_V005', 'CONUS_V006'}
-            ALEXI ET image collection ID (the default is 'CONUS_V005').
+            ALEXI ET image collection ID (the default is 'CONUS_V006').
         lai_source : string
             LAI image collection ID.
         tir_source : string
@@ -96,7 +96,7 @@ class Image(object):
         airpressure_source: {'CFSR'}
             Air pressure source keyword (the default is 'CFSR').
         stability_iterations : int, optional
-            Number of istability calculation iterations.  If not set, the
+            Number of stability calculation iterations.  If not set, the
             number will be computed dynamically.
         albedo_iterations : int, optional
             Number albedo separation iterations (the default is 10).
@@ -150,7 +150,7 @@ class Image(object):
         }
 
         # # Build SCENE_ID from the (possibly merged) system:index
-        # sceneid = ee.List(ee.String(self.index).split('_')).slice(-3)
+        # scene_id = ee.List(ee.String(self.index).split('_')).slice(-3)
         # self.scene_id = ee.String(scene_id.get(0)).cat('_') \
         #     .cat(ee.String(scene_id.get(1))).cat('_') \
         #     .cat(ee.String(scene_id.get(2)))
@@ -222,6 +222,7 @@ class Image(object):
             self.stabil_iter = None
         self.albedo_iter = int(albedo_iterations + 0.5)
         self.rs_interp_flag = utils.boolean(rs_interp_flag)
+        # CGM - This does not appear to be used anymore
         self.ta_interp_flag = utils.boolean(ta_interp_flag)
         self.ta_smooth_flag = utils.boolean(ta_smooth_flag)
         self.et_min = et_min
@@ -285,7 +286,7 @@ class Image(object):
             # If the source is an ee.Image assume it is an NLCD image
             self.lc_source = self.landcover_source.rename(['landcover'])
             self.lc_type = 'NLCD'
-        elif re.match('USGS/NLCD_RELEASES/2019_REL/NLCD/\d{4}', self.landcover_source.upper()):
+        elif re.match('USGS/NLCD_RELEASES/2019_REL/NLCD/\\d{4}', self.landcover_source.upper()):
             # Assume an image was passed in and use it directly
             self.lc_source = ee.Image(self.landcover_source.upper()).select(['landcover'])
             self.lc_type = 'NLCD'
@@ -313,7 +314,7 @@ class Image(object):
                 .first().select(['landcover'])
             )
             self.lc_type = 'NLCD'
-        elif re.match('USGS/NLCD_RELEASES/2016_REL/\d{4}', self.landcover_source.upper()):
+        elif re.match('USGS/NLCD_RELEASES/2016_REL/\\d{4}', self.landcover_source.upper()):
             # Assume an image was passed in and use it directly
             self.lc_source = ee.Image(self.landcover_source.upper()).select(['landcover'])
             self.lc_type = 'NLCD'
@@ -793,7 +794,7 @@ class Image(object):
         }
         ta_source_re = re.compile(
             '(projects/earthengine-legacy/assets/)?'
-            'projects/(\w+/)?disalexi/ta(ir)?/(conus|global)_v\d{3}\w?(_\w+)',
+            'projects/(\\w+/)?disalexi/ta(ir)?/(conus|global)_v\\d{3}\\w?(_\\w+)',
             re.IGNORECASE
         )
 
@@ -868,7 +869,7 @@ class Image(object):
         else:
             raise ValueError(f'Unsupported ta_source: {self.ta_source}\n')
 
-        # elif re.match('projects/(\w+/)?disalexi/ta/conus_v', self.ta_source, re.I):
+        # elif re.match('projects/(\\w+/)?disalexi/ta/conus_v', self.ta_source, re.I):
 
         return ta_img.rename(['ta']).set(self.properties)
 
@@ -1227,7 +1228,7 @@ class Image(object):
 
         """
 
-        # TODO: Test making a single multiband image of all of these and making
+        # TODO: Test making a single multi-band image of all of these and making
         #   a single reduceResolution call
         rr_params = {'reducer': ee.Reducer.mean().unweighted(), 'maxPixels': 30000}
         proj_params = {'crs': self.alexi_crs, 'crsTransform': self.alexi_geo}
@@ -1269,7 +1270,7 @@ class Image(object):
             albedo_iter=self.albedo_iter,
         )
 
-        # TODO: Does this also need the reduceResolution().reproject() call?
+        # CGM - Does this also need the reduceResolution().reproject() call?
         #   All the inputs are already at that scale
         return (
             ta_coarse
@@ -1279,6 +1280,7 @@ class Image(object):
             .set(self.properties)
         )
 
+    # CGM - What is the difference between this function and ta_mosaic()?
     def ta_qm(self, ta_img, step_size, step_count, threshold=0.5):
         """Compute the air temperature for each ALEXI ET cell that minimizes
         the bias between Landsat scale ET and ALEXI ET for a fixed range of
@@ -1350,80 +1352,10 @@ class Image(object):
             .select(['ta', 'bias', 'et'])
         )
 
-    # TODO: Move to a utils module maybe since it isn't a function of self
-    # TODO: Maybe rename also
-    def ta_mosaic_interpolate(self, ta_mosaic_img):
-        """
-
-        Parameters
-        ----------
-        input_img
-
-        Returns
-        -------
-
-
-        """
-        # Reverse the band order so that we can find the last transition
-        #   from decreasing to increasing with a positive bias
-        ta_bands = ta_mosaic_img.select('step_\\d+_ta').bandNames().reverse()
-        bias_bands = ta_mosaic_img.select('step_\\d+_bias').bandNames().reverse()
-        ta_array = ta_mosaic_img.select(ta_bands).toArray()
-        bias_array = ta_mosaic_img.select(bias_bands).toArray()
-        # Assign the bias that are very similar a very large value that they will not be selected
-        diff = bias_array.arraySlice(0, 1).subtract(bias_array.arraySlice(0, 0, -1))
-        bias_array_mask = diff.abs().lt(0.001)
-        # repeat the last value to make the array the same length. array is reversed order.
-        bias_array_mask = bias_array_mask.arrayCat(bias_array_mask.arraySlice(0, -1), 0)
-        bias_array = bias_array.add(bias_array_mask.multiply(99))
-
-        # Identify the "last" transition from a negative to positive bias
-        # CGM - Having problems with .ceil() limiting result to the image data range
-        #   Multiplying by a big number seemed to fix the issue but this could still
-        #     be a problem with the bias ranges get really small
-        sign_array = bias_array.multiply(1000).ceil().max(0).min(1).int()
-        tgt_array = sign_array.arraySlice(0, 0, -1).subtract(sign_array.arraySlice(0, 1))
-        # Insert an extra value at the beginning (of reverse, so actually at end)
-        #   of the transition array so the indexing lines up for all steps
-        tgt_array = bias_array.arraySlice(0, 0, 1).multiply(0).arrayCat(tgt_array, 0)
-        tgt_index = tgt_array.arrayArgmax().arrayFlatten([['index']])
-        # Get the max transition value in order to know if there was a transition
-        tgt_max = tgt_array.arrayReduce(ee.Reducer.max(), [0]).arrayFlatten([['max']])
-
-        # Identify the position of minimum absolute bias
-        min_bias_index = bias_array.abs().multiply(-1).arrayArgmax().arrayFlatten([['index']])
-
-        # Identify the "bracketing" Ta and bias values
-        # If there is a transition, use the "last" transition
-        # If there is not a transition, use the minimum absolute bias for both
-        # Note, the index is for the reversed arrays
-        # B is the "high" value, A is the "low value"
-        index_b = tgt_index.subtract(1).max(0).where(tgt_max.eq(0), min_bias_index)
-        index_a = (
-            tgt_index.min(ta_bands.size().subtract(1))
-            .where(tgt_max.eq(0), min_bias_index)
-        )
-        ta_b = ta_array.arrayGet(index_b)
-        ta_a = ta_array.arrayGet(index_a)
-        bias_b = bias_array.arrayGet(index_b)
-        bias_a = bias_array.arrayGet(index_a)
-
-        # Linearly interpolate Ta
-        ta_img = (
-            ta_b.subtract(ta_a).divide(bias_b.subtract(bias_a))
-            .multiply(bias_a.multiply(-1)).add(ta_a)
-            .max(ta_a).min(ta_b)
-        )
-        # # Compute the target Ta as the average of the bracketing Ta values
-        # ta_img = ta_a.add(ta_b).multiply(0.5)
-
-        # Mask out Ta cells with all negative biases
-        ta_img = ta_img.updateMask(bias_b.lt(0).And(bias_a.lt(0)).Not())
-
-        return ta_img.rename(['ta'])
-
     def ta_mosaic(self, ta_img, step_size, step_count, threshold=0.5):
-        """
+        """Compute the air temperature for each ALEXI ET cell that minimizes
+        the bias between Landsat scale ET and ALEXI ET for a fixed range of
+        air temperature values
 
         Parameters
         ----------
@@ -1434,16 +1366,15 @@ class Image(object):
             The number of Ta steps.
         threshold : float, optional
 
+
         Returns
         -------
         image : ee.Image
-            ALEXI scale air temperature image
+            ALEXI scale multi-band air temperature image
 
         """
 
-        # CGM - This is basically identical to ta_coarse()
-        # Can't use ta_coarse since a mapped function can only have one input
-        # Redefining it here allows threshold to be passed in
+        # Redefining ta_funct() here allows threshold to be passed into function
         def ta_func(ta):
             """Compute TSEB ET for the target t_air value"""
             et_fine = tseb.tseb_pt(
@@ -1498,6 +1429,109 @@ class Image(object):
         # ])
 
         return ee.ImageCollection(ta_coll.map(ta_func)).toBands()
+
+    # TODO: Move to a utils module maybe since it isn't a function of self
+    # TODO: Maybe rename also
+    def ta_mosaic_min_bias(self, ta_mosaic_img):
+        """Return the air temperature with the minimum bias from a mosaic stack
+
+        Parameters
+        ----------
+        ta_mosaic_img : ee.Image
+
+        Returns
+        -------
+        image : ee.Image
+            ALEXI scale single band air temperature image
+
+        """
+        # Select the Ta image with the minimum bias
+        ta_array = ta_mosaic_img.select('step_\\d+_ta').toArray()
+        bias_array = ta_mosaic_img.select('step_\\d+_bias').toArray()
+        diff = bias_array.arraySlice(0, 1).subtract(bias_array.arraySlice(0, 0, -1))
+        bias_array_mask = diff.abs().lt(0.001)
+        # Make the array the same length by repeating the first value
+        bias_array_mask = bias_array_mask.arraySlice(0, 0, 1).arrayCat(bias_array_mask, 0)
+        bias_array_new = bias_array.add(bias_array_mask.multiply(99))
+        index = bias_array_new.abs().multiply(-1).arrayArgmax() \
+            .arraySlice(0, 0, 1).arrayFlatten([['array']])
+        ta_img = ta_array.arrayGet(index)
+
+        return ta_img.rename(['ta'])
+
+    # TODO: Move to a utils module maybe since it isn't a function of self
+    # TODO: Maybe rename also, ta_mosaic_zero_bias()?
+    def ta_mosaic_interpolate(self, ta_mosaic_img):
+        """Interpolate the air temperature for a bias of 0 from from a mosaic stack
+
+        Parameters
+        ----------
+        ta_mosaic_img : ee.Image
+
+        Returns
+        -------
+        image : ee.Image
+            ALEXI scale single band air temperature image
+
+        """
+        # Reverse the band order so that we can find the last transition
+        #   from decreasing to increasing with a positive bias
+        ta_bands = ta_mosaic_img.select('step_\\d+_ta').bandNames().reverse()
+        bias_bands = ta_mosaic_img.select('step_\\d+_bias').bandNames().reverse()
+        ta_array = ta_mosaic_img.select(ta_bands).toArray()
+        bias_array = ta_mosaic_img.select(bias_bands).toArray()
+
+        # Assign the bias that are very similar a very large value so that they will not be selected
+        diff = bias_array.arraySlice(0, 1).subtract(bias_array.arraySlice(0, 0, -1))
+        bias_array_mask = diff.abs().lt(0.001)
+        # repeat the last value to make the array the same length. array is reversed order.
+        bias_array_mask = bias_array_mask.arrayCat(bias_array_mask.arraySlice(0, -1), 0)
+        adj_bias_array = bias_array.add(bias_array_mask.multiply(99))
+
+        # Identify the "last" transition from a negative to positive bias
+        # CGM - Having problems with .ceil() limiting result to the image data range
+        #   Multiplying by a big number seemed to fix the issue but this could still
+        #     be a problem with the bias ranges get really small
+        sign_array = bias_array.multiply(1000).ceil().max(0).min(1).int()
+        tran_array = sign_array.arraySlice(0, 0, -1).subtract(sign_array.arraySlice(0, 1))
+        # Insert an extra value at the beginning (of reverse, so actually at end)
+        #   of the transition array so the indexing lines up for all steps
+        tran_array = bias_array.arraySlice(0, 0, 1).multiply(0).arrayCat(tran_array, 0)
+        tran_index = tran_array.arrayArgmax().arrayFlatten([['index']])
+        # Get the max transition value in order to know if there was a transition
+        tran_max = tran_array.arrayReduce(ee.Reducer.max(), [0]).arrayFlatten([['max']])
+
+        # Identify the position of minimum absolute bias
+        min_bias_index = adj_bias_array.abs().multiply(-1).arrayArgmax().arrayFlatten([['index']])
+
+        # Identify the "bracketing" Ta and bias values
+        # If there is a transition, use the "last" transition
+        # If there is not a transition, use the minimum absolute bias for both
+        # Note, the index is for the reversed arrays
+        # B is the "high" value, A is the "low value"
+        index_b = tran_index.subtract(1).max(0).where(tran_max.eq(0), min_bias_index)
+        index_a = (
+            tran_index.min(ta_bands.size().subtract(1))
+            .where(tran_max.eq(0), min_bias_index)
+        )
+        ta_b = ta_array.arrayGet(index_b)
+        ta_a = ta_array.arrayGet(index_a)
+        bias_b = bias_array.arrayGet(index_b)
+        bias_a = bias_array.arrayGet(index_a)
+
+        # Linearly interpolate Ta
+        ta_img = (
+            ta_b.subtract(ta_a).divide(bias_b.subtract(bias_a))
+            .multiply(bias_a.multiply(-1)).add(ta_a)
+            .max(ta_a).min(ta_b)
+        )
+        # Compute the target Ta as the average of the bracketing Ta values
+        # ta_img = ta_a.add(ta_b).multiply(0.5)
+
+        # Mask out Ta cells with all negative biases
+        ta_img = ta_img.updateMask(bias_b.lt(0).And(bias_a.lt(0)).Not())
+
+        return ta_img.rename(['ta'])
 
     def et_coarse(self, ta_img, threshold=0.5):
         """Compute the Landsat ET summed to the ALEXI grid for the
