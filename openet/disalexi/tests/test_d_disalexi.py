@@ -180,7 +180,6 @@ def test_Image_ta_mosaic_interpolate(ta_init=290, step_size=5, step_count=4):
     ]
 )
 def test_Image_ta_mosaic_min_bias_values(ta_values, bias_values, expected):
-    # Check that a reasonable air temperature value is returned
     d_obj = disalexi.Image(**default_image_args())
     mask_img = d_obj.et_alexi.multiply(0)
     ta_images = [mask_img.add(x).rename(f'step_{i}_ta')  for i, x in enumerate(ta_values)]
@@ -198,10 +197,10 @@ def test_Image_ta_mosaic_min_bias_values(ta_values, bias_values, expected):
         [[280, 285, 290, 295, 300], [-4, -3, -2, 1, 3], 293.33],
         [[280, 285, 290, 295, 300], [-2, -2, -1, 1, 3], 292.5],
         [[280, 285, 290, 295, 300, 305, 310], [-2, -2, -2, 1, 3, 4, 5], 293.33],
-        [[270, 275, 280, 285, 290, 295, 300, 305, 310], [-2, -2, -2, -2, -2, 1, 3, 4, 5], 293.33],
+        [[270, 275, 280, 285, 290, 295, 300, 305], [-2, -2, -2, -2, -2, 1, 3, 4], 293.33],
         [[280, 285, 290, 295, 300], [1, 2, 3, 4, 5], 280],
         # Test multiple negative to positive bias transitions
-        [[270, 275, 280, 285, 290, 295, 300, 305, 310], [-2, -0.1, 0.1, -2, -1, 1, 3, 4, 5], 293.33],
+        [[270, 275, 280, 285, 290, 295, 300, 305], [-2, -0.1, 0.1, -2, -1, 1, 3, 4], 293.33],
         # Pixels with all negative biases are masked in interpolate function
         [[280, 285, 290, 295, 300], [-5, -4, -3, -2, -1], None],
     ]

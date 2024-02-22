@@ -74,10 +74,10 @@ def tseb_pt(
     a_pt_in : float, optional
         Priestley Taylor coefficient for canopy potential transpiration
         (the default is 1.32).
-    stabil_iter: int, optional
+    stabil_iter : int, optional
         Number of iterations of stability calculation.  If not set the number
         of iterations will be computed dynamically.
-    albedo_iter: int, optional
+    albedo_iter : int, optional
         Number of iterations of albedo separation calculation
         (the default is 10).
     et_min : float, optinal
@@ -547,10 +547,10 @@ def tseb_invert(
     a_pt_in : float, optional
         Priestley Taylor coefficient for canopy potential transpiration
         (the default is 1.32).
-    stabil_iter: int, optional
+    stabil_iter : int, optional
         Number of iterations of stability calculation.  If not set the number
         of iterations will be computed dynamically.
-    albedo_iter: int, optional
+    albedo_iter : int, optional
         Number of iterations of albedo separation calculation
         (the default is 10).
 

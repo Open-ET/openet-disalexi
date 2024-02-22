@@ -73,7 +73,7 @@ class Image(object):
             LAI image collection ID.
         tir_source : string
             Sharpened thermal infrared image collection ID.
-        elevation_source: str, ee.Image
+        elevation_source : str, ee.Image
             Elevation source keyword or asset (the default is USGS/SRTMGL1_003).
             Units must be in meters.
         landcover_source : {'USGS/NLCD_RELEASES/2019_REL/NLCD',
@@ -112,9 +112,9 @@ class Image(object):
             Latitude [deg].  If not set will default to ee.Image.pixelLonLat().
         lon : ee.Image, optional
             Longitude [deg].  If not set will default to ee.Image.pixelLonLat().
-        et_min: float, optional
+        et_min : float, optional
             Minimum output ET value. (the default is 0.01).
-        kwargs: dict, optional
+        kwargs : dict, optional
             et_reference_source : str, float
                 Reference ET source (the default is None).
                 Parameter is required if computing 'et_fraction' or 'et_reference'.
@@ -246,8 +246,7 @@ class Image(object):
             self.et_reference_resample = None
 
         # Check reference ET parameters
-        if (self.et_reference_factor and
-                not utils.is_number(self.et_reference_factor)):
+        if self.et_reference_factor and not utils.is_number(self.et_reference_factor):
             raise ValueError('et_reference_factor must be a number')
         if self.et_reference_factor and self.et_reference_factor < 0:
             raise ValueError('et_reference_factor must be greater than zero')
@@ -257,8 +256,7 @@ class Image(object):
             raise ValueError('Unsupported et_reference_resample method\n')
 
         if lat is None:
-            self.lat = self.ndvi.multiply(0).add(
-                ee.Image.pixelLonLat().select(['latitude']))
+            self.lat = self.ndvi.multiply(0).add(ee.Image.pixelLonLat().select(['latitude']))
         elif utils.is_number(lat):
             self.lat = ee.Image.constant(lat)
         elif isinstance(lat, ee.computedobject.ComputedObject):
@@ -267,8 +265,7 @@ class Image(object):
             raise ValueError('invalid lat parameter')
 
         if lon is None:
-            self.lon = self.ndvi.multiply(0).add(
-                ee.Image.pixelLonLat().select(['longitude']))
+            self.lon = self.ndvi.multiply(0).add(ee.Image.pixelLonLat().select(['longitude']))
         elif utils.is_number(lon):
             self.lon = ee.Image.constant(lon)
         elif isinstance(lon, ee.computedobject.ComputedObject):
@@ -1482,24 +1479,24 @@ class Image(object):
         bias_array = ta_mosaic_img.select(bias_bands).toArray()
 
         # Assign the bias that are very similar a very large value so that they will not be selected
-        diff = bias_array.arraySlice(0, 1).subtract(bias_array.arraySlice(0, 0, -1))
-        bias_array_mask = diff.abs().lt(0.001)
+        diff_array = bias_array.arraySlice(0, 1).subtract(bias_array.arraySlice(0, 0, -1))
+        adj_bias_mask = diff_array.abs().lt(0.001)
         # repeat the last value to make the array the same length. array is reversed order.
-        bias_array_mask = bias_array_mask.arrayCat(bias_array_mask.arraySlice(0, -1), 0)
-        adj_bias_array = bias_array.add(bias_array_mask.multiply(99))
+        adj_bias_mask = adj_bias_mask.arrayCat(adj_bias_mask.arraySlice(0, -1), 0)
+        adj_bias_array = bias_array.add(adj_bias_mask.multiply(99))
 
         # Identify the "last" transition from a negative to positive bias
         # CGM - Having problems with .ceil() limiting result to the image data range
         #   Multiplying by a big number seemed to fix the issue but this could still
         #     be a problem with the bias ranges get really small
         sign_array = bias_array.multiply(1000).ceil().max(0).min(1).int()
-        tran_array = sign_array.arraySlice(0, 0, -1).subtract(sign_array.arraySlice(0, 1))
+        transition_array = sign_array.arraySlice(0, 0, -1).subtract(sign_array.arraySlice(0, 1))
         # Insert an extra value at the beginning (of reverse, so actually at end)
         #   of the transition array so the indexing lines up for all steps
-        tran_array = bias_array.arraySlice(0, 0, 1).multiply(0).arrayCat(tran_array, 0)
-        tran_index = tran_array.arrayArgmax().arrayFlatten([['index']])
+        transition_array = bias_array.arraySlice(0, 0, 1).multiply(0).arrayCat(transition_array, 0)
+        transition_index = transition_array.arrayArgmax().arrayFlatten([['index']])
         # Get the max transition value in order to know if there was a transition
-        tran_max = tran_array.arrayReduce(ee.Reducer.max(), [0]).arrayFlatten([['max']])
+        transition_max = transition_array.arrayReduce(ee.Reducer.max(), [0]).arrayFlatten([['max']])
 
         # Identify the position of minimum absolute bias
         min_bias_index = adj_bias_array.abs().multiply(-1).arrayArgmax().arrayFlatten([['index']])
@@ -1509,10 +1506,10 @@ class Image(object):
         # If there is not a transition, use the minimum absolute bias for both
         # Note, the index is for the reversed arrays
         # B is the "high" value, A is the "low value"
-        index_b = tran_index.subtract(1).max(0).where(tran_max.eq(0), min_bias_index)
+        index_b = transition_index.subtract(1).max(0).where(transition_max.eq(0), min_bias_index)
         index_a = (
-            tran_index.min(ta_bands.size().subtract(1))
-            .where(tran_max.eq(0), min_bias_index)
+            transition_index.min(ta_bands.size().subtract(1))
+            .where(transition_max.eq(0), min_bias_index)
         )
         ta_b = ta_array.arrayGet(index_b)
         ta_a = ta_array.arrayGet(index_a)
@@ -1520,12 +1517,14 @@ class Image(object):
         bias_a = bias_array.arrayGet(index_a)
 
         # Linearly interpolate Ta
+        # Limit the interpolated value to the bracketing values (don't extrapolate)
         ta_img = (
             ta_b.subtract(ta_a).divide(bias_b.subtract(bias_a))
             .multiply(bias_a.multiply(-1)).add(ta_a)
             .max(ta_a).min(ta_b)
         )
-        # Compute the target Ta as the average of the bracketing Ta values
+        # # Compute the target Ta as the average of the bracketing Ta values
+        # #   instead of interpolating
         # ta_img = ta_a.add(ta_b).multiply(0.5)
 
         # Mask out Ta cells with all negative biases
