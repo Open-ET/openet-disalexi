@@ -1196,7 +1196,13 @@ class Image(object):
 
         """
         # Compute the initial Ta from the meteorology
-        ta_direct_img = self.ta_direct()
+        # Round to the nearest 10th
+        # Decide what this band should be called in the output image
+        ta_direct_img = (
+            self.ta_direct()
+            .multiply(10).round().divide(10)
+            .rename(['ta_direct'])
+        )
 
         # Compute the Ta 1k steps from the initial Ta image
         ta_1k_steps_img = self.ta_mosaic(
@@ -1204,13 +1210,9 @@ class Image(object):
         )
 
         # Interpolate the minimum bias Ta from the 1k steps
-        ta_img = self.ta_mosaic_interp(ta_1k_steps_img)
+        ta_img = self.ta_mosaic_interpolate(ta_1k_steps_img)
 
-        return (
-            ee.Image([ta_img, ta_direct_img])
-            .rename(['ta', 'ta_direct'])
-            .set(self.properties)
-        )
+        return ta_direct_img.addBands(ta_img).set(self.properties)
 
     def ta_direct(self):
         """Compute initial coarse scale air temperature estimate from meteorology
@@ -1527,10 +1529,16 @@ class Image(object):
         # #   instead of interpolating
         # ta_img = ta_a.add(ta_b).multiply(0.5)
 
-        # Mask out Ta cells with all negative biases
-        ta_img = ta_img.updateMask(bias_b.lt(0).And(bias_a.lt(0)).Not())
+        # # CGM - This is mostly needed at the 10k step size
+        # #   Commenting out for now
+        # # Mask out Ta cells with all negative biases
+        # ta_img = ta_img.updateMask(bias_b.lt(0).And(bias_a.lt(0)).Not())
 
-        return ta_img.rename(['ta'])
+        return (
+            ta_img
+            .addBands([ta_a, bias_a, ta_b, bias_b])
+            .rename(['ta_interp', 'ta_a', 'bias_a', 'ta_b', 'bias_b'])
+        )
 
     def et_coarse(self, ta_img, threshold=0.5):
         """Compute the Landsat ET summed to the ALEXI grid for the

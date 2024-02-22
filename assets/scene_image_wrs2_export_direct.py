@@ -1057,7 +1057,7 @@ def main(
                     # CGM - Should we use the Landsat time or the ALEXI time?
                     'system:time_start': landsat_info['properties']['system:time_start'],
                     # 'system:time_start': utils.millis(image_dt),
-                    # Other poperties
+                    # Other properties
                     # 'spacecraft_id': landsat_img.get('SATELLITE'),
                     # 'landsat': landsat,
                     # 'date': image_dt.strftime('%Y-%m-%d'),
