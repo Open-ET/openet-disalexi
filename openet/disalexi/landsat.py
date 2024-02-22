@@ -54,22 +54,27 @@ class Landsat(object):
             http://doi.org/10.1016/S0034-4257(00)00205-4
 
         """
-        albedo = self.input_image\
-            .select(['blue', 'red', 'nir', 'swir1', 'swir2'])\
+        albedo = (
+            self.input_image
+            .select(['blue', 'red', 'nir', 'swir1', 'swir2'])
             .multiply([0.356, 0.130, 0.373, 0.085, 0.072])
-        return albedo.select([0])\
-            .add(albedo.select([1])).add(albedo.select([2]))\
-            .add(albedo.select([3])).add(albedo.select([4]))\
-            .subtract(0.0018)\
+        )
+        return (
+            albedo.select([0]).add(albedo.select([1])).add(albedo.select([2]))
+            .add(albedo.select([3])).add(albedo.select([4])).subtract(0.0018)
             .rename(['albedo'])
+        )
 
         # # Using a sum reducer was returning an unbounded image
-        # return ee.Image(self.input_image)\
+        # # CGM - This could probably be fixed with a setDefaultProjection() call
+        # return (
+        #     ee.Image(self.input_image)\
         #     .select(['blue', 'red', 'nir', 'swir1', 'swir2'])\
         #     .multiply([0.356, 0.130, 0.373, 0.085, 0.072])\
         #     .reduce(ee.Reducer.sum())\
         #     .subtract(0.0018)\
         #     .rename(['albedo'])
+        # )
 
     # DEADBEEF - LAI is being read from a source image collection
     #   Leaving this method since it is currently used in emissivity calculation
@@ -92,12 +97,13 @@ class Landsat(object):
     @lazy_property
     def _emissivity(self):
         """METRIC narrowband emissivity"""
-        lai = self._lai
-        ndvi = self._ndvi
         # Initial values are for NDVI > 0 and LAI <= 3
-        return lai.divide(300).add(0.97) \
-            .where(ndvi.lte(0), 0.99) \
-            .where(ndvi.gt(0).And(lai.gt(3)), 0.98)
+        return (
+            self._lai.divide(300).add(0.97)
+            .where(self._ndvi.lte(0), 0.99)
+            .where(self._ndvi.gt(0).And(self._lai.gt(3)), 0.98)
+            .rename(['emissivity'])
+        )
 
     @lazy_property
     def _ndvi(self):
@@ -113,8 +119,7 @@ class Landsat(object):
         ndvi : ee.Image
 
         """
-        return ee.Image(self.input_image).normalizedDifference(['nir', 'red']) \
-            .rename(['ndvi'])
+        return ee.Image(self.input_image).normalizedDifference(['nir', 'red']).rename(['ndvi'])
 
 
 class Landsat_C01_SR(Landsat):
@@ -259,8 +264,8 @@ class Landsat_C02_SR(Landsat):
 
         """
         scalars_multi = [
-            0.0000275, 0.0000275, 0.0000275, 0.0000275, 0.0000275, 0.0000275,
-            0.00341802, 1]
+            0.0000275, 0.0000275, 0.0000275, 0.0000275, 0.0000275, 0.0000275, 0.00341802, 1,
+        ]
         scalars_add = [-0.2, -0.2, -0.2, -0.2, -0.2, -0.2, 149.0, 0]
 
         self.raw_image = ee.Image(raw_image)
@@ -284,14 +289,13 @@ class Landsat_C02_SR(Landsat):
                           'ST_B10', 'QA_PIXEL'],
         })
         # Rename bands to generic names
-        output_bands = [
-            'blue', 'green', 'red', 'nir', 'swir1', 'swir2',
-            'lst', 'QA_PIXEL']
+        output_bands = ['blue', 'green', 'red', 'nir', 'swir1', 'swir2', 'lst', 'QA_PIXEL']
 
-        self.input_image = ee.Image(self.raw_image) \
-            .select(input_bands.get(self._spacecraft_id), output_bands) \
-            .multiply(scalars_multi) \
-            .add(scalars_add)\
+        self.input_image = (
+            ee.Image(self.raw_image)
+            .select(input_bands.get(self._spacecraft_id), output_bands)
+            .multiply(scalars_multi)
+            .add(scalars_add)
             .set({
                 'system:time_start': self._time_start,
                 'system:index': self._index,
@@ -299,6 +303,7 @@ class Landsat_C02_SR(Landsat):
                 'SATELLITE': self._spacecraft_id,
                 'SPACECRAFT_ID': self._spacecraft_id,
             })
+        )
         super()
 
     def prep(self):
@@ -331,9 +336,13 @@ class Landsat_C02_SR(Landsat):
         return self.prep_image
 
     @lazy_property
-    def _cfmask(self, cirrus_flag=False, dilate_flag=False,
-                shadow_flag=True, snow_flag=True,
-                ):
+    def _cfmask(
+            self,
+            cirrus_flag=False,
+            dilate_flag=False,
+            shadow_flag=True,
+            snow_flag=True,
+            ):
         """Extract cloud mask from the Landsat Collection 2 SR QA_PIXEL band
 
         Parameters

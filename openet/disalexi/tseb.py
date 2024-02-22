@@ -277,9 +277,6 @@ def tseb_pt(
     r_x = tseb_utils.compute_r_x(
         u_attr=u_attr, hc=hc, F=lai, d0=d0, z0m=z0m, xl=leaf_width, leaf_c=leaf_c, fm_h=0
     )
-    # r_ah, r_s, r_x, u_attr = tseb_utils.compute_resistance(
-    #     u, t_air, t_air, hc, lai, d0, z0m, z0h, z_u, z_t, leaf_width, leaf,
-    #     leaf_s, leaf_c, 0, 0, 0)
 
     T_c = t_air.multiply(1)
     # DEADBEEF - In IDL, this calculation is in C, not K?
@@ -313,8 +310,6 @@ def tseb_pt(
         Rn_c = tseb_utils.compute_Rn_c(albedo_c, t_air, T_c_iter, T_s_iter, e_atm, Rs_c, F)
         Rn_s = tseb_utils.compute_Rn_s(albedo_s, t_air, T_c_iter, T_s_iter, e_atm, Rs_s, F)
         Rn = Rn_c.add(Rn_s)
-        # Rn_s, Rn_c, Rn = tseb_utils.compute_Rn(
-        #     albedo_c, albedo_s, t_air, T_c_iter, T_s_iter, e_atm, Rs_c, Rs_s, F)
 
         G = tseb_utils.compute_G0(Rn, Rn_s, albedo, ndvi, t_noon, time, EF_s_iter)
 
@@ -325,9 +320,9 @@ def tseb_pt(
                 {'f_green': f_green, 'a_pt': a_pt_iter, 'Ss': Ss, 'g': g, 'Rn_c': Rn_c})
             .max(0)
         )
+
         H_c_init = Rn_c.subtract(LE_c_init)
-        # H_c = albedo.expression(
-        #     'Rn_c - LE_c', {'Rn_c': Rn_c, 'LE_c': LE_c})
+        # H_c = albedo.expression('Rn_c - LE_c', {'Rn_c': Rn_c, 'LE_c': LE_c})
 
         T_c_iter = tseb_utils.temp_separation_tc(
             H_c_init, fc_q, t_air, t_rad, r_ah_iter, r_s_iter, r_x_iter, r_air, cp
@@ -336,8 +331,6 @@ def tseb_pt(
         T_ac = tseb_utils.temp_separation_tac(
             T_c_iter, T_s_iter, fc_q, t_air, r_ah_iter, r_s_iter, r_x_iter
         )
-        # T_c_iter, T_s_iter, T_ac = tseb_utils.temp_separation(
-        #     H_c, fc_q, t_air, t_rad, r_ah_iter, r_s_iter, r_x_iter, r_air, cp)
 
         H_s = albedo.expression(
             'r_air * cp * (T_s - T_ac) / r_s',
@@ -351,8 +344,7 @@ def tseb_pt(
 
         LE_s = Rn_s.subtract(G).subtract(H_s)
         LE_c = Rn_c.subtract(H_c)
-        # LE_s = albedo.expression(
-        #     'Rn_s - G - H_s', {'Rn_s': Rn_s, 'G': G, 'H_s': H_s})
+        # LE_s = albedo.expression('Rn_s - G - H_s', {'Rn_s': Rn_s, 'G': G, 'H_s': H_s})
         # LE_c = albedo.expression('Rn_c - H_c', {'Rn_c': Rn_c, 'H_c': H_c})
 
         # CGM - Is there a reason this isn't up with the H calculation?
@@ -369,25 +361,18 @@ def tseb_pt(
         fh = tseb_utils.compute_stability_fh(H, t_rad, u_attr_iter, r_air, z_t, d0, cp)
         fm = tseb_utils.compute_stability_fm(H, t_rad, u_attr_iter, r_air, z_u, d0, z0m, cp)
         fm_h = tseb_utils.compute_stability_fm_h(H, t_rad, u_attr_iter, r_air, hc, d0, z0m, cp)
-        # CGM - z0h is not used in this function, should it be?
-        # fm, fh, fm_h = tseb_utils.compute_stability(
-        #     H, t_rad, r_air, cp, u_attr, z_u, z_t, hc, d0, z0m, z0h
-        # )
 
         u_attr_iter = tseb_utils.compute_u_attr(u=u, d0=d0, z0m=z0m, z_u=z_u, fm=fm)
         r_ah_iter = tseb_utils.compute_r_ah(u_attr=u_attr_iter, d0=d0, z0h=z0h, z_t=z_t, fh=fh)
         r_s_iter = tseb_utils.compute_r_s(
             u_attr=u_attr_iter, T_s=T_s_iter, T_c=T_c_iter, hc=hc, F=lai,
-            d0=d0, z0m=z0m, leaf=leaf, leaf_s=leaf_s, fm_h=fm_h
+            d0=d0, z0m=z0m, leaf=leaf, leaf_s=leaf_s, fm_h=fm_h,
         )
         # CGM - Why is this function is passing "lai" to "F"?
         r_x_iter = tseb_utils.compute_r_x(
             u_attr=u_attr_iter, hc=hc, F=lai, d0=d0, z0m=z0m,
-            xl=leaf_width, leaf_c=leaf_c, fm_h=fm_h
+            xl=leaf_width, leaf_c=leaf_c, fm_h=fm_h,
         )
-        # r_ah_iter, r_s_iter, r_x_iter, u_attr_iter = tseb_utils.compute_resistance(
-        #     u, T_s_iter, T_c_iter, hc, lai, d0, z0m, z0h, z_u, z_t,
-        #     leaf_width, leaf, leaf_s, leaf_c, fm, fh, fm_h)
 
         a_pt_iter = (
             a_pt_iter
@@ -395,13 +380,11 @@ def tseb_pt(
             .where(a_pt_iter.lte(0), 0.01)
         )
 
-        den_s = albedo.expression('Rn_s - G', {'Rn_s': Rn_s, 'G': G})
+        den_s = Rn_s.subtract(G)
         den_s = den_s.updateMask(den_s.neq(0))
         # den_s[den_s == 0.] = np.nan
 
         EF_s_iter = LE_s.divide(den_s)
-        # EF_s_iter = albedo.expression(
-        #     'LE_s / den_s', {'LE_s': LE_s, 'den_s': den_s})
 
         return ee.Dictionary({
             'a_pt': a_pt_iter, 'EF_s': EF_s_iter, 'G': G,
@@ -672,10 +655,9 @@ def tseb_invert(
         '1.0 / ((log((z_U - D0) / z0m)) * (log((z_U - D0) / z0m)))',
         {'z_U': z_u, 'D0': d0, 'z0m': z0m}
     )
-    #further for z0m
+    # Further for z0m
     z0m = et_alexi.expression(
-        '(z_U - D0) / (exp(1. / sqrt(z0m)))',
-        {'z_U': z_u, 'D0': d0, 'z0m': z0m}
+        '(z_U - D0) / (exp(1.0 / sqrt(z0m)))', {'z_U': z_u, 'D0': d0, 'z0m': z0m}
     )
     # redefine z0h
     z0h = z0m.add(0)
@@ -712,8 +694,7 @@ def tseb_invert(
 
     # Slope of the saturation vapor pressure [kPa] (FAO56 3-9)
     Ss = t_air.expression(
-        '4098. * e_s / (((t_air - 273.16) + 237.3) ** 2)',
-        {'e_s': e_s, 't_air': t_air}
+        '4098. * e_s / (((t_air - 273.16) + 237.3) ** 2)', {'e_s': e_s, 't_air': t_air}
     )
 
     # Latent heat of vaporization (~2.45 at 20 C) [MJ kg-1] (FAO56 3-1)
@@ -752,6 +733,7 @@ def tseb_invert(
     # p = t_air.expression(
     #     '101.3 * (((t_air - (0.0065 * z)) / t_air) ** 5.26)',
     #     {'t_air': t_air, 'z': z})
+
     # Density of air? (kg m-3)
     r_air = t_air.expression(
         '101.3 * (((t_air - (0.0065 * z)) / t_air) ** 5.26) / 1.01 / t_air / 0.287',
@@ -772,9 +754,6 @@ def tseb_invert(
     r_x = tseb_utils.compute_r_x(
         u_attr=u_attr, hc=hc, F=lai, d0=d0, z0m=z0m, xl=leaf_width, leaf_c=leaf_c, fm_h=0
     )
-    # r_ah, r_s, r_x, u_attr = tseb_utils.compute_resistance(
-    #     u, t_air, t_air, hc, lai, d0, z0m, z0h, z_u, z_t, leaf_width, leaf,
-    #     leaf_s, leaf_c, 0, 0, 0)
 
     T_c = t_air.multiply(1)
     # DEADBEEF - In IDL, this calculation is in C, not K?
@@ -784,7 +763,8 @@ def tseb_invert(
     )
     # T_s = lai.expression(
     #     '(t_rad - (fc_q * T_c)) / (1 - fc_q)',
-    #     {'t_rad': t_rad, 'T_c': T_c, 'fc_q': fc_q})
+    #     {'t_rad': t_rad, 'T_c': T_c, 'fc_q': fc_q}
+    # )
 
     # CGM - Initialize to match t_air shape
     # This doesn't seem to do anything, commenting out for now
@@ -805,14 +785,14 @@ def tseb_invert(
         u_attr_iter = ee.Image(ee.Dictionary(prev).get('u_attr'))
         ta_iter = ee.Image(ee.Dictionary(prev).get('ta'))
         #ta_iter=t_air # test tair not change
-        #Yun whether tair changes in each iteration???
+
+        # Yun whether tair changes in each iteration???
         Rn_c = tseb_utils.compute_Rn_c(albedo_c, ta_iter, T_c_iter, T_s_iter, e_atm, Rs_c, F)
         Rn_s = tseb_utils.compute_Rn_s(albedo_s, ta_iter, T_c_iter, T_s_iter, e_atm, Rs_s, F)
         Rn = Rn_c.add(Rn_s)
-        # Rn_s, Rn_c, Rn = tseb_utils.compute_Rn(
-        #     albedo_c, albedo_s, t_air, T_c_iter, T_s_iter, e_atm, Rs_c, Rs_s, F)
 
         G = tseb_utils.compute_G0(Rn, Rn_s, albedo, ndvi, t_noon, time, EF_s_iter)
+
         # Yun - use the ALEXI ET to get daily LE and then to get H
         H = Rn.subtract(LEtot).subtract(G)
 
@@ -824,14 +804,12 @@ def tseb_invert(
             .max(0)
         )
         H_c_init = Rn_c.subtract(LE_c_init)
-        # H_c = albedo.expression(
-        #     'Rn_c - LE_c', {'Rn_c': Rn_c, 'LE_c': LE_c})
+        # H_c = albedo.expression('Rn_c - LE_c', {'Rn_c': Rn_c, 'LE_c': LE_c})
         H_s = H.subtract(H_c_init)
 
         LE_s = Rn_s.subtract(G).subtract(H_s)
 
-        # CGM - This won't doing anything at this position in the code.
-        #   Commenting out for now.
+        # CGM - This won't do anything at this position in the code. Commenting out for now.
         # r_ah_iter = r_ah_iter.where(r_ah_iter.eq(0), 10.0)
 
         # CGM - This doesn't seem to do anything, commenting out for now
@@ -841,10 +819,6 @@ def tseb_invert(
         fh = tseb_utils.compute_stability_fh(H, t_rad, u_attr_iter, r_air, z_t, d0, cp)
         fm = tseb_utils.compute_stability_fm(H, t_rad, u_attr_iter, r_air, z_u, d0, z0m, cp)
         fm_h = tseb_utils.compute_stability_fm_h(H, t_rad, u_attr_iter, r_air, hc, d0, z0m, cp)
-        # CGM - z0h is not used in this function, should it be?
-        # fm, fh, fm_h = tseb_utils.compute_stability(
-        #     H, t_rad, r_air, cp, u_attr, z_u, z_t, hc, d0, z0m, z0h
-        # )
 
         u_attr_iter = tseb_utils.compute_u_attr(u=u, d0=d0, z0m=z0m, z_u=z_u, fm=fm)
         r_ah_iter = tseb_utils.compute_r_ah(u_attr=u_attr_iter, d0=d0, z0h=z0h, z_t=z_t, fh=fh)
@@ -857,10 +831,6 @@ def tseb_invert(
             u_attr=u_attr_iter, hc=hc, F=lai, d0=d0, z0m=z0m,
             xl=leaf_width, leaf_c=leaf_c, fm_h=fm_h
         )
-        # r_ah_iter, r_s_iter, r_x_iter, u_attr_iter = tseb_utils.compute_resistance(
-        #     u, T_s_iter, T_c_iter, hc, lai, d0, z0m, z0h, z_u, z_t,
-        #     leaf_width, leaf, leaf_s, leaf_c, fm, fh, fm_h
-        # )
 
         T_c_iter = tseb_utils.temp_separation_tc(
             H_c_init, fc_q, ta_iter, t_rad, r_ah_iter, r_s_iter, r_x_iter, r_air, cp
@@ -869,9 +839,6 @@ def tseb_invert(
         T_ac = tseb_utils.temp_separation_tac(
             T_c_iter, T_s_iter, fc_q, ta_iter, r_ah_iter, r_s_iter, r_x_iter
         )
-        # T_c_iter, T_s_iter, T_ac = tseb_utils.temp_separation(
-        #     H_c, fc_q, t_air, t_rad, r_ah_iter, r_s_iter, r_x_iter, r_air, cp)
-        # Yun back to the Tair
         ta_iter = T_ac.subtract(H.multiply(r_ah_iter).divide(r_air.multiply(1004.16)))
 
         a_pt_iter = (
@@ -880,13 +847,11 @@ def tseb_invert(
             .where(a_pt_iter.lte(0), 0.01)
         )
 
-        den_s = albedo.expression('Rn_s - G', {'Rn_s': Rn_s, 'G': G})
+        den_s = Rn_s.subtract(G)
         den_s = den_s.updateMask(den_s.neq(0))
         # den_s[den_s == 0.] = np.nan
 
         EF_s_iter = LE_s.divide(den_s)
-        # EF_s_iter = albedo.expression(
-        #     'LE_s / den_s', {'LE_s': LE_s, 'den_s': den_s})
 
         return ee.Dictionary({
             'a_pt': a_pt_iter, 'EF_s': EF_s_iter, 'G': G,
@@ -903,21 +868,29 @@ def tseb_invert(
         'Rn_c': ee.Image(0), 'Rn_s': ee.Image(0),
         'r_ah': r_ah, 'r_s': r_s, 'r_x': r_x, 'rs_1': rs_1,
         'T_ac': ee.Image(0), 'T_c': T_c, 'T_s': T_s,
-        'u_attr': u_attr, 'ta': t_air
+        'u_attr': u_attr, 'ta': t_air,
     })
     iter_output = ee.Dictionary(
         ee.List.sequence(1, stabil_iter).iterate(iter_func, input_images)
     )
 
-    # Unpack the iteration output
-    # a_pt = ee.Image(iter_output.get('a_pt'))
-    # Rn_c = ee.Image(iter_output.get('Rn_c'))
-    # Rn_s = ee.Image(iter_output.get('Rn_s'))
-    # G = ee.Image(iter_output.get('G'))
-    # LE_c = ee.Image(iter_output.get('LE_c'))
-    # LE_s = ee.Image(iter_output.get('LE_s'))
+    # Extract the Ta from the iteration output
     ta = ee.Image(iter_output.get('ta'))
     ta = ta.updateMask(ta.gte(173.16))
     ta = ta.updateMask(ta.lte(473.16))
+
+    # # Uncomment to extract the other iteration variables
+    # a_pt = ee.Image(iter_output.get('a_pt'))
+    # EF_s = ee.Image(iter_output.get('EF_s'))
+    # G = ee.Image(iter_output.get('G'))
+    # Rn_c = ee.Image(iter_output.get('Rn_c'))
+    # Rn_s = ee.Image(iter_output.get('Rn_s'))
+    # r_ah = ee.Image(iter_output.get('r_ah'))
+    # r_s = ee.Image(iter_output.get('r_s'))
+    # r_x = ee.Image(iter_output.get('r_x'))
+    # T_ac = ee.Image(iter_output.get('T_ac'))
+    # T_c = ee.Image(iter_output.get('T_c'))
+    # T_s = ee.Image(iter_output.get('T_s'))
+    # u_attr = ee.Image(iter_output.get('u_attr'))
 
     return ta.rename(['ta'])

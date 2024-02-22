@@ -38,8 +38,8 @@ class Image(object):
             image,
             ta_source='CONUS_V006',
             alexi_source='CONUS_V006',
-            lai_source='projects/earthengine-legacy/assets/projects/openet/lai/landsat/c02_unsat',
-            tir_source='projects/earthengine-legacy/assets/projects/openet/tir/landsat/c02',
+            lai_source='projects/openet/assets/lai/landsat/c02',
+            tir_source='projects/openet/assets/tir/landsat/c02',
             elevation_source='USGS/SRTMGL1_003',
             landcover_source='USGS/NLCD_RELEASES/2019_REL/NLCD',
             ta0_source='CFSR',
@@ -654,6 +654,22 @@ class Image(object):
         """Leaf Area Index (LAI)"""
         if utils.is_number(self.lai_source):
             lai_img = ee.Image.constant(float(self.lai_source))
+        elif (type(self.lai_source) is str and
+              self.lai_source.lower() in ['openet-landsat-lai', 'openet-lai', 'openet.lai']):
+            import openet.lai
+            # The LAI module only accepts python strings as input for the image ID
+            # Calling .getInfo() here to avoid needing to modify the LAI module (for now)
+            # This will make it NOT possible to map this function
+            #   and in the long run the LAI module should be modified to support either
+            #   ee.Strings or ee.Images
+            lai_img = openet.lai.Landsat(utils.getinfo(self.id)).lai(nonveg=True)
+            # lai_img = openet.lai.Landsat(utils.getinfo(self.index)).lai(nonveg=True)
+
+            # This approach for getting the version will only work with the new LAI v0.2.0
+            #   that was built with a pyproject.toml and pins DisALEXI to Python 3.8+
+            from importlib import metadata
+            self.landsat_lai_version = metadata.metadata('openet-landsat-lai')['Version']
+            
         elif type(self.lai_source) is str:
             # Assumptions (for now)
             #   String lai_source is an image collection ID
@@ -1135,7 +1151,7 @@ class Image(object):
         self.leaf_width = lc_remap(self.lc_source, self.lc_type, 'xl')
         self.clump = lc_remap(self.lc_source, self.lc_type, 'omega')
 
-    # DEADBEEF - Not used any more
+    # DEADBEEF - Not used any more and will be removed at some point
     # # Helper functions for computing Ta (and ET)
     # def ta_coarse(self, ta_img, threshold=0.5):
     #     """Compute the air temperature for each ALEXI ET cell that minimizes
@@ -1198,11 +1214,7 @@ class Image(object):
         # Compute the initial Ta from the meteorology
         # Round to the nearest 10th
         # Decide what this band should be called in the output image
-        ta_direct_img = (
-            self.ta_direct()
-            .multiply(10).round().divide(10)
-            .rename(['ta_direct'])
-        )
+        ta_direct_img = self.ta_direct().multiply(10).round().divide(10).rename(['ta_direct'])
 
         # Compute the Ta 1k steps from the initial Ta image
         ta_1k_steps_img = self.ta_mosaic(

@@ -10,18 +10,21 @@ import openet.disalexi.utils as utils
 # Default property values
 l8_properties = {
     'system:time_start': 1404839150550, 'system:index': 'LC08_028031_20140708',
-    'SPACECRAFT_ID': 'LANDSAT_8', 'SATELLITE': 'LANDSAT_8'}
+    'SPACECRAFT_ID': 'LANDSAT_8', 'SATELLITE': 'LANDSAT_8',
+}
 l7_properties = {
     'system:time_start': 992192137355, 'system:index': 'LE07_028031_20010610',
-    'SPACECRAFT_ID': 'LANDSAT_7', 'SATELLITE': 'LANDSAT_7'}
+    'SPACECRAFT_ID': 'LANDSAT_7', 'SATELLITE': 'LANDSAT_7',
+}
 l5_properties = {
     'system:time_start': 988735571649, 'system:index': 'LT05_028031_20010501',
-    'SPACECRAFT_ID': 'LANDSAT_5', 'SATELLITE': 'LANDSAT_5'}
+    'SPACECRAFT_ID': 'LANDSAT_5', 'SATELLITE': 'LANDSAT_5',
+}
 
 landsat_c01_sr_scalars = [0.0001, 0.0001, 0.0001, 0.0001, 0.0001, 0.0001, 0.1, 1]
 landsat_c02_sr_scalars_multi = [
-    0.0000275, 0.0000275, 0.0000275, 0.0000275, 0.0000275, 0.0000275,
-    0.00341802, 1]
+    0.0000275, 0.0000275, 0.0000275, 0.0000275, 0.0000275, 0.0000275, 0.00341802, 1
+]
 landsat_c02_sr_scalars_add = [-0.2, -0.2, -0.2, -0.2, -0.2, -0.2, 149.0, 1]
 
 
@@ -207,15 +210,17 @@ def test_Landsat_C02_SR_albedo(blue, green, red, nir, swir1, swir2, tol=0.000001
     """
     expected = sum([a * b for a, b in zip(
         [blue, red, nir, swir1, swir2, 1],
-        [0.356, 0.130, 0.373, 0.085, 0.072, -0.0018])])
+        [0.356, 0.130, 0.373, 0.085, 0.072, -0.0018]
+    )])
 
     # Undo the scalars that are applied in the init
-    raw_img = ee.Image.constant([blue, green, red, nir, swir1, swir2, 300, 0]) \
-        .rename(['SR_B2', 'SR_B3', 'SR_B4', 'SR_B5', 'SR_B6', 'SR_B7', 'ST_B10',
-                 'QA_PIXEL']) \
-        .subtract(landsat_c02_sr_scalars_add) \
-        .divide(landsat_c02_sr_scalars_multi) \
+    raw_img = (
+        ee.Image.constant([blue, green, red, nir, swir1, swir2, 300, 0])
+        .rename(['SR_B2', 'SR_B3', 'SR_B4', 'SR_B5', 'SR_B6', 'SR_B7', 'ST_B10', 'QA_PIXEL'])
+        .subtract(landsat_c02_sr_scalars_add)
+        .divide(landsat_c02_sr_scalars_multi)
         .set(l8_properties)
+    )
     albedo = ee.Image(landsat.Landsat_C02_SR(ee.Image(raw_img))._albedo)
     assert abs(utils.constant_image_value(albedo)['albedo'] - expected) <= tol
 
@@ -235,10 +240,11 @@ def test_Landsat_C02_SR_albedo(blue, green, red, nir, swir1, swir2, tol=0.000001
     ]
 )
 def test_Landsat_C02_SR_cfmask(pixel_qa, expected):
-    input_img = ee.Image.constant([0.2, 0, 0, 0, 0, 0, 300, int(pixel_qa, 2)]) \
-        .rename(['SR_B2', 'SR_B3', 'SR_B4', 'SR_B5', 'SR_B6', 'SR_B7', 'ST_B10',
-                 'QA_PIXEL']) \
+    input_img = (
+        ee.Image.constant([0.2, 0, 0, 0, 0, 0, 300, int(pixel_qa, 2)])
+        .rename(['SR_B2', 'SR_B3', 'SR_B4', 'SR_B5', 'SR_B6', 'SR_B7', 'ST_B10', 'QA_PIXEL'])
         .set(l8_properties)
+    )
     cfmask = ee.Image(landsat.Landsat_C02_SR(input_img)._cfmask)
     assert utils.constant_image_value(cfmask)['cfmask'] == expected
 
@@ -247,12 +253,13 @@ def test_Landsat_C02_SR_cfmask(pixel_qa, expected):
 #   Leaving this test since existing lai method is used in emissivity calculation
 def test_Landsat_C02_SR_lai(red=0.2, nir=0.7, expected=1.200, tol=0.001):
     # Undo the scalars that are applied in the init
-    input_img = ee.Image.constant([0.2, 0.2, red, nir, 0.2, 0.2, 300, 0]) \
-        .rename(['SR_B2', 'SR_B3', 'SR_B4', 'SR_B5', 'SR_B6', 'SR_B7', 'ST_B10',
-                 'QA_PIXEL']) \
-        .subtract(landsat_c02_sr_scalars_add) \
-        .divide(landsat_c02_sr_scalars_multi) \
+    input_img = (
+        ee.Image.constant([0.2, 0.2, red, nir, 0.2, 0.2, 300, 0])
+        .rename(['SR_B2', 'SR_B3', 'SR_B4', 'SR_B5', 'SR_B6', 'SR_B7', 'ST_B10', 'QA_PIXEL'])
+        .subtract(landsat_c02_sr_scalars_add)
+        .divide(landsat_c02_sr_scalars_multi)
         .set(l8_properties)
+    )
     lai = ee.Image(landsat.Landsat_C02_SR(input_img)._lai)
     assert abs(utils.constant_image_value(lai)['lai'] - expected) <= tol
 
@@ -268,22 +275,24 @@ def test_Landsat_C02_SR_lai(red=0.2, nir=0.7, expected=1.200, tol=0.001):
 # )
 # def test_Landsat_C02_SR_lst(red, nir, bt, expected, tol=0.001):
 #     """Test that different emissivity values (from NDVI & LAI) change LST"""
-#     input_img = ee.Image.constant([0.2, 0.2, red, nir, 0.2, 0.2, bt, 0]) \
-#         .rename(['SR_B2', 'SR_B3', 'SR_B4', 'SR_B5', 'SR_B6', 'SR_B7', 'ST_B10',
-#                  'QA_PIXEL']) \
-#         .subtract(landsat_c02_sr_scalars_add) \
-#         .divide(landsat_c02_sr_scalars_multi) \
+#     input_img = (
+#         ee.Image.constant([0.2, 0.2, red, nir, 0.2, 0.2, bt, 0])
+#         .rename(['SR_B2', 'SR_B3', 'SR_B4', 'SR_B5', 'SR_B6', 'SR_B7', 'ST_B10', 'QA_PIXEL'])
+#         .subtract(landsat_c02_sr_scalars_add)
+#         .divide(landsat_c02_sr_scalars_multi)
 #         .set(l8_properties)
+#     )
 #     lst = ee.Image(landsat.Landsat_C02_SR(input_img)._lst)
 #     assert abs(utils.constant_image_value(lst)['lst'] - expected) <= tol
 
 
 def test_Landsat_C02_SR_ndvi(red=0.2, nir=0.7, expected=0.5556, tol=0.001):
-    input_img = ee.Image.constant([0.2, 0.2, red, nir, 0.2, 0.2, 300, 0]) \
-        .rename(['SR_B2', 'SR_B3', 'SR_B4', 'SR_B5', 'SR_B6', 'SR_B7', 'ST_B10',
-                 'QA_PIXEL']) \
-        .subtract(landsat_c02_sr_scalars_add) \
-        .divide(landsat_c02_sr_scalars_multi) \
+    input_img = (
+        ee.Image.constant([0.2, 0.2, red, nir, 0.2, 0.2, 300, 0])
+        .rename(['SR_B2', 'SR_B3', 'SR_B4', 'SR_B5', 'SR_B6', 'SR_B7', 'ST_B10', 'QA_PIXEL'])
+        .subtract(landsat_c02_sr_scalars_add)
+        .divide(landsat_c02_sr_scalars_multi)
         .set(l8_properties)
+    )
     ndvi = ee.Image(landsat.Landsat_C02_SR(input_img)._ndvi)
     assert abs(utils.constant_image_value(ndvi)['ndvi'] - expected) <= tol

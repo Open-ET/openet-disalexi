@@ -37,7 +37,7 @@ def default_image(
             'system:index': SCENE_ID,
             'system:time_start': SCENE_TIME,
             # 'system:time_start': ee.Date(SCENE_DATE).millis(),
-            'system:id': COLL_ID + SCENE_ID,
+            'system:id': f'{COLL_ID}/{SCENE_ID}',
         })
 )
 
@@ -167,7 +167,7 @@ def test_Image_ta_mosaic_interpolate(ta_init=290, step_size=5, step_count=4):
         step_size=step_size, step_count=step_count)
     ta_interp = d_obj.ta_mosaic_interpolate(ta_mosaic_img)
     output = utils.point_image_value(ta_interp, TEST_POINT)
-    assert abs(output['ta'] - 290) < 10
+    assert abs(output['ta_interp'] - 290) < 10
 
 
 @pytest.mark.parametrize(
@@ -187,7 +187,6 @@ def test_Image_ta_mosaic_min_bias_values(ta_values, bias_values, expected):
     ta_mosaic_img = ee.Image(ta_images + bias_images)
     ta_interp = d_obj.ta_mosaic_min_bias(ta_mosaic_img)
     output = utils.point_image_value(ta_interp, TEST_POINT)
-    print(output)
     assert abs(output['ta'] - expected) < 1
 
 
@@ -201,8 +200,10 @@ def test_Image_ta_mosaic_min_bias_values(ta_values, bias_values, expected):
         [[280, 285, 290, 295, 300], [1, 2, 3, 4, 5], 280],
         # Test multiple negative to positive bias transitions
         [[270, 275, 280, 285, 290, 295, 300, 305], [-2, -0.1, 0.1, -2, -1, 1, 3, 4], 293.33],
-        # Pixels with all negative biases are masked in interpolate function
-        [[280, 285, 290, 295, 300], [-5, -4, -3, -2, -1], None],
+        # In the original 10k processing, pixels with all negative biases were masked
+        # This is commented out for now but may be added back in and should be tested for
+        [[280, 285, 290, 295, 300], [-5, -4, -3, -2, -1], 300],
+        # [[280, 285, 290, 295, 300], [-5, -4, -3, -2, -1], None],
     ]
 )
 def test_Image_ta_mosaic_interpolate_values(ta_values, bias_values, expected):
@@ -214,11 +215,10 @@ def test_Image_ta_mosaic_interpolate_values(ta_values, bias_values, expected):
     ta_mosaic_img = ee.Image(ta_images + bias_images)
     ta_interp = d_obj.ta_mosaic_interpolate(ta_mosaic_img)
     output = utils.point_image_value(ta_interp, TEST_POINT)
-    print(output)
     if expected is None:
-        assert output['ta'] is None
+        assert output['ta_interp'] is None
     else:
-        assert abs(output['ta'] - expected) < 1
+        assert abs(output['ta_interp'] - expected) < 1
 
 
 def test_Image_set_landcover_vars_default(tol=1E-6):

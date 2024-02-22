@@ -11,6 +11,7 @@ import openet.disalexi.utils as utils
 
 COLL_ID = 'LANDSAT/LC08/C02/T1_L2'
 SCENE_ID = 'LC08_044033_20170716'
+IMAGE_ID = f'{COLL_ID}/{SCENE_ID}'
 SCENE_TIME = 1500230731090
 # SCENE_ID = 'LC08_042035_20150713'
 # SCENE_TIME = 1436812419150
@@ -29,8 +30,7 @@ TEST_POINT = (-121.5265, 38.7399)
 
 # SCENE_TIME = utils.getinfo(ee.Date(SCENE_DATE).millis())
 # SCENE_POINT = (-19.44252382373145, 36.04047742246546)
-# SCENE_POINT = utils.getinfo(
-#     ee.Image(f'{COLL_ID}/{SCENE_ID}').geometry().centroid())['coordinates']
+# SCENE_POINT = utils.getinfo(ee.Image(IMAGE_ID).geometry().centroid())['coordinates']
 
 
 # # Should these be test fixtures instead?
@@ -141,8 +141,8 @@ def test_Image_init_default_parameters():
     m = disalexi.Image(default_image())
     assert m.ta_source == 'CONUS_V006'
     assert m.alexi_source == 'CONUS_V006'
-    assert m.lai_source == 'projects/earthengine-legacy/assets/projects/openet/lai/landsat/c02_unsat'
-    assert m.tir_source == 'projects/earthengine-legacy/assets/projects/openet/tir/landsat/c02'
+    assert m.lai_source == 'projects/openet/assets/lai/landsat/c02'
+    assert m.tir_source == 'projects/openet/assets/tir/landsat/c02'
     assert m.elevation_source == 'USGS/SRTMGL1_003'
     assert m.landcover_source == 'USGS/NLCD_RELEASES/2019_REL/NLCD'
     assert m.airpressure_source == 'CFSR'
@@ -200,7 +200,7 @@ def test_Image_init_date_properties():
 #     assert output['bands'][0]['id'] == 'ndvi'
 #     assert output['properties']['system:index'] == SCENE_ID
 #     assert output['properties']['system:time_start'] == SCENE_TIME
-#     assert output['properties']['image_id'] == COLL_ID + SCENE_ID
+#     assert output['properties']['image_id'] == IMAGE_ID
 #
 #
 # def test_Image_lst_properties():
@@ -209,7 +209,7 @@ def test_Image_init_date_properties():
 #     assert output['bands'][0]['id'] == 'lst'
 #     assert output['properties']['system:index'] == SCENE_ID
 #     assert output['properties']['system:time_start'] == SCENE_TIME
-#     assert output['properties']['image_id'] == COLL_ID + SCENE_ID
+#     assert output['properties']['image_id'] == IMAGE_ID
 
 
 @pytest.mark.parametrize(
@@ -269,7 +269,7 @@ def test_Image_ta_properties():
     assert output['bands'][0]['id'] == 'ta'
     assert output['properties']['system:index'] == SCENE_ID
     assert output['properties']['system:time_start'] == SCENE_TIME
-    assert output['properties']['image_id'] == COLL_ID + SCENE_ID
+    assert output['properties']['image_id'] == IMAGE_ID
    # assert output['properties']['ta_iteration'] > 0
 
 
@@ -303,7 +303,7 @@ def test_Image_ta_properties():
 )
 def test_Image_alexi_source(scene_id, source, xy, expected, tol=0.0001):
     if scene_id:
-        scene_time = ee.Image(COLL_ID + scene_id).get('system:time_start').getInfo()
+        scene_time = ee.Image(f'{COLL_ID}/{scene_id}').get('system:time_start').getInfo()
     else:
         scene_time = None
     output = utils.point_image_value(disalexi.Image(
@@ -559,6 +559,91 @@ def test_Image_windspeed_band_name():
     assert output == 'windspeed'
 
 
+def test_Image_lai_band_name():
+    output = utils.getinfo(disalexi.Image(default_image()).lai)['bands'][0]['id']
+    assert output == 'lai'
+
+
+@pytest.mark.parametrize(
+    'source, xy, expected',
+    [
+        ['projects/openet/assets/lai/landsat/c02', TEST_POINT, 3.6301],
+        ['projects/openet/assets/lai/landsat/c02', [-121.50822, 38.71776], 0.5750],
+        # CGM - These collections will be removed in the future
+        # ['projects/earthengine-legacy/assets/projects/openet/lai/landsat/c02_unsat', TEST_POINT, 3.6301],
+        # ['projects/earthengine-legacy/assets/projects/openet/lai/landsat/c02_unsat', [-121.50822, 38.71776], 0.5750],
+        ['openet-landsat-lai', TEST_POINT, 3.6301],
+        ['OPENET-LAI', TEST_POINT, 3.6301],
+        ['4.123', TEST_POINT, 4.123],
+        [4.123, TEST_POINT, 4.123],
+    ]
+)
+def test_Image_lai_source(source, xy, expected, tol=0.0001):
+    output = utils.point_image_value(disalexi.Image(default_image(), lai_source=source).lai, xy)
+    assert abs(output['lai'] - expected) <= tol
+
+
+@pytest.mark.parametrize(
+    'source',
+    [
+        'projects/openet/assets/lai/landsat/c02',
+        'openet-landsat-lai',
+        # 4.123,
+    ]
+)
+def test_Image_lai_version_property(source):
+    # Trigger building the LAI in order to set the landsat_lai_version
+    model_obj = disalexi.Image(default_image(), lai_source=source)
+    lai_img = model_obj.lai
+    assert model_obj.landsat_lai_version
+
+
+# @pytest.mark.parametrize(
+#     'xy, expected',
+#     [
+#         [TEST_POINT, 4.234],
+#         [[-121.50822, 38.71776], 0.5791],
+#     ]
+# )
+# def test_Image_lai_values(xy, expected, tol=0.0001):
+#     output = utils.point_image_value(disalexi.Image(default_image()).lai, xy)
+#     assert abs(output['lai'] - expected) <= tol
+
+
+def test_Image_tir_band_name():
+    output = utils.getinfo(disalexi.Image(default_image()).tir)['bands'][0]['id']
+    assert output == 'tir'
+
+
+@pytest.mark.parametrize(
+    ' source, xy, expected',
+    [
+        ['projects/openet/assets/tir/landsat/c02', TEST_POINT, 306.5],
+        ['projects/openet/assets/tir/landsat/c02', [-121.50822, 38.71776], 323.6],
+        # CGM - These collections will be removed in the future
+        # ['projects/earthengine-legacy/assets/projects/openet/tir/landsat/c02', TEST_POINT, 306.5],
+        # ['projects/earthengine-legacy/assets/projects/openet/tir/landsat/c02', [-121.50822, 38.71776], 323.6],
+        ['300', TEST_POINT, 300],
+        [300, TEST_POINT, 300],
+    ]
+)
+def test_Image_tir_source(source, xy, expected, tol=0.0001):
+    output = utils.point_image_value(disalexi.Image(default_image(), tir_source=source).tir, xy)
+    assert abs(output['tir'] - expected) <= tol
+
+
+# @pytest.mark.parametrize(
+#     ' xy, expected',
+#     [
+#         [TEST_POINT, 306.5],
+#         [[-121.50822, 38.71776], 323.6],
+#     ]
+# )
+# def test_Image_tir_values(xy, expected, tol=0.0001):
+#     output = utils.point_image_value(disalexi.Image(default_image(), tir_source=source).tir, xy)
+#     assert abs(output['tir'] - expected) <= tol
+
+
 def test_Image_et_default_values(expected=5.625469759837161, tol=0.0001):
     output = utils.point_image_value(default_image_obj().et, TEST_POINT)
     assert abs(output['et'] - expected) <= tol
@@ -640,7 +725,7 @@ def test_Image_et_properties():
     assert output['bands'][0]['id'] == 'et'
     assert output['properties']['system:index'] == SCENE_ID
     assert output['properties']['system:time_start'] == SCENE_TIME
-    assert output['properties']['image_id'] == COLL_ID + SCENE_ID
+    assert output['properties']['image_id'] == IMAGE_ID
     # assert output['properties']['ta_iteration'] > 0
 
 
@@ -650,7 +735,7 @@ def test_Image_et_reference_properties():
     assert output['bands'][0]['id'] == 'et_reference'
     assert output['properties']['system:index'] == SCENE_ID
     assert output['properties']['system:time_start'] == SCENE_TIME
-    assert output['properties']['image_id'] == COLL_ID + SCENE_ID
+    assert output['properties']['image_id'] == IMAGE_ID
 
 
 def test_Image_et_reference_default_values(expected=10.0, tol=0.0001):
@@ -665,8 +750,8 @@ def test_Image_et_reference_default_values(expected=10.0, tol=0.0001):
     'source, band, xy, expected',
     [
         ['IDAHO_EPSCOR/GRIDMET', 'etr', TEST_POINT, 11.2],
-        ['projects/openet/assets/reference_et/california/cimis/daily/v1', 'etr', TEST_POINT, 10.124],
-        ['projects/openet/reference_et/california/cimis/daily/v1', 'etr', TEST_POINT, 10.124],
+        ['projects/openet/assets/reference_et/california/cimis/daily/v1', 'etr', TEST_POINT, 10.174],
+        ['projects/openet/reference_et/california/cimis/daily/v1', 'etr', TEST_POINT, 10.174],
         ['projects/climate-engine/cimis/daily', 'ETr_ASCE', TEST_POINT, 10.124],
         ['10.8985', None, TEST_POINT, 10.8985],
         [10.8985, None, TEST_POINT, 10.8985],
@@ -708,7 +793,7 @@ def test_Image_mask_properties():
     assert output['bands'][0]['id'] == 'mask'
     assert output['properties']['system:index'] == SCENE_ID
     assert output['properties']['system:time_start'] == SCENE_TIME
-    assert output['properties']['image_id'] == COLL_ID + SCENE_ID
+    assert output['properties']['image_id'] == IMAGE_ID
 
 
 def test_Image_time_point_values():
@@ -722,7 +807,7 @@ def test_Image_time_properties():
     assert output['bands'][0]['id'] == 'time'
     assert output['properties']['system:index'] == SCENE_ID
     assert output['properties']['system:time_start'] == SCENE_TIME
-    assert output['properties']['image_id'] == COLL_ID + SCENE_ID
+    assert output['properties']['image_id'] == IMAGE_ID
 
 
 def test_Image_calculate_variables_default():
@@ -759,7 +844,7 @@ def test_Image_calculate_properties():
     output =  utils.getinfo(default_image_obj().calculate(['ndvi']))
     assert output['properties']['system:index'] == SCENE_ID
     assert output['properties']['system:time_start'] == SCENE_TIME
-    assert output['properties']['image_id'] == COLL_ID + SCENE_ID
+    assert output['properties']['image_id'] == IMAGE_ID
 
 
 def test_Image_calculate_values(tol=0.0001):
@@ -787,7 +872,7 @@ def test_Image_calculate_variables_valueerror():
 # Landsat Collection 1 SR
 def test_Image_from_landsat_c1_sr_default_image():
     """Test that the classmethod is returning a class object"""
-    output = disalexi.Image.from_landsat_c1_sr(ee.Image(COLL_ID + SCENE_ID))
+    output = disalexi.Image.from_landsat_c1_sr(ee.Image(IMAGE_ID))
     assert type(output) == type(disalexi.Image(default_image()))
 
 
@@ -842,7 +927,7 @@ def test_Image_from_landsat_c1_sr_exception():
 # Landsat Collection 2 SR
 def test_Image_from_landsat_c2_sr_default_image():
     """Test that the classmethod is returning a class object"""
-    output = disalexi.Image.from_landsat_c2_sr(ee.Image(COLL_ID + SCENE_ID))
+    output = disalexi.Image.from_landsat_c2_sr(ee.Image(IMAGE_ID))
     assert type(output) == type(disalexi.Image(default_image()))
 
 

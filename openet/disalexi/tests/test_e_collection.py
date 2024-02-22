@@ -374,7 +374,8 @@ def test_Collection_overpass_no_variables_exception():
 @pytest.mark.parametrize('use_joins', [True, False])
 def test_Collection_interpolate_use_joins(use_joins):
     """Only checking if the parameter is accepted and runs for now"""
-    output = utils.getinfo(default_coll_obj().interpolate(use_joins=use_joins))
+    output = utils.getinfo(default_coll_obj().interpolate(
+        use_joins=use_joins, **interp_args))
     assert output['type'] == 'ImageCollection'
     assert parse_scene_id(output) == ['20170701']
 
@@ -571,7 +572,6 @@ def test_Collection_interpolate_no_variables_exception():
 )
 def test_Collection_get_image_ids(collections, scene_id_list):
     # get_image_ids method makes a getInfo call internally
-    output = default_coll_obj(collections=collections, variables=None)\
-        .get_image_ids()
+    output = default_coll_obj(collections=collections, variables=None).get_image_ids()
     assert type(output) is list
     assert set(x.split('/')[-1] for x in output) == set(scene_id_list)

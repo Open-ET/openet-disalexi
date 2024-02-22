@@ -285,8 +285,7 @@ def test_compute_r_ah(u_attr, d0, z0h, z_t, fh, expected, tol=1E-10):
          0.47368143806798, 0.10771802129930, 0, 84.57955576951095],
     ]
 )
-def test_compute_r_s(u_attr, T_s, T_c, hc, F, d0, z0m, leaf, leaf_s, fm_h,
-                     expected, tol=1E-10):
+def test_compute_r_s(u_attr, T_s, T_c, hc, F, d0, z0m, leaf, leaf_s, fm_h, expected, tol=1E-10):
     output_image = tseb_utils.compute_r_s(
         ee.Image.constant(u_attr), ee.Image.constant(T_s),
         ee.Image.constant(T_c), ee.Image.constant(hc), ee.Image.constant(F),
@@ -318,8 +317,7 @@ def test_compute_r_s(u_attr, T_s, T_c, hc, F, d0, z0m, leaf, leaf_s, fm_h,
          0, 40.04016661292570],
     ]
 )
-def test_compute_r_x(u_attr, hc, F, d0, z0m, xl, leaf_c, fm_h,
-                     expected, tol=1E-10):
+def test_compute_r_x(u_attr, hc, F, d0, z0m, xl, leaf_c, fm_h, expected, tol=1E-10):
     output_image = tseb_utils.compute_r_x(
         ee.Image.constant(u_attr), ee.Image.constant(hc), ee.Image.constant(F),
         ee.Image.constant(d0), ee.Image.constant(z0m), ee.Image.constant(xl),
@@ -348,8 +346,7 @@ def test_compute_r_x(u_attr, hc, F, d0, z0m, xl, leaf_c, fm_h,
          0.92213005065918, 231.40032270633148],
     ]
 )
-def test_compute_Rn_c(albedo_c, T_air, T_c, T_s, e_atm, Rs_c, F,
-                      expected, tol=1E-10):
+def test_compute_Rn_c(albedo_c, T_air, T_c, T_s, e_atm, Rs_c, F, expected, tol=1E-10):
     output_image = tseb_utils.compute_Rn_c(
         ee.Image.constant(albedo_c), ee.Image.constant(T_air),
         ee.Image.constant(T_c), ee.Image.constant(T_s),
@@ -379,8 +376,7 @@ def test_compute_Rn_c(albedo_c, T_air, T_c, T_s, e_atm, Rs_c, F,
          0.92213005065918, 365.85694730307142],
     ]
 )
-def test_compute_Rn_s(albedo_s, T_air, T_c, T_s, e_atm, Rs_s, F,
-                      expected, tol=1E-10):
+def test_compute_Rn_s(albedo_s, T_air, T_c, T_s, e_atm, Rs_s, F, expected, tol=1E-10):
     output_image = tseb_utils.compute_Rn_s(
         ee.Image.constant(albedo_s), ee.Image.constant(T_air),
         ee.Image.constant(T_c), ee.Image.constant(T_s),
@@ -410,8 +406,7 @@ def test_compute_Rn_s(albedo_s, T_air, T_c, T_s, e_atm, Rs_s, F,
          0.0, 120.07887402772921],
     ]
 )
-def test_compute_G0(Rn, Rn_s, albedo, ndvi, t_rise, t_end, time, EF_s,
-                    expected, tol=1E-10):
+def test_compute_G0(Rn, Rn_s, albedo, ndvi, t_rise, t_end, time, EF_s, expected, tol=1E-10):
     output_image = tseb_utils.compute_G0(
         ee.Image.constant(Rn), ee.Image.constant(Rn_s),
         ee.Image.constant(albedo), ee.Image.constant(ndvi),
@@ -448,8 +443,7 @@ def test_compute_G0(Rn, Rn_s, albedo, ndvi, t_rise, t_end, time, EF_s,
         [10, 0.99, 295, 400, 50, 100, 20, 1, 295+50],
     ]
 )
-def test_temp_separation_tc(H_c, fc_q, T_air, t0, r_ah, r_s, r_x, r_air,
-                            expected, tol=1E-10):
+def test_temp_separation_tc(H_c, fc_q, T_air, t0, r_ah, r_s, r_x, r_air, expected, tol=1E-10):
     output_image = tseb_utils.temp_separation_tc(
         ee.Image.constant(H_c), ee.Image.constant(fc_q), ee.Image.constant(T_air),
         ee.Image.constant(t0), ee.Image.constant(r_ah), ee.Image.constant(r_s),
@@ -481,8 +475,7 @@ def test_temp_separation_tc(H_c, fc_q, T_air, t0, r_ah, r_s, r_x, r_air,
         [10, 0.99, 295, 400, 295+50],
     ]
 )
-def test_temp_separation_ts(T_c, fc_q, T_air, t0,
-                            expected, tol=1E-10):
+def test_temp_separation_ts(T_c, fc_q, T_air, t0, expected, tol=1E-10):
     output_image = tseb_utils.temp_separation_ts(
         ee.Image.constant(T_c), ee.Image.constant(fc_q),
         ee.Image.constant(T_air), ee.Image.constant(t0))
@@ -510,8 +503,7 @@ def test_temp_separation_ts(T_c, fc_q, T_air, t0,
          40.04016661292570, 301.47772096219484],
     ]
 )
-def test_temp_separation_tac(T_c, T_s, fc_q, T_air, r_ah, r_s, r_x,
-                             expected, tol=1E-6):
+def test_temp_separation_tac(T_c, T_s, fc_q, T_air, r_ah, r_s, r_x, expected, tol=1E-6):
     output_image = tseb_utils.temp_separation_tac(
         ee.Image.constant(T_c), ee.Image.constant(T_s), ee.Image.constant(fc_q),
         ee.Image.constant(T_air), ee.Image.constant(r_ah),
@@ -544,8 +536,7 @@ def test_temp_separation_tac(T_c, T_s, fc_q, T_air, r_ah, r_s, r_x,
         #  0.39618403124601, 50.0, 0.18979610988896, 1.94460807517059],
     ]
 )
-def test_compute_stability_fh(H, t0, u_attr, r_air, z_t, d0, expected,
-                              tol=1E-10):
+def test_compute_stability_fh(H, t0, u_attr, r_air, z_t, d0, expected, tol=1E-10):
     output_image = tseb_utils.compute_stability_fh(
         ee.Image.constant(H), ee.Image.constant(t0), ee.Image.constant(u_attr),
         ee.Image.constant(r_air), ee.Image.constant(z_t), ee.Image.constant(d0))
@@ -583,8 +574,7 @@ def test_compute_stability_fh(H, t0, u_attr, r_air, z_t, d0, expected,
         #  1.15883632516281],
     ]
 )
-def test_compute_stability_fm(H, t0, u_attr, r_air, z_u, d0, z0m, expected,
-                              tol=1E-10):
+def test_compute_stability_fm(H, t0, u_attr, r_air, z_u, d0, z0m, expected, tol=1E-10):
     output_image = tseb_utils.compute_stability_fm(
         ee.Image.constant(H), ee.Image.constant(t0), ee.Image.constant(u_attr),
         ee.Image.constant(r_air), ee.Image.constant(z_u),
@@ -624,8 +614,7 @@ def test_compute_stability_fm(H, t0, u_attr, r_air, z_u, d0, z0m, expected,
         #  0.03501738227451, 0.00819727197171],
     ]
 )
-def test_compute_stability_fm_h(H, t0, u_attr, r_air, hc, d0, z0m, expected,
-                                tol=1E-10):
+def test_compute_stability_fm_h(H, t0, u_attr, r_air, hc, d0, z0m, expected, tol=1E-10):
     output_image = tseb_utils.compute_stability_fm_h(
         ee.Image.constant(H), ee.Image.constant(t0), ee.Image.constant(u_attr),
         ee.Image.constant(r_air), ee.Image.constant(hc), ee.Image.constant(d0),
