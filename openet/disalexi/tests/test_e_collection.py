@@ -13,8 +13,6 @@ import openet.disalexi.utils as utils
 # CGM - Scene LE07_044033_20170724 isn't loaded in collection 2 yet
 C02_COLLECTIONS = ['LANDSAT/LC08/C02/T1_L2', 'LANDSAT/LE07/C02/T1_L2']
 C02_SCENE_ID_LIST = sorted(['LC08_044033_20170716', 'LE07_044033_20170708'])
-# C01_SCENE_ID_LIST = sorted(['LC08_044033_20170716', 'LE07_044033_20170708',
-#                         'LE07_044033_20170724'])
 # TA_SOURCE = 'CONUS_V003'
 # LAI_SOURCE = 'projects/earthengine-legacy/assets/projects/openet/lai/landsat/c02_unsat'
 # TIR_SOURCE = 'projects/earthengine-legacy/assets/projects/openet/tir/landsat/c02'
@@ -95,13 +93,6 @@ def test_Collection_init_cloud_cover_max_str():
 @pytest.mark.parametrize(
     'coll_id, start_date, end_date',
     [
-        # ['LANDSAT/LT04/C01/T1_SR', '1981-01-01', '1982-01-01'],
-        # ['LANDSAT/LT04/C01/T1_SR', '1994-01-01', '1995-01-01'],
-        ['LANDSAT/LT05/C01/T1_SR', '1983-01-01', '1984-01-01'],
-        ['LANDSAT/LT05/C01/T1_SR', '2012-01-01', '2013-01-01'],
-        ['LANDSAT/LE07/C01/T1_SR', '1998-01-01', '1999-01-01'],
-        ['LANDSAT/LE07/C01/T1_SR', '2022-01-01', '2023-01-01'],
-        ['LANDSAT/LC08/C01/T1_SR', '2012-01-01', '2013-01-01'],
         # ['LANDSAT/LT04/C02/T1_L2', '1981-01-01', '1982-01-01'],
         # ['LANDSAT/LT04/C02/T1_L2', '1994-01-01', '1995-01-01'],
         ['LANDSAT/LT05/C02/T1_L2', '1983-01-01', '1984-01-01'],
@@ -213,12 +204,11 @@ def test_Collection_build_invalid_variable_exception():
 def test_Collection_build_dates():
     """Check that dates passed to build function override Class dates"""
     coll_obj = default_coll_obj(start_date='2017-08-01', end_date='2017-09-01')
-    output = utils.getinfo(coll_obj._build(
-        start_date='2017-07-16', end_date='2017-07-17'))
+    output = utils.getinfo(coll_obj._build(start_date='2017-07-16', end_date='2017-07-17'))
     assert parse_scene_id(output) == ['LC08_044033_20170716']
 
 
-def test_Collection_build_landsat_c02_sr():
+def test_Collection_build_landsat_c02_l2():
     """Test if the Landsat SR collections can be built"""
     coll_obj = default_coll_obj(
         collections=['LANDSAT/LC08/C02/T1_L2', 'LANDSAT/LE07/C02/T1_L2'])
@@ -236,16 +226,13 @@ def test_Collection_build_exclusive_enddate():
 def test_Collection_build_cloud_cover():
     """Test if the cloud cover max parameter is being applied"""
     # CGM - The filtered images should probably be looked up programmatically
-    output = utils.getinfo(default_coll_obj(cloud_cover_max=0.5)._build(
-        variables=['et']))
+    output = utils.getinfo(default_coll_obj(cloud_cover_max=0.5)._build(variables=['et']))
     assert 'LE07_044033_20170724' not in parse_scene_id(output)
 
 
 @pytest.mark.parametrize(
     'collection_id, start_date, end_date',
     [
-        # ['LANDSAT/LT05/C01/T1_TOA', '2012-01-01', '2013-01-01'],
-        ['LANDSAT/LT05/C01/T1_SR', '2012-01-01', '2013-01-01'],
         ['LANDSAT/LT05/C02/T1_L2', '2012-01-01', '2013-01-01'],
     ]
 )
@@ -260,8 +247,6 @@ def test_Collection_build_filter_dates_lt05(collection_id, start_date, end_date)
 @pytest.mark.parametrize(
     'collection_id, start_date, end_date',
     [
-        # ['LANDSAT/LE07/C01/T1_TOA', '2022-01-01', '2023-01-01'],
-        ['LANDSAT/LE07/C01/T1_SR', '2022-01-01', '2023-01-01'],
         ['LANDSAT/LE07/C02/T1_L2', '2022-01-01', '2023-01-01'],
     ]
 )
@@ -276,8 +261,6 @@ def test_Collection_build_filter_dates_le07(collection_id, start_date, end_date)
 @pytest.mark.parametrize(
     'collection_id, start_date, end_date',
     [
-        # ['LANDSAT/LC08/C01/T1_TOA', '2013-01-01', '2013-04-01'],
-        ['LANDSAT/LC08/C01/T1_SR', '2013-01-01', '2013-04-01'],
         ['LANDSAT/LC08/C02/T1_L2', '2013-01-01', '2013-04-01'],
     ]
 )
@@ -312,7 +295,8 @@ def test_Collection_build_filter_args_keyword():
     collections = ['LANDSAT/LC08/C02/T1_L2', 'LANDSAT/LE07/C02/T1_L2']
     wrs2_filter = [
         {'type': 'equals', 'leftField': 'WRS_PATH', 'rightValue': 44},
-        {'type': 'equals', 'leftField': 'WRS_ROW', 'rightValue': 33}]
+        {'type': 'equals', 'leftField': 'WRS_ROW', 'rightValue': 33}
+    ]
     coll_obj = default_coll_obj(
         collections=collections,
         geometry=ee.Geometry.Rectangle(-125, 35, -120, 40),
@@ -374,8 +358,7 @@ def test_Collection_overpass_no_variables_exception():
 @pytest.mark.parametrize('use_joins', [True, False])
 def test_Collection_interpolate_use_joins(use_joins):
     """Only checking if the parameter is accepted and runs for now"""
-    output = utils.getinfo(default_coll_obj().interpolate(
-        use_joins=use_joins, **interp_args))
+    output = utils.getinfo(default_coll_obj().interpolate(use_joins=use_joins, **interp_args))
     assert output['type'] == 'ImageCollection'
     assert parse_scene_id(output) == ['20170701']
 
@@ -565,8 +548,6 @@ def test_Collection_interpolate_no_variables_exception():
 @pytest.mark.parametrize(
     'collections, scene_id_list',
     [
-        # [['LANDSAT/LC08/C01/T1_TOA', 'LANDSAT/LE07/C01/T1_TOA'], C01_SCENE_ID_LIST],
-        # [['LANDSAT/LC08/C01/T1_SR', 'LANDSAT/LE07/C01/T1_SR'], C01_SCENE_ID_LIST],
         [['LANDSAT/LC08/C02/T1_L2', 'LANDSAT/LE07/C02/T1_L2'], C02_SCENE_ID_LIST],
     ]
 )

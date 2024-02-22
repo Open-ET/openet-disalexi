@@ -421,7 +421,7 @@ class Image(object):
         ----------
         image_id : str
             An earth engine image ID.
-            (i.e. 'LANDSAT/LC08/C01/T1_SR/LC08_044033_20170716')
+            (i.e. 'LANDSAT/LC08/C02/T1_L2/LC08_044033_20170716')
         kwargs
             Keyword arguments to pass through to model init.
 
@@ -433,15 +433,11 @@ class Image(object):
         # CGM - Should the supported image collection IDs and helper
         # function mappings be set in a property or method of the Image class?
         collection_methods = {
-            'LANDSAT/LC09/C02/T1_L2': 'from_landsat_c2_sr',
-            'LANDSAT/LC08/C02/T1_L2': 'from_landsat_c2_sr',
-            'LANDSAT/LE07/C02/T1_L2': 'from_landsat_c2_sr',
-            'LANDSAT/LT05/C02/T1_L2': 'from_landsat_c2_sr',
-            'LANDSAT/LT04/C02/T1_L2': 'from_landsat_c2_sr',
-            'LANDSAT/LC08/C01/T1_SR': 'from_landsat_c1_sr',
-            'LANDSAT/LE07/C01/T1_SR': 'from_landsat_c1_sr',
-            'LANDSAT/LT05/C01/T1_SR': 'from_landsat_c1_sr',
-            'LANDSAT/LT04/C01/T1_SR': 'from_landsat_c1_sr',
+            'LANDSAT/LC09/C02/T1_L2': 'from_landsat_c02_l2',
+            'LANDSAT/LC08/C02/T1_L2': 'from_landsat_c02_l2',
+            'LANDSAT/LE07/C02/T1_L2': 'from_landsat_c02_l2',
+            'LANDSAT/LT05/C02/T1_L2': 'from_landsat_c02_l2',
+            'LANDSAT/LT04/C02/T1_L2': 'from_landsat_c02_l2',
         }
 
         try:
@@ -456,28 +452,8 @@ class Image(object):
         return method(ee.Image(image_id), **kwargs)
 
     @classmethod
-    def from_landsat_c1_sr(cls, sr_image, **kwargs):
-        """Returns a DisALEXI Image instance from a Landsat Collection 1 SR image
-
-        Parameters
-        ----------
-        sr_image : ee.Image
-            A raw Landsat Collection 1 SR image.
-        cloudmask_args : dict
-            Keyword arguments to pass through to cloud mask function.
-        kwargs : dict
-            Keyword arguments to pass through to Image init function.
-
-        Returns
-        -------
-        Instance of Image class
-
-        """
-        return cls(landsat.Landsat_C01_SR(sr_image).prep(), **kwargs)
-
-    @classmethod
-    def from_landsat_c2_sr(cls, sr_image, **kwargs):
-        """Returns a DisALEXI Image instance from a Landsat Collection 2 SR image
+    def from_landsat_c02_l2(cls, sr_image, **kwargs):
+        """Returns a DisALEXI Image instance from a Landsat C02 Level 2 (SR) image
 
         Parameters
         ----------
@@ -493,7 +469,7 @@ class Image(object):
         Instance of Image class
 
         """
-        return cls(landsat.Landsat_C02_SR(sr_image).prep(), **kwargs)
+        return cls(landsat.Landsat_C02_L2(sr_image).prep(), **kwargs)
 
     def calculate(self, variables=['et']):
         """Return a multiband image of calculated variables
@@ -669,7 +645,7 @@ class Image(object):
             #   that was built with a pyproject.toml and pins DisALEXI to Python 3.8+
             from importlib import metadata
             self.landsat_lai_version = metadata.metadata('openet-landsat-lai')['Version']
-            
+
         elif type(self.lai_source) is str:
             # Assumptions (for now)
             #   String lai_source is an image collection ID

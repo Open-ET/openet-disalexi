@@ -869,65 +869,10 @@ def test_Image_calculate_variables_valueerror():
         utils.getinfo(default_image_obj().calculate(['FOO']))
 
 
-# Landsat Collection 1 SR
-def test_Image_from_landsat_c1_sr_default_image():
+# Landsat Collection 2 Level 2
+def test_Image_from_landsat_c02_l2_default_image():
     """Test that the classmethod is returning a class object"""
-    output = disalexi.Image.from_landsat_c1_sr(ee.Image(IMAGE_ID))
-    assert type(output) == type(disalexi.Image(default_image()))
-
-
-@pytest.mark.parametrize(
-    'image_id',
-    [
-        'LANDSAT/LC08/C01/T1_SR/LC08_044033_20170716',
-        'LANDSAT/LE07/C01/T1_SR/LE07_044033_20170708',
-        'LANDSAT/LT05/C01/T1_SR/LT05_044033_20110716',
-    ]
-)
-def test_Image_from_landsat_c1_sr_image_id(image_id):
-    """Test instantiating the class from a Landsat image ID"""
-    output = utils.getinfo(disalexi.Image.from_landsat_c1_sr(image_id).ndvi)
-    assert output['properties']['system:index'] == image_id.split('/')[-1]
-
-
-def test_Image_from_landsat_c1_sr_image():
-    """Test instantiating the class from a Landsat ee.Image"""
-    image_id = 'LANDSAT/LC08/C01/T1_SR/LC08_044033_20170716'
-    output = utils.getinfo(disalexi.Image.from_landsat_c1_sr(ee.Image(image_id)).ndvi)
-    assert output['properties']['system:index'] == image_id.split('/')[-1]
-
-
-# def test_Image_from_landsat_c1_sr_et_fraction():
-#     """Test if ETf can be built for a Landsat images"""
-#     image_id = 'LANDSAT/LC08/C01/T1_SR/LC08_044033_20170716'
-#     output = utils.getinfo(disalexi.Image.from_landsat_c1_sr(image_id).et_fraction)
-#     assert output['properties']['system:index'] == image_id.split('/')[-1]
-
-
-# # CM - This test won't work since there is not a "C01" image in the Ta source
-# #   and the filtering is done on the full image_id, not the scene_id
-# #   since the Ta is dependent on the image LST
-# def test_Image_from_landsat_c1_sr_et():
-#     """Test if ET can be built for a Landsat images"""
-#     image_id = 'LANDSAT/LC08/C01/T1_SR/LC08_044033_20170716'
-#     output = utils.getinfo(disalexi.Image.from_landsat_c1_sr(
-#         image_id, ta_source='CONUS_V005',
-#         lai_source='projects/earthengine-legacy/assets/projects/openet/lai/landsat/c02_unsat',
-#         tir_source='projects/earthengine-legacy/assets/projects/openet/tir/landsat/c02',
-#     ).et)
-#     assert output['properties']['system:index'] == image_id.split('/')[-1]
-
-
-def test_Image_from_landsat_c1_sr_exception():
-    """Test instantiating the class for an invalid image ID"""
-    with pytest.raises(Exception):
-        utils.getinfo(disalexi.Image.from_landsat_c1_sr(ee.Image('FOO')).ndvi)
-
-
-# Landsat Collection 2 SR
-def test_Image_from_landsat_c2_sr_default_image():
-    """Test that the classmethod is returning a class object"""
-    output = disalexi.Image.from_landsat_c2_sr(ee.Image(IMAGE_ID))
+    output = disalexi.Image.from_landsat_c02_l2(ee.Image(IMAGE_ID))
     assert type(output) == type(disalexi.Image(default_image()))
 
 
@@ -940,40 +885,40 @@ def test_Image_from_landsat_c2_sr_default_image():
         'LANDSAT/LT05/C02/T1_L2/LT05_044033_20110716',
     ]
 )
-def test_Image_from_landsat_c2_sr_image_id(image_id):
+def test_Image_from_landsat_c02_l2_image_id(image_id):
     """Test instantiating the class from a Landsat image ID"""
-    output = utils.getinfo(disalexi.Image.from_landsat_c2_sr(image_id).ndvi)
+    output = utils.getinfo(disalexi.Image.from_landsat_c02_l2(image_id).ndvi)
     assert output['properties']['system:index'] == image_id.split('/')[-1]
 
 
-def test_Image_from_landsat_c2_sr_image():
+def test_Image_from_landsat_c02_l2_image():
     """Test instantiating the class from a Landsat ee.Image"""
     image_id = 'LANDSAT/LC08/C02/T1_L2/LC08_044033_20170716'
-    output = utils.getinfo(disalexi.Image.from_landsat_c2_sr(ee.Image(image_id)).ndvi)
+    output = utils.getinfo(disalexi.Image.from_landsat_c02_l2(ee.Image(image_id)).ndvi)
     assert output['properties']['system:index'] == image_id.split('/')[-1]
 
 
-# def test_Image_from_landsat_c2_sr_et_fraction():
+# def test_Image_from_landsat_c02_l2_et_fraction():
 #     """Test if ETf can be built for a Landsat images"""
 #     image_id = 'LANDSAT/LC08/C02/T1_L2/LC08_044033_20170716'
 #     output = utils.getinfo(disalexi.Image.from_landsat_c1_sr(image_id).et_fraction)
 #     assert output['properties']['system:index'] == image_id.split('/')[-1]
 
 
-def test_Image_from_landsat_c2_sr_et():
+def test_Image_from_landsat_c02_l2_et():
     """Test if ET can be built for a Landsat images"""
     image_id = 'LANDSAT/LC08/C02/T1_L2/LC08_044033_20170716'
-    output = utils.getinfo(disalexi.Image.from_landsat_c2_sr(image_id).et)
+    output = utils.getinfo(disalexi.Image.from_landsat_c02_l2(image_id).et)
     assert output['properties']['system:index'] == image_id.split('/')[-1]
 
 
-def test_Image_from_landsat_c2_sr_exception():
+def test_Image_from_landsat_c02_l2_exception():
     """Test instantiating the class for an invalid image ID"""
     with pytest.raises(Exception):
-        utils.getinfo(disalexi.Image.from_landsat_c2_sr(ee.Image('FOO')).ndvi)
+        utils.getinfo(disalexi.Image.from_landsat_c02_l2(ee.Image('FOO')).ndvi)
 
 
-def test_Image_from_landsat_c2_sr_scaling():
+def test_Image_from_landsat_c02_l2_scaling():
     """Test if Landsat SR images images are being scaled"""
     sr_img = ee.Image('LANDSAT/LC08/C02/T1_L2/LC08_044033_20170716')
     input_img = ee.Image.constant([10909, 10909, 10909, 14545, 10909, 10909,
@@ -986,18 +931,17 @@ def test_Image_from_landsat_c2_sr_scaling():
               'system:time_start': ee.Number(sr_img.get('system:time_start'))})
 
     output = utils.constant_image_value(
-        disalexi.Image.from_landsat_c2_sr(input_img).ndvi)
+        disalexi.Image.from_landsat_c02_l2(input_img).ndvi)
     assert abs(output['ndvi'] - 0.333) <= 0.001
 
     output = utils.constant_image_value(
-        disalexi.Image.from_landsat_c2_sr(input_img).albedo)
+        disalexi.Image.from_landsat_c02_l2(input_img).albedo)
     assert abs(output['albedo'] - 0.137) <= 0.001
 
 
 @pytest.mark.parametrize(
     'image_id',
     [
-        'LANDSAT/LC08/C01/T1_SR/LC08_044033_20170716',
         'LANDSAT/LC08/C02/T1_L2/LC08_044033_20170716',
     ]
 )
@@ -1010,10 +954,7 @@ def test_Image_from_image_id(image_id):
 
 def test_Image_from_method_kwargs():
     """Test that the init parameters can be passed through the helper methods"""
-    # assert disalexi.Image.from_landsat_c1_toa(
-    #     'LANDSAT/LC08/C01/T1_TOA/LC08_042035_20150713',
-    #     elevation_source='DEADBEEF').elevation_source == 'DEADBEEF'
-    assert disalexi.Image.from_landsat_c2_sr(
+    assert disalexi.Image.from_landsat_c02_l2(
         'LANDSAT/LC08/C02/T1_L2/LC08_042035_20150713',
         elevation_source='DEADBEEF').elevation_source == 'DEADBEEF'
 
@@ -1028,7 +969,7 @@ def test_Image_from_method_kwargs():
 # )
 # def test_Image_albedo_values(xy, expected, tol=0.0001):
 #     output = utils.point_image_value(disalexi.Image.from_image_id(
-#         'LANDSAT/LC08/C01/T1_SR/LC08_044033_20170716').albedo, xy)
+#         'LANDSAT/LC08/C02/T1_L2/LC08_044033_20170716').albedo, xy)
 #     assert abs(output['albedo'] - expected) <= tol
 #
 #
@@ -1041,7 +982,7 @@ def test_Image_from_method_kwargs():
 # )
 # def test_Image_ndvi_values(xy, expected, tol=0.0001):
 #     output = utils.point_image_value(disalexi.Image.from_image_id(
-#         'LANDSAT/LC08/C01/T1_SR/LC08_044033_20170716').ndvi, xy)
+#         'LANDSAT/LC08/C02/T1_L2/LC08_044033_20170716').ndvi, xy)
 #     assert abs(output['ndvi'] - expected) <= tol
 #
 #

@@ -3,6 +3,7 @@ from builtins import input
 from collections import defaultdict
 import configparser
 from datetime import datetime, timedelta, timezone
+from importlib import metadata
 import json
 # import logging
 import math
@@ -16,6 +17,7 @@ import ee
 import openet.disalexi
 import openet.core
 import openet.core.utils as utils
+import openet.lai
 
 TOOL_NAME = 'tair_image_wrs2_export'
 TOOL_VERSION = '0.3.0'
@@ -947,19 +949,24 @@ def main(
                     except:
                         logging.info(f'  {scene_id} - No TIR image in source, skipping')
                         continue
+
+                landsat_lai_version = None
                 if ('lai_source' in model_args.keys() and
                         type(model_args['lai_source']) is str):
-                    # Assumptions: string lai_source is an image collection ID
-                    lai_coll = ee.ImageCollection(model_args['lai_source']) \
-                        .filterMetadata('scene_id', 'equals', scene_id)
-                    lai_img = ee.Image(lai_coll.first())
-                    lai_info = utils.get_info(lai_img)
-                    landsat_lai_version = None
-                    try:
-                        landsat_lai_version = lai_info['properties']['landsat_lai_version']
-                    except:
-                        logging.info(f'  {scene_id} - No LAI image in source, skipping')
-                        continue
+                    if model_args['lai_source'].lower() in ['openet-landsat-lai', 'openet-lai']:
+                        landsat_lai_version = metadata.metadata('openet-landsat-lai')['Version']
+                    else:
+                        # TODO: Add a check for if the source is a collection ID
+                        # Assumptions: string lai_source is an image collection ID
+                        lai_coll = ee.ImageCollection(model_args['lai_source']) \
+                            .filterMetadata('scene_id', 'equals', scene_id)
+                        lai_img = ee.Image(lai_coll.first())
+                        lai_info = utils.get_info(lai_img)
+                        try:
+                            landsat_lai_version = lai_info['properties']['landsat_lai_version']
+                        except:
+                            logging.info(f'  {scene_id} - No LAI image in source, skipping')
+                            continue
 
                 # CGM: We could pre-compute (or compute once and then save)
                 #   the crs, transform, and shape since they should (will?) be
