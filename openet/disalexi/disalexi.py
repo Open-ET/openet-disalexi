@@ -81,7 +81,7 @@ class Image(object):
                             'USGS/NLCD_RELEASES/2016_REL',
                             'USGS/NLCD_RELEASES/2016_REL/2011',
                             'GLOBELAND30'}
-            Land cover source keyword
+            Land cover source collection or image ID
             (the default is 'USGS/NLCD_RELEASES/2019_REL/NLCD').
         ta0_source : {'CFSR'}
             Air temperature source keyword (the default is 'CFSR').
@@ -351,20 +351,6 @@ class Image(object):
         #                     ee.Date(self.year, 12, 31))\
         #         .select(['discrete_classification])
         #     self.lc_type = ''
-        # TODO: Eventually remove this option since the image collection is deprecated
-        elif self.landcover_source.upper().startswith('USGS/NLCD/'):
-            self.lc_source = ee.Image(self.landcover_source.upper()).select(['landcover'])
-            self.lc_type = 'NLCD'
-        # TODO: Eventually remove the NLCD  keyword sources
-        elif self.landcover_source.upper() == 'NLCD2016':
-            self.lc_source = ee.Image('USGS/NLCD/NLCD2016').select(['landcover'])
-            self.lc_type = 'NLCD'
-        elif self.landcover_source.upper() == 'NLCD2011':
-            self.lc_source = ee.Image('USGS/NLCD/NLCD2011').select(['landcover'])
-            self.lc_type = 'NLCD'
-        elif self.landcover_source.upper() == 'NLCD2006':
-            self.lc_source = ee.Image('USGS/NLCD/NLCD2006').select(['landcover'])
-            self.lc_type = 'NLCD'
         # TODO: Eventually remove this option
         elif self.landcover_source.upper() == 'GLOBELAND30':
             # GlobeLand30 values need to be set to the lowest even multiple of 10,
@@ -377,8 +363,7 @@ class Image(object):
                 .rename(['landcover'])
             self.lc_type = 'GLOBELAND30'
         else:
-            raise ValueError(f'Unsupported landcover_source: '
-                             f'{self.landcover_source}\n')
+            raise ValueError(f'Unsupported landcover_source: {self.landcover_source}\n')
         self.set_landcover_vars()
 
         # Image projection and geotransform

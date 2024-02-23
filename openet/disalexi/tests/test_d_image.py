@@ -356,7 +356,6 @@ def test_Image_elevation_band_name():
         ['USGS/NLCD_RELEASES/2019_REL/NLCD/2016', TEST_POINT, 82],
         ['USGS/NLCD_RELEASES/2016_REL', TEST_POINT, 82],
         ['USGS/NLCD_RELEASES/2016_REL/2016', TEST_POINT, 82],
-        ['USGS/NLCD/NLCD2016', TEST_POINT, 82],
         ['GLOBELAND30', TEST_POINT, 10],
         [ee.Image('USGS/SRTMGL1_003').multiply(0).add(82), TEST_POINT, 82],
         ['82', TEST_POINT, 82],
