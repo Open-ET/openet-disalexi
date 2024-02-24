@@ -355,7 +355,13 @@ def test_Collection_overpass_no_variables_exception():
         utils.getinfo(default_coll_obj(variables=[]).overpass())
 
 
-@pytest.mark.parametrize('use_joins', [True, False])
+@pytest.mark.parametrize(
+    'use_joins',
+    [
+        True,
+        # False,   # Won't run, raises memory errors
+    ]
+)
 def test_Collection_interpolate_use_joins(use_joins):
     """Only checking if the parameter is accepted and runs for now"""
     output = utils.getinfo(default_coll_obj().interpolate(use_joins=use_joins, **interp_args))

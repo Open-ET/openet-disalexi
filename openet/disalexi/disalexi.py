@@ -1,13 +1,13 @@
-# from builtins import input
 # import datetime
+from importlib import metadata
 import pprint
 import re
 
 import ee
-# import numpy as np
+import openet.lai
 
 # Why can't these be imported directly
-from .lc_properties import remaps
+from .lc_properties import lc_remaps
 from . import landsat
 from . import tseb
 from . import tseb_utils
@@ -273,97 +273,9 @@ class Image(object):
         else:
             raise ValueError('invalid lon parameter')
 
-        # TODO: Move this into a landcover source function
-        # Set default land cover image and type
-        # For now default to CONUS and use default if image and type were not set
-        if utils.is_number(self.landcover_source):
-            self.lc_source = ee.Image.constant(int(self.landcover_source)).rename(['landcover'])
-            self.lc_type = 'NLCD'
-        elif isinstance(self.landcover_source, ee.computedobject.ComputedObject):
-            # If the source is an ee.Image assume it is an NLCD image
-            self.lc_source = self.landcover_source.rename(['landcover'])
-            self.lc_type = 'NLCD'
-        elif re.match('USGS/NLCD_RELEASES/2019_REL/NLCD/\\d{4}', self.landcover_source.upper()):
-            # Assume an image was passed in and use it directly
-            self.lc_source = ee.Image(self.landcover_source.upper()).select(['landcover'])
-            self.lc_type = 'NLCD'
-        elif self.landcover_source.upper().startswith('USGS/NLCD_RELEASES/2019_REL/NLCD'):
-            # Use startswith to catch trailing slash in collection ID
-            # If the image collection is passed in, assume the target is CONUS
-            #   and select a close year
-            # Clamp the year to 1999-2019 for now
-            year_remap = ee.Dictionary({
-                '1999': '2001', '2000': '2001', '2001': '2001', '2002': '2001',
-                '2003': '2004', '2004': '2004', '2005': '2004',
-                '2006': '2006', '2007': '2006',
-                '2008': '2008', '2009': '2008',
-                '2010': '2011', '2011': '2011', '2012': '2011',
-                '2013': '2013', '2014': '2013',
-                '2015': '2016', '2016': '2016', '2017': '2016',
-                '2018': '2019', '2019': '2019',
-            })
-            nlcd_year = year_remap.get(self.year.min(2019).max(1999).format('%d'))
-            # The timestart didn't seem quite right on the NLCD assets,
-            #   so filtering using the system:index instead
-            self.lc_source = (
-                ee.ImageCollection(self.landcover_source)
-                .filter(ee.Filter.equals('system:index', nlcd_year))
-                .first().select(['landcover'])
-            )
-            self.lc_type = 'NLCD'
-        elif re.match('USGS/NLCD_RELEASES/2016_REL/\\d{4}', self.landcover_source.upper()):
-            # Assume an image was passed in and use it directly
-            self.lc_source = ee.Image(self.landcover_source.upper()).select(['landcover'])
-            self.lc_type = 'NLCD'
-        elif self.landcover_source.upper().startswith('USGS/NLCD_RELEASES/2016_REL'):
-            # If the image collection is passed in, assume the target is CONUS
-            #   and select a close year
-            year_remap = ee.Dictionary({
-                '1999': 2001, '2000': 2001, '2001': 2001, '2002': 2001,
-                '2003': 2004, '2004': 2004, '2005': 2004,
-                '2006': 2006, '2007': 2006,
-                '2008': 2008, '2009': 2008,
-                '2010': 2011, '2011': 2011, '2012': 2011,
-                '2013': 2013, '2014': 2013,
-                '2015': 2016, '2016': 2016,
-            })
-            nlcd_year = year_remap.get(self.year.min(2016).max(1999).format('%d'))
-            nlcd_date = ee.Date.fromYMD(nlcd_year, 1, 1)
-            self.lc_source = (
-                ee.ImageCollection(self.landcover_source)
-                .filterDate(nlcd_date, nlcd_date.advance(1, 'year'))
-                .first().select(['landcover'])
-            )
-            self.lc_type = 'NLCD'
-        # TODO: Test out the ESA 10m Landcover asset
-        #   Collection ID: ESA/WorldCover/v100
-        #   Only 2020 is currently available
-        # elif self.landcover_source == 'ESA/WorldCover/v100/2020':
-        #     self.lc_source = ee.Image(self.landcover_source).select(['Map'])
-        #     self.lc_type = 'ESA?'
-        # TODO: Test out the Copernicus 100m landcover asset
-        #   Collection ID: COPERNICUS/Landcover/100m/Proba-V-C3/Global
-        #   Years: 2015-2019
-        # elif self.landcover_source == 'COPERNICUS/Landcover/100m/Proba-V-C3/Global':
-        # elif self.landcover_source.startswith('COPERNICUS/Landcover/100m/Proba-V-C3/Global/2'):
-        #     self.lc_source = ee.ImageCollection(self.landcover_source)
-        #         .filterDate(ee.Date(self.year, 1, 1),
-        #                     ee.Date(self.year, 12, 31))\
-        #         .select(['discrete_classification])
-        #     self.lc_type = ''
-        # TODO: Eventually remove this option
-        elif self.landcover_source.upper() == 'GLOBELAND30':
-            # GlobeLand30 values need to be set to the lowest even multiple of 10,
-            #   since that is currently what is in the landcover.xlsx file.
-            # http://www.globallandcover.com/GLC30Download/index.aspx
-            lc_coll = ee.ImageCollection('users/cgmorton/GlobeLand30')\
-                .filterBounds(image.geometry().bounds(1))
-            self.lc_source = ee.Image(lc_coll.mosaic())\
-                .divide(10).floor().multiply(10)\
-                .rename(['landcover'])
-            self.lc_type = 'GLOBELAND30'
-        else:
-            raise ValueError(f'Unsupported landcover_source: {self.landcover_source}\n')
+        # TODO: This is not getting set in landcover function
+        #   Only NLCD types are currently supported
+        self.lc_type = 'NLCD'
         self.set_landcover_vars()
 
         # Image projection and geotransform
@@ -611,13 +523,100 @@ class Image(object):
         return elev_img.select([0], ['elevation'])
 
     @lazy_property
+    def landcover(self):
+        """Landcover"""
+        if utils.is_number(self.landcover_source):
+            lc_img = ee.Image.constant(int(self.landcover_source)).rename(['landcover'])
+            self.lc_type = 'NLCD'
+        elif isinstance(self.landcover_source, ee.computedobject.ComputedObject):
+            # If the source is an ee.Image assume it is an NLCD image
+            lc_img = self.landcover_source.rename(['landcover'])
+            self.lc_type = 'NLCD'
+        elif (re.match('USGS/NLCD_RELEASES/2021_REL/NLCD/\\d{4}', self.landcover_source.upper()) or
+              re.match('USGS/NLCD_RELEASES/2019_REL/NLCD/\\d{4}', self.landcover_source.upper()) or
+              re.match('USGS/NLCD_RELEASES/2016_REL/\\d{4}', self.landcover_source.upper())):
+            # Assume an NLCD image ID was passed in and use it directly
+            lc_img = ee.Image(self.landcover_source.upper()).select(['landcover'])
+            self.lc_type = 'NLCD'
+        elif self.landcover_source.upper() == 'USGS/NLCD_RELEASES/2019_REL/NLCD':
+            # If the image collection is passed in, assume the target is CONUS
+            #   and select a close year
+            # Clamp the year to 1999-2019 for now
+            year_remap = ee.Dictionary({
+                '1999': '2001', '2000': '2001', '2001': '2001', '2002': '2001',
+                '2003': '2004', '2004': '2004', '2005': '2004',
+                '2006': '2006', '2007': '2006',
+                '2008': '2008', '2009': '2008',
+                '2010': '2011', '2011': '2011', '2012': '2011',
+                '2013': '2013', '2014': '2013',
+                '2015': '2016', '2016': '2016', '2017': '2016',
+                '2018': '2019', '2019': '2019',
+            })
+            nlcd_year = year_remap.get(self.year.min(2019).max(1999).format('%d'))
+            lc_img = (
+                ee.ImageCollection(self.landcover_source)
+                .filter(ee.Filter.equals('system:index', nlcd_year))
+                .first().select(['landcover'])
+            )
+            self.lc_type = 'NLCD'
+        elif self.landcover_source.upper() == 'USGS/NLCD_RELEASES/2016_REL':
+            # If the image collection is passed in, assume the target is CONUS
+            #   and select a close year
+            year_remap = ee.Dictionary({
+                '1999': '2001', '2000': '2001', '2001': '2001', '2002': '2001',
+                '2003': '2004', '2004': '2004', '2005': '2004',
+                '2006': '2006', '2007': '2006',
+                '2008': '2008', '2009': '2008',
+                '2010': '2011', '2011': '2011', '2012': '2011',
+                '2013': '2013', '2014': '2013',
+                '2015': '2016', '2016': '2016',
+            })
+            nlcd_year = year_remap.get(self.year.min(2016).max(1999).format('%d'))
+            lc_img = (
+                ee.ImageCollection(self.landcover_source)
+                .filter(ee.Filter.equals('system:index', nlcd_year))
+                .first().select(['landcover'])
+            )
+            self.lc_type = 'NLCD'
+        else:
+            raise ValueError(f'Unsupported landcover_source: {self.landcover_source}\n')
+        # TODO: Test out the ESA 10m Landcover asset
+        #   Collection ID: ESA/WorldCover/v100
+        #   Only 2020 is currently available
+        # elif self.landcover_source == 'ESA/WorldCover/v100/2020':
+        #     lc_img = ee.Image(self.landcover_source).select(['Map'], ['landcover'])
+        #     self.lc_type = 'ESA?'
+        # TODO: Test out the Copernicus 100m landcover asset
+        #   Collection ID: COPERNICUS/Landcover/100m/Proba-V-C3/Global
+        #   Years: 2015-2019
+        # elif self.landcover_source == 'COPERNICUS/Landcover/100m/Proba-V-C3/Global':
+        # elif self.landcover_source.startswith('COPERNICUS/Landcover/100m/Proba-V-C3/Global/2'):
+        #     lc_img = (
+        #         ee.ImageCollection(self.landcover_source)
+        #         .filterDate(ee.Date(self.year, 1, 1), ee.Date(self.year, 12, 31))
+        #         .select(['discrete_classification])
+        #         .rename(['landcover'])
+        #     self.lc_type = ''
+        # # TODO: Eventually remove this option
+        # elif self.landcover_source.upper() == 'GLOBELAND30':
+        #     # GlobeLand30 values need to be set to the lowest even multiple of 10,
+        #     #   since that is currently what is in the landcover.xlsx file.
+        #     # http://www.globallandcover.com/GLC30Download/index.aspx
+        #     lc_coll = ee.ImageCollection('users/cgmorton/GlobeLand30')\
+        #         .filterBounds(self.image.geometry().bounds(1))
+        #     lc_img = ee.Image(lc_coll.mosaic())\
+        #         .divide(10).floor().multiply(10).rename(['landcover'])
+        #     self.lc_type = 'GLOBELAND30'
+
+        return lc_img
+
+    @lazy_property
     def lai(self):
         """Leaf Area Index (LAI)"""
         if utils.is_number(self.lai_source):
             lai_img = ee.Image.constant(float(self.lai_source))
         elif (type(self.lai_source) is str and
-              self.lai_source.lower() in ['openet-landsat-lai', 'openet-lai', 'openet.lai']):
-            import openet.lai
+              self.lai_source.lower() in ['openet-landsat-lai', 'openet-lai']):
             # The LAI module only accepts python strings as input for the image ID
             # Calling .getInfo() here to avoid needing to modify the LAI module (for now)
             # This will make it NOT possible to map this function
@@ -628,7 +627,6 @@ class Image(object):
 
             # This approach for getting the version will only work with the new LAI v0.2.0
             #   that was built with a pyproject.toml and pins DisALEXI to Python 3.8+
-            from importlib import metadata
             self.landsat_lai_version = metadata.metadata('openet-landsat-lai')['Version']
 
         elif type(self.lai_source) is str:
@@ -764,7 +762,6 @@ class Image(object):
             'CONUS_V004': 'projects/openet/disalexi/tair/conus_v004_1k',
             'CONUS_V005': 'projects/openet/disalexi/tair/conus_v005_1k',
             'CONUS_V006': 'projects/openet/disalexi/tair/conus_v006_1k',
-            'CONUS_V006B': 'projects/openet/disalexi/tair/conus_v006b_1k',
         }
         ta_source_re = re.compile(
             '(projects/earthengine-legacy/assets/)?'
@@ -789,17 +786,19 @@ class Image(object):
             )
             input_img = ee.Image(ta_coll.first())
 
-            # Select the Ta image with the minimum bias
-            ta_array = input_img.select('step_\\d+_ta').toArray()
-            bias_array = input_img.select('step_\\d+_bias').toArray()
-            diff = bias_array.arraySlice(0, 1).subtract(bias_array.arraySlice(0, 0, -1))
-            bias_array_mask = diff.abs().lt(0.001)
-            # Make the array the same length by repeating the first value
-            bias_array_mask = bias_array_mask.arraySlice(0, 0, 1).arrayCat(bias_array_mask, 0)
-            bias_array_new = bias_array.add(bias_array_mask.multiply(99))
-            index = bias_array_new.abs().multiply(-1).arrayArgmax()\
-                .arraySlice(0, 0, 1).arrayFlatten([['array']])
-            ta_img = ta_array.arrayGet(index)
+            ta_img = self.ta_mosaic_min_bias(input_img)
+            # DEADBEEF
+            # # Select the Ta image with the minimum bias
+            # ta_array = input_img.select('step_\\d+_ta').toArray()
+            # bias_array = input_img.select('step_\\d+_bias').toArray()
+            # diff = bias_array.arraySlice(0, 1).subtract(bias_array.arraySlice(0, 0, -1))
+            # bias_array_mask = diff.abs().lt(0.001)
+            # # Make the array the same length by repeating the first value
+            # bias_array_mask = bias_array_mask.arraySlice(0, 0, 1).arrayCat(bias_array_mask, 0)
+            # bias_array_new = bias_array.add(bias_array_mask.multiply(99))
+            # index = bias_array_new.abs().multiply(-1).arrayArgmax()\
+            #     .arraySlice(0, 0, 1).arrayFlatten([['array']])
+            # ta_img = ta_array.arrayGet(index)
 
             if self.ta_smooth_flag:
                 # CGM - The v003 calculations used a radius of 2 instead of 1
@@ -819,17 +818,19 @@ class Image(object):
             )
             input_img = ee.Image(ta_coll.first())
 
-            # Select the Ta image with the minimum bias
-            ta_array = input_img.select('step_\\d+_ta').toArray()
-            bias_array = input_img.select('step_\\d+_bias').toArray()
-            diff = bias_array.arraySlice(0, 1).subtract(bias_array.arraySlice(0, 0, -1))
-            bias_array_mask = diff.abs().lt(0.001)
-            # Make the array the same length by repeating the first value
-            bias_array_mask = bias_array_mask.arraySlice(0, 0, 1).arrayCat(bias_array_mask, 0)
-            bias_array_new = bias_array.add(bias_array_mask.multiply(99))
-            index = bias_array_new.abs().multiply(-1).arrayArgmax()\
-                .arraySlice(0, 0, 1).arrayFlatten([['array']])
-            ta_img = ta_array.arrayGet(index)
+            ta_img = self.ta_mosaic_min_bias(input_img)
+            # DEADBEEF
+            # # Select the Ta image with the minimum bias
+            # ta_array = input_img.select('step_\\d+_ta').toArray()
+            # bias_array = input_img.select('step_\\d+_bias').toArray()
+            # diff = bias_array.arraySlice(0, 1).subtract(bias_array.arraySlice(0, 0, -1))
+            # bias_array_mask = diff.abs().lt(0.001)
+            # # Make the array the same length by repeating the first value
+            # bias_array_mask = bias_array_mask.arraySlice(0, 0, 1).arrayCat(bias_array_mask, 0)
+            # bias_array_new = bias_array.add(bias_array_mask.multiply(99))
+            # index = bias_array_new.abs().multiply(-1).arrayArgmax()\
+            #     .arraySlice(0, 0, 1).arrayFlatten([['array']])
+            # ta_img = ta_array.arrayGet(index)
 
             if self.ta_smooth_flag:
                 # CGM - The v003 calculations used a radius of 2 instead of 1
@@ -869,8 +870,7 @@ class Image(object):
                 .resample('bilinear').reproject(crs=self.crs, crsTransform=self.transform)
             )
         else:
-            raise ValueError(f'Invalid airpressure_source: '
-                             f'{self.airpressure_source}\n')
+            raise ValueError(f'Invalid airpressure_source: {self.airpressure_source}\n')
 
         return ee.Image(ap_img).rename(['pressure'])
 
@@ -935,8 +935,7 @@ class Image(object):
                     .first()
                 )
         else:
-            raise ValueError(f'Unsupported rs_hourly_source: '
-                             f'{self.rs_hourly_source}\n')
+            raise ValueError(f'Unsupported rs_hourly_source: {self.rs_hourly_source}\n')
 
         return ee.Image(rs1_img).rename(['rs'])
 
@@ -1024,8 +1023,7 @@ class Image(object):
                 .resample('bilinear').reproject(crs=self.crs, crsTransform=self.transform)
             )
         else:
-            raise ValueError(f'Unsupported windspeed_source: '
-                             f'{self.windspeed_source}\n')
+            raise ValueError(f'Unsupported windspeed_source: {self.windspeed_source}\n')
 
         return ee.Image(windspeed_img).max(2).min(20).rename(['windspeed'])
 
@@ -1068,8 +1066,13 @@ class Image(object):
             Landcover type (choices are "NLCD" or "GlobeLand30")
 
         """
-        if self.lc_type.upper() not in remaps.keys():
-            raise KeyError(f'Invalid lc_type (choices are {", ".join(remaps.keys())})')
+
+        # Call landcover function to trigger building lc_type
+        lc_img = self.landcover
+
+        if self.lc_type.upper() not in lc_remaps.keys():
+            raise KeyError(f'Invalid lc_type: {self.lc_type.upper()}\n'
+                           f'Choices are {", ".join(lc_remaps.keys())})')
 
         def lc_remap(landcover, lc_type, lc_var):
             """Remap land cover values to target values
@@ -1087,7 +1090,7 @@ class Image(object):
             -------
             remap_img : ee.Image
             """
-            lc_items = sorted(remaps[lc_type.upper()][lc_var].items())
+            lc_items = sorted(lc_remaps[lc_type.upper()][lc_var].items())
             input_values = [k for k, v in lc_items]
             # Scale output values by 100 since remap values must be integer
             output_values = [v * 100 for k, v in lc_items]
@@ -1100,17 +1103,17 @@ class Image(object):
             )
 
         # Get LC based variables
-        self.aleafv = lc_remap(self.lc_source, self.lc_type, 'aleafv')
-        self.aleafn = lc_remap(self.lc_source, self.lc_type, 'aleafn')
-        self.aleafl = lc_remap(self.lc_source, self.lc_type, 'aleafl')
-        self.adeadv = lc_remap(self.lc_source, self.lc_type, 'adeadv')
-        self.adeadn = lc_remap(self.lc_source, self.lc_type, 'adeadn')
-        self.adeadl = lc_remap(self.lc_source, self.lc_type, 'adeadl')
+        self.aleafv = lc_remap(lc_img, self.lc_type, 'aleafv')
+        self.aleafn = lc_remap(lc_img, self.lc_type, 'aleafn')
+        self.aleafl = lc_remap(lc_img, self.lc_type, 'aleafl')
+        self.adeadv = lc_remap(lc_img, self.lc_type, 'adeadv')
+        self.adeadn = lc_remap(lc_img, self.lc_type, 'adeadn')
+        self.adeadl = lc_remap(lc_img, self.lc_type, 'adeadl')
         # Yun modified to use hmax for hmin too!!!
-        self.hc_min = lc_remap(self.lc_source, self.lc_type, 'hmax')
-        self.hc_max = lc_remap(self.lc_source, self.lc_type, 'hmax')
-        self.leaf_width = lc_remap(self.lc_source, self.lc_type, 'xl')
-        self.clump = lc_remap(self.lc_source, self.lc_type, 'omega')
+        self.hc_min = lc_remap(lc_img, self.lc_type, 'hmax')
+        self.hc_max = lc_remap(lc_img, self.lc_type, 'hmax')
+        self.leaf_width = lc_remap(lc_img, self.lc_type, 'xl')
+        self.clump = lc_remap(lc_img, self.lc_type, 'omega')
 
     # DEADBEEF - Not used any more and will be removed at some point
     # # Helper functions for computing Ta (and ET)
@@ -1202,7 +1205,8 @@ class Image(object):
 
         # TODO: Test making a single multi-band image of all of these and making
         #   a single reduceResolution call
-        rr_params = {'reducer': ee.Reducer.mean().unweighted(), 'maxPixels': 30000}
+        rr_params = {'reducer': ee.Reducer.median().unweighted(), 'maxPixels': 30000}
+        # rr_params = {'reducer': ee.Reducer.mean().unweighted(), 'maxPixels': 30000}
         proj_params = {'crs': self.alexi_crs, 'crsTransform': self.alexi_geo}
 
         # TODO: Check that t_air0 is supposed to be passed to t_air and t_air0 parameters
@@ -1434,7 +1438,7 @@ class Image(object):
     # TODO: Move to a utils module maybe since it isn't a function of self
     # TODO: Maybe rename also, ta_mosaic_zero_bias()?
     def ta_mosaic_interpolate(self, ta_mosaic_img):
-        """Interpolate the air temperature for a bias of 0 from from a mosaic stack
+        """Interpolate the air temperature for a bias of 0 from a mosaic stack
 
         Parameters
         ----------
@@ -1507,8 +1511,9 @@ class Image(object):
         # # Mask out Ta cells with all negative biases
         # ta_img = ta_img.updateMask(bias_b.lt(0).And(bias_a.lt(0)).Not())
 
+        # Round to the nearest tenth (should it be hundredth?)
         return (
-            ta_img
+            ta_img.multiply(10).round().divide(10)
             .addBands([ta_a, bias_a, ta_b, bias_b])
             .rename(['ta_interp', 'ta_a', 'bias_a', 'ta_b', 'bias_b'])
         )

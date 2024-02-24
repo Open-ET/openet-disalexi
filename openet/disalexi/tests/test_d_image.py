@@ -352,11 +352,12 @@ def test_Image_elevation_band_name():
 @pytest.mark.parametrize(
     'source, xy, expected',
     [
+        ['USGS/NLCD_RELEASES/2021_REL/NLCD/2021', TEST_POINT, 82],
         ['USGS/NLCD_RELEASES/2019_REL/NLCD', TEST_POINT, 82],
         ['USGS/NLCD_RELEASES/2019_REL/NLCD/2016', TEST_POINT, 82],
         ['USGS/NLCD_RELEASES/2016_REL', TEST_POINT, 82],
         ['USGS/NLCD_RELEASES/2016_REL/2016', TEST_POINT, 82],
-        ['GLOBELAND30', TEST_POINT, 10],
+        # ['GLOBELAND30', TEST_POINT, 10],
         [ee.Image('USGS/SRTMGL1_003').multiply(0).add(82), TEST_POINT, 82],
         ['82', TEST_POINT, 82],
         [82, TEST_POINT, 82],
@@ -364,17 +365,41 @@ def test_Image_elevation_band_name():
 )
 def test_Image_landcover_source(source, xy, expected, tol=0.001):
     output = utils.point_image_value(disalexi.Image(
-        default_image(), landcover_source=source).lc_source, xy)
+        default_image(), landcover_source=source).landcover, xy)
     assert abs(output['landcover'] - expected) <= tol
 
 
-def test_Image_landcover_source_exception():
+@pytest.mark.parametrize(
+    'source',
+    [
+        # No source
+        '',
+        # Fail on collection ID with trailing slash
+        'USGS/NLCD_RELEASES/2019_REL/NLCD/',
+    ]
+)
+def test_Image_landcover_source_invalid(source):
     with pytest.raises(ValueError):
-        utils.getinfo(disalexi.Image(default_image(), landcover_source='').landcover)
+        utils.getinfo(disalexi.Image(default_image(), landcover_source=source).landcover)
+
+
+@pytest.mark.parametrize(
+    'source',
+    [
+        # Fail on missing year images
+        # Not sure why these tests aren't working
+        'USGS/NLCD_RELEASES/2019_REL/NLCD/2021',
+        'USGS/NLCD_RELEASES/2021_REL/NLCD/2019',
+        'USGS/NLCD_RELEASES/2016_REL/2019',
+    ]
+)
+def test_Image_landcover_source_invalid(source):
+    with pytest.raises(Exception):
+        utils.getinfo(disalexi.Image(default_image(), landcover_source=source).landcover)
 
 
 def test_Image_landcover_band_name():
-    output = utils.getinfo(disalexi.Image(default_image()).lc_source)['bands'][0]['id']
+    output = utils.getinfo(disalexi.Image(default_image()).landcover)['bands'][0]['id']
     assert output == 'landcover'
 
 
