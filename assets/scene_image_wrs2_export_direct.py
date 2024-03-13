@@ -8,7 +8,7 @@ import json
 # import logging
 import math
 import os
-# import pprint
+import pprint
 import re
 import time
 
@@ -340,16 +340,11 @@ def main(
     #     k.lower(): int(v) if utils.is_number(v) else v
     #     for k, v in dict(ini['TAIR']).items()}
 
-    if 'cell_size' not in tair_args.keys():
-        tair_args['cell_size'] = 30
+    # DEADBEEF - Tair cell size parameter is not used anywhere
+    # if 'cell_size' not in tair_args.keys():
+    #     tair_args['cell_size'] = 30
     if 'retile' not in tair_args.keys():
         tair_args['retile'] = 0
-    if ('source_coll' not in tair_args.keys() or
-            tair_args['source_coll'].lower() == 'none'):
-        tair_args['source_coll'] = None
-    # Clear Ta start value if is source is set
-    if tair_args['source_coll'] is not None:
-        tair_args['ta_start'] = None
 
     logging.info('\nDISALEXI Parameters')
     if 'stability_iterations' in model_args.keys():
@@ -357,9 +352,10 @@ def main(
     logging.info(f'  Albedo iter: {int(model_args["albedo_iterations"])}')
 
     logging.info('\nTAIR Parameters')
-    logging.info(f'  Source:     {tair_args["source_coll"]}')
-    logging.info(f'  Ta Start:   {tair_args["ta_start"]}')
-    logging.debug(f'  Cell size:  {tair_args["cell_size"]}')
+    # DEADBEEF - Source and start are not used in Ta direct calculation
+    # logging.info(f'  Source:     {tair_args["source_coll"]}')
+    # logging.info(f'  Ta Start:   {tair_args["ta_start"]}')
+    # logging.debug(f'  Cell size:  {tair_args["cell_size"]}')
     logging.debug(f'  Retile:     {tair_args["retile"]}')
     logging.info(f'  Step Size:  {tair_args["step_size"]}')
     logging.debug(f'  Step Count: {tair_args["step_count"]}')
@@ -503,8 +499,7 @@ def main(
     logging.info('\nChecking available ALEXI data')
     alexi_coll = (
         ee.ImageCollection(alexi_coll_id)
-        .filterDate(iter_start_dt.strftime('%Y-%m-%d'),
-                    iter_end_dt.strftime('%Y-%m-%d'))
+        .filterDate(iter_start_dt.strftime('%Y-%m-%d'), iter_end_dt.strftime('%Y-%m-%d'))
     )
     def set_date(x):
         return x.set('date', ee.Date(x.get('system:time_start')).format('yyyy-MM-dd'))
@@ -517,8 +512,10 @@ def main(
             (model_args['windspeed_source'] == 'CFSR')):
         logging.info('\nChecking available meteorology data')
         meteo_coll_id = 'projects/disalexi/meteo_data/windspeed/global_v001_3hour'
-        meteo_coll = ee.ImageCollection(meteo_coll_id) \
+        meteo_coll = (
+            ee.ImageCollection(meteo_coll_id)
             .filterDate(iter_start_dt.strftime('%Y-%m-%d'), iter_end_dt.strftime('%Y-%m-%d'))
+        )
         def set_date(x):
             return x.set('date', ee.Date(x.get('system:time_start')).format('yyyy-MM-dd'))
         meteo_dates = set(utils.get_info(meteo_coll.map(set_date).aggregate_histogram('date').keys()))
@@ -623,10 +620,12 @@ def main(
 
             # Get list of existing image assets and their properties
             logging.debug('  Getting GEE asset list')
-            asset_coll = ee.ImageCollection(export_coll_id) \
-                .filterDate(year_start_date, year_end_date) \
-                .filter(ee.Filter.inList('wrs2_tile', tile_list)) \
+            asset_coll = (
+                ee.ImageCollection(export_coll_id)
+                .filterDate(year_start_date, year_end_date)
+                .filter(ee.Filter.inList('wrs2_tile', tile_list))
                 .filterBounds(tile_geom)
+            )
             year_asset_props = {
                 f'{export_coll_id}/{x["properties"]["system:index"]}': x['properties']
                 for x in utils.get_info(asset_coll)['features']
@@ -766,6 +765,9 @@ def main(
                 image_date = image_dt.strftime('%Y-%m-%d')
                 next_date = (image_dt + timedelta(days=1)).strftime('%Y-%m-%d')
 
+                landsat_img = ee.Image(image_id)
+                landsat_dt = ee.Date(landsat_img.get('system:time_start'))
+
                 export_id = export_id_fmt.format(
                     model=ini['INPUTS']['et_model'].lower(),
                     index=image_id.lower().replace('/', '_'),
@@ -801,14 +803,6 @@ def main(
                 #     #     time.sleep(1)
                 #     #     # input('ENTER')
                 #     #     continue
-                # if ('ta_source' in model_args.keys() and
-                #         model_args['ta_source'].startswith('projects/')):
-                #     ta_source_coll = ee.ImageCollection(model_args['ta_source'])\
-                #         .filterMetadata('image_id', 'equals', image_id)
-                #     if utils.get_info(ta_source_coll.size()) == 0:
-                #         logging.info(f'  {scene_id} - No Tair image in source collection, skipping')
-                #         # time.sleep(1)
-                #         continue
 
                 if update_flag:
                     if export_id in tasks.keys():
@@ -911,78 +905,77 @@ def main(
                 logging.debug(f'  Collection: {os.path.dirname(asset_id)}')
                 logging.debug(f'  Image ID:   {os.path.basename(asset_id)}')
 
-                if tair_args['source_coll'] is None:
-                    logging.debug(f'  Tair source: {tair_args["ta_start"]}')
-                    ta_source_img = alexi_mask.add(float(tair_args['ta_start']))\
-                        .rename(['ta'])
-                elif tair_args['source_coll'] == 'NLDAS':
-                    logging.debug('  Tair source: NLDAS')
-                    ta_source_coll = ee.ImageCollection('NASA/NLDAS/FORA0125_H002')\
-                        .filterDate(image_date, next_date)\
-                        .select(['temperature'])
-                    # Pulling maximum air temperature instead of 0 UTC
-                    # input_image = ee.Image(ta_source_coll.first())\
-                    input_image = ee.Image(ta_source_coll.reduce(ee.Reducer.max()))\
-                        .add(273.15).floor()
-                    ta_source_img = alexi_mask.add(input_image).rename(['ta'])
-                else:
-                    logging.debug(f'  Tair source: {tair_args["source_coll"]}')
-                    ta_source_coll = ee.ImageCollection(tair_args['source_coll'])\
-                        .filterMetadata('image_id', 'equals', image_id)
-                    if utils.get_info(ta_source_coll.size()) == 0:
-                        logging.info(f'  {scene_id} - No Tair image in source coll, skipping')
-                        # input('ENTER')
-                        continue
-                    ta_source_img = ta_min_bias(ee.Image(ta_source_coll.first()))
 
-                # Manually check if the source LAI and TIR images are present
+                # DEADBEEF - But keep in case it is useful code for reading Ta climo
+                # if tair_args['source_coll'] == 'NLDAS':
+                #     logging.debug('  Tair source: NLDAS')
+                #     ta_source_coll = (
+                #         ee.ImageCollection('NASA/NLDAS/FORA0125_H002')
+                #         .filterDate(image_date, next_date)
+                #         .select(['temperature'])
+                #     )
+                #     # Pulling maximum air temperature instead of 0 UTC
+                #     # input_image = ee.Image(ta_source_coll.first())\
+                #     input_image = ee.Image(ta_source_coll.reduce(ee.Reducer.max()))\
+                #         .add(273.15).floor()
+                #     ta_source_img = alexi_mask.add(input_image).rename(['ta'])
+                # elif tair_args['source_coll'] is None:
+                #     logging.debug(f'  Tair source: {tair_args["ta_start"]}')
+                #     ta_source_img = alexi_mask.add(float(tair_args['ta_start'])) \
+                #         .rename(['ta'])
+                # else:
+                #     logging.debug(f'  Tair source: {tair_args["source_coll"]}')
+                #     ta_source_coll = ee.ImageCollection(tair_args['source_coll'])\
+                #         .filterMetadata('image_id', 'equals', image_id)
+                #     if utils.get_info(ta_source_coll.size()) == 0:
+                #         logging.info(f'  {scene_id} - No Tair image in source coll, skipping')
+                #         # input('ENTER')
+                #         continue
+                #     ta_source_img = ta_min_bias(ee.Image(ta_source_coll.first()))
+
+
+                # Manually check if the source LAI and LST images are present
                 # Eventually this should/could be done inside the model instead
-                if ('tir_source' in model_args.keys() and
-                        type(model_args['tir_source']) is str):
-                    # Assumptions: string tir_source is an image collection ID
-                    tir_coll = ee.ImageCollection(model_args['tir_source']) \
+                # landsat_lst_version = None
+                if ('lst_source' in model_args.keys()) and (type(model_args['lst_source']) is str):
+                    # Assumptions: string lst_source is an image collection ID
+                    lst_info = utils.get_info(ee.Image(
+                        ee.ImageCollection(model_args['lst_source'])
                         .filterMetadata('scene_id', 'equals', scene_id)
-                    tir_img = ee.Image(tir_coll.first())
-                    tir_info = utils.get_info(tir_img)
+                        .first()
+                    ))
                     try:
-                        sharpen_version = tir_info['properties']['sharpen_version']
+                        landsat_lst_version = lst_info['properties']['landsat_lst_version']
                     except:
-                        logging.info(f'  {scene_id} - No TIR image in source, skipping')
+                        logging.info(f'  {scene_id} - No LST image in source, skipping')
                         continue
 
-                landsat_lai_version = None
-                if ('lai_source' in model_args.keys() and
-                        type(model_args['lai_source']) is str):
+                if ('lai_source' in model_args.keys()) and (type(model_args['lai_source']) is str):
+                    landsat_lai_version = None
                     if model_args['lai_source'].lower() in ['openet-landsat-lai', 'openet-lai']:
                         landsat_lai_version = metadata.metadata('openet-landsat-lai')['Version']
                     else:
                         # TODO: Add a check for if the source is a collection ID
                         # Assumptions: string lai_source is an image collection ID
-                        lai_coll = ee.ImageCollection(model_args['lai_source']) \
+                        lai_info = utils.get_info(ee.Image(
+                            ee.ImageCollection(model_args['lai_source'])
                             .filterMetadata('scene_id', 'equals', scene_id)
-                        lai_img = ee.Image(lai_coll.first())
-                        lai_info = utils.get_info(lai_img)
+                            .first()
+                        ))
                         try:
                             landsat_lai_version = lai_info['properties']['landsat_lai_version']
                         except:
                             logging.info(f'  {scene_id} - No LAI image in source, skipping')
                             continue
 
-                # CGM: We could pre-compute (or compute once and then save)
-                #   the crs, transform, and shape since they should (will?) be
-                #   the same for each wrs2 tile
-                landsat_img = ee.Image(image_id)
-                landsat_info = utils.get_info(landsat_img.select([1]))
-                # landsat_info = utils.get_info(landsat_img.select(['SR_B2']))
-                landsat_dt = ee.Date(landsat_info['properties']['system:time_start'])
-
                 if (('windspeed_source' in model_args.keys()) and
-                        (model_args['windspeed_source'] == 'CFSR')):
+                       (model_args['windspeed_source'] == 'CFSR')):
                     windspeed_coll_id = 'projects/disalexi/meteo_data/windspeed/global_v001_3hour'
-                    windspeed_coll = ee.ImageCollection(windspeed_coll_id) \
-                        .filterDate(landsat_dt.advance(-3, 'hour'),
-                                    landsat_dt.advance(3, 'hour')) \
+                    windspeed_coll = (
+                        ee.ImageCollection(windspeed_coll_id)
+                        .filterDate(landsat_dt.advance(-3, 'hour'), landsat_dt.advance(3, 'hour'))
                         .select(['windspeed'])
+                    )
                     try:
                         windspeed_count = utils.get_info(windspeed_coll.size())
                     except:
@@ -993,10 +986,15 @@ def main(
 
                 d_obj = openet.disalexi.Image.from_image_id(image_id, **model_args)
 
-                export_img = d_obj.ta_coarse(
-                    step_size=tair_args['step_size'],
-                    step_count=tair_args['step_count'],
-                )
+
+                
+                # CGM - For testing just output the Ta direct image
+                export_img = d_obj.ta_direct().rename(['ta_direct'])
+
+                # export_img = d_obj.ta_coarse(
+                #     step_size=tair_args['step_size'],
+                #     step_count=tair_args['step_count'],
+                # )
 
                 # # Compute the initial Ta from the meteorology
                 # ta_direct_img = d_obj.ta_direct()
@@ -1051,18 +1049,23 @@ def main(
                     'date_ingested': datetime.today().strftime('%Y-%m-%d'),
                     'image_id': image_id,
                     'landsat_lai_version': landsat_lai_version,
+                    'landsat_lst_version': landsat_lst_version,
                     'model_name': model_name,
                     'model_version': openet.disalexi.__version__,
                     'scene_id': scene_id,
-                    'sharpen_version': sharpen_version,
                     'tool_name': TOOL_NAME,
                     'tool_version': TOOL_VERSION,
                     'wrs2_tile': wrs2_tile_fmt.format(p, r),
                     # Source properties
-                    'CLOUD_COVER': landsat_info['properties']['CLOUD_COVER'],
-                    'CLOUD_COVER_LAND': landsat_info['properties']['CLOUD_COVER_LAND'],
+                    # CGM - Note, setting the properties as server side objects
+                    #   won't work for COG exports
+                    'CLOUD_COVER': landsat_img.get('CLOUD_COVER'),
+                    'CLOUD_COVER_LAND': landsat_img.get('CLOUD_COVER_LAND'),
+                    # 'CLOUD_COVER': landsat_info['properties']['CLOUD_COVER'],
+                    # 'CLOUD_COVER_LAND': landsat_info['properties']['CLOUD_COVER_LAND'],
                     # CGM - Should we use the Landsat time or the ALEXI time?
-                    'system:time_start': landsat_info['properties']['system:time_start'],
+                    'system:time_start': landsat_img.get('system:time_start'),
+                    # 'system:time_start': landsat_info['properties']['system:time_start'],
                     # 'system:time_start': utils.millis(image_dt),
                     # Other properties
                     # 'spacecraft_id': landsat_img.get('SATELLITE'),

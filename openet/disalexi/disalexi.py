@@ -356,8 +356,6 @@ class Image(object):
         ----------
         sr_image : ee.Image
             A raw Landsat Collection 2 SR image.
-        cloudmask_args : dict
-            Keyword arguments to pass through to cloud mask function.
         kwargs : dict
             Keyword arguments to pass through to Image init function.
 
@@ -668,14 +666,14 @@ class Image(object):
                 .filterMetadata('scene_id', 'equals', self.index)
             tir_img = ee.Image(tir_coll.first())
             tir_img = tir_img.multiply(ee.Number(tir_img.get('scale_factor')))\
-                .set({'sharpen_version': tir_img.get('sharpen_version')})
-            self.sharpen_version = tir_img.get('sharpen_version')
+                .set({'landsat_lst_version': tir_img.get('landsat_lst_version')})
+            self.sharpen_version = tir_img.get('landsat_lst_version')
         else:
             raise ValueError(f'Unsupported tir_source: {self.tir_source}\n')
 
-        # tir_img = ee.Image('users/tulipyangyun/LST_20162091720').add(273.16)
         return tir_img.select([0], ['tir'])
 
+    # DEADBEEF - Remove when Landsat C01 support is dropped
     # CGM - This is not being called but maybe should be applied to just the
     #   Collection 1 TIR image (since it is not LST)
     # @lazy_property

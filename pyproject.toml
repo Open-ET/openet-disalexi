@@ -21,7 +21,7 @@ classifiers = [
 ]
 dependencies = [
     "earthengine-api>=0.1.367",
-    "openet-core>=0.2.0",
+    "openet-core>=0.4.0",
     "openet-landsat-lai>=0.2.0",
     # "openet-refet-gee>=0.2.0",
     "python-dateutil",
