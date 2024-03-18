@@ -763,7 +763,8 @@ class Image(object):
         }
         ta_source_re = re.compile(
             '(projects/earthengine-legacy/assets/)?'
-            'projects/(\\w+/)?disalexi/ta(ir)?/(conus|global)_v\\d{3}\\w?(_\\w+)',
+            'projects/(\\w+/)?(assets/)?'
+            'disalexi/ta(ir)?/(conus|global)_v\\d{3}\\w?(_\\w+)',
             re.IGNORECASE
         )
 
@@ -841,8 +842,6 @@ class Image(object):
 
         else:
             raise ValueError(f'Unsupported ta_source: {self.ta_source}\n')
-
-        # elif re.match('projects/(\\w+/)?disalexi/ta/conus_v', self.ta_source, re.I):
 
         return ta_img.rename(['ta']).set(self.properties)
 
