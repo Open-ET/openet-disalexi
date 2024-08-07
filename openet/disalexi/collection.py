@@ -2,7 +2,7 @@ import copy
 import datetime
 import pprint
 
-from dateutil.relativedelta import *
+from dateutil.relativedelta import relativedelta
 import ee
 
 from . import utils

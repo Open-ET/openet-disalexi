@@ -11,7 +11,7 @@ def tseb_pt(
         albedo, ndvi, lai, clump, leaf_width, hc_min, hc_max,
         datetime, lon=None, lat=None, a_pt_in=1.32,
         stabil_iter=None, albedo_iter=10, et_min=0.01
-        ):
+):
     """Priestley-Taylor TSEB
 
     Calculates the Priestley Taylor TSEB fluxes using a single observation of
@@ -52,7 +52,7 @@ def tseb_pt(
     adeadl : ee.Image
 
     albedo : ee.Image
-
+        Albedo
     ndvi : ee.Image
         Normalized Difference Vegetation Index
     lai : ee.Image
@@ -129,7 +129,7 @@ def tseb_pt(
     zs = tseb_utils.solar_zenith(
         datetime=datetime,
         lon=lon.multiply(math.pi / 180),
-        lat=lat.multiply(math.pi / 180)
+        lat=lat.multiply(math.pi / 180),
     )
 
     # ************************************************************************
@@ -317,7 +317,8 @@ def tseb_pt(
             albedo
             .expression(
                 'f_green * (a_pt * Ss / (Ss + g)) * Rn_c',
-                {'f_green': f_green, 'a_pt': a_pt_iter, 'Ss': Ss, 'g': g, 'Rn_c': Rn_c})
+                {'f_green': f_green, 'a_pt': a_pt_iter, 'Ss': Ss, 'g': g, 'Rn_c': Rn_c}
+            )
             .max(0)
         )
 
@@ -404,7 +405,7 @@ def tseb_pt(
         'Rn_c': ee.Image(0), 'Rn_s': ee.Image(0),
         'r_ah': r_ah, 'r_s': r_s, 'r_x': r_x,
         'T_ac': ee.Image(0), 'T_c': T_c, 'T_s': T_s,
-        'u_attr': u_attr
+        'u_attr': u_attr,
     })
     iter_output = ee.Dictionary(
         ee.List.sequence(1, stabil_iter).iterate(iter_func, input_images)
@@ -465,7 +466,7 @@ def tseb_invert(
         albedo, ndvi, lai, clump, leaf_width, hc_min, hc_max,
         datetime, lon=None, lat=None, a_pt_in=1.32,
         stabil_iter=None, albedo_iter=10,
-        ):
+):
     """Priestley-Taylor TSEB
 
     Calculates the Priestley Taylor TSEB fluxes using a single observation of
@@ -589,7 +590,7 @@ def tseb_invert(
     zs = tseb_utils.solar_zenith(
         datetime=datetime,
         lon=lon.multiply(math.pi / 180),
-        lat=lat.multiply(math.pi / 180)
+        lat=lat.multiply(math.pi / 180),
     )
 
     # ************************************************************************
@@ -650,7 +651,7 @@ def tseb_invert(
     # z_t = lai.multiply(0).add(50)
 
     # Yun - modify z0m when using it at alexi scale
-    # var = 1. / ((alog((z_U - D0) / z0m)) * (alog((z_U - D0) / z0m))) in IDL code
+    # var = 1.0 / ((alog((z_U - D0) / z0m)) * (alog((z_U - D0) / z0m))) in IDL code
     z0m = et_alexi.expression(
         '1.0 / ((log((z_U - D0) / z0m)) * (log((z_U - D0) / z0m)))',
         {'z_U': z_u, 'D0': d0, 'z0m': z0m}
@@ -659,7 +660,7 @@ def tseb_invert(
     z0m = et_alexi.expression(
         '(z_U - D0) / (exp(1.0 / sqrt(z0m)))', {'z_U': z_u, 'D0': d0, 'z0m': z0m}
     )
-    # redefine z0h
+    # Redefine z0h
     z0h = z0m.add(0)
 
     # Parameters for In-Canopy Wind Speed Extinction
@@ -732,7 +733,8 @@ def tseb_invert(
     e_atm = tseb_utils.emissivity(t_air)
     # p = t_air.expression(
     #     '101.3 * (((t_air - (0.0065 * z)) / t_air) ** 5.26)',
-    #     {'t_air': t_air, 'z': z})
+    #     {'t_air': t_air, 'z': z}
+    # )
 
     # Density of air? (kg m-3)
     r_air = t_air.expression(

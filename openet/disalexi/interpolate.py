@@ -2,7 +2,7 @@ import datetime
 import logging
 
 import ee
-from dateutil.relativedelta import *
+from dateutil.relativedelta import relativedelta
 
 from . import utils
 

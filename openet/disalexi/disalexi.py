@@ -38,9 +38,12 @@ class Image(object):
             image,
             ta_source='CONUS_V006',
             alexi_source='CONUS_V006',
-            lai_source='projects/openet/assets/lai/landsat/c02',
-            tir_source='projects/openet/assets/tir/landsat/c02',
+            lai_source='openet-landsat-lai',
+            lst_source='projects/openet/assets/lst/landsat/c02',
+            # lai_source='projects/openet/assets/lai/landsat/c02',
+            # tir_source='projects/openet/assets/tir/landsat/c02',
             elevation_source='USGS/SRTMGL1_003',
+            # elevation_source='NASA/NASADEM_HGT/001',
             landcover_source='USGS/NLCD_RELEASES/2019_REL/NLCD',
             ta0_source='CFSR',
             rs_daily_source='CFSR',
@@ -70,17 +73,16 @@ class Image(object):
         alexi_source : {'CONUS_V003', 'CONUS_V004', 'CONUS_V005', 'CONUS_V006'}
             ALEXI ET image collection ID (the default is 'CONUS_V006').
         lai_source : string
-            LAI image collection ID.
-        tir_source : string
-            Sharpened thermal infrared image collection ID.
+            LAI image collection ID or "openet-landsat-lai" to compute dynamically
+            using the openet-landsat-lai module.
+        lst_source : string
+            LST image collection ID.
         elevation_source : str, ee.Image
             Elevation source keyword or asset (the default is USGS/SRTMGL1_003).
             Units must be in meters.
         landcover_source : {'USGS/NLCD_RELEASES/2019_REL/NLCD',
                             'USGS/NLCD_RELEASES/2019_REL/NLCD/2016',
-                            'USGS/NLCD_RELEASES/2016_REL',
-                            'USGS/NLCD_RELEASES/2016_REL/2011',
-                            'GLOBELAND30'}
+                            'USGS/NLCD_RELEASES/2021_REL/NLCD/2021'}
             Land cover source collection or image ID
             (the default is 'USGS/NLCD_RELEASES/2019_REL/NLCD').
         ta0_source : {'CFSR'}
@@ -151,9 +153,11 @@ class Image(object):
 
         # # Build SCENE_ID from the (possibly merged) system:index
         # scene_id = ee.List(ee.String(self.index).split('_')).slice(-3)
-        # self.scene_id = ee.String(scene_id.get(0)).cat('_') \
-        #     .cat(ee.String(scene_id.get(1))).cat('_') \
+        # self.scene_id = (
+        #     ee.String(scene_id.get(0)).cat('_')
+        #     .cat(ee.String(scene_id.get(1))).cat('_')
         #     .cat(ee.String(scene_id.get(2)))
+        # )
 
         # # Build WRS2_TILE from the scene_id
         # self.wrs2_tile = ee.String('p').cat(self.scene_id.slice(5, 8)) \
@@ -207,7 +211,7 @@ class Image(object):
         self.ta_source = ta_source
         self.alexi_source = alexi_source
         self.lai_source = lai_source
-        self.tir_source = tir_source
+        self.lst_source = lst_source
         self.elevation_source = elevation_source
         self.landcover_source = landcover_source
         self.ta0_source = ta0_source
@@ -273,7 +277,7 @@ class Image(object):
         else:
             raise ValueError('invalid lon parameter')
 
-        # TODO: This is not getting set in landcover function
+        # TODO: This is now getting set in landcover function
         #   Only NLCD types are currently supported
         self.lc_type = 'NLCD'
         self.set_landcover_vars()
@@ -387,7 +391,7 @@ class Image(object):
             elif v.lower() == 'et_reference':
                 output_images.append(self.et_reference.float())
             elif v.lower() == 'lst':
-                output_images.append(self.tir.float())
+                output_images.append(self.lst.float())
             elif v.lower() == 'mask':
                 output_images.append(self.mask)
             elif v.lower() == 'ndvi':
@@ -414,7 +418,7 @@ class Image(object):
 
         """
         et = tseb.tseb_pt(
-            t_air=self.ta, t_rad=self.tir, t_air0=self.t_air0, e_air=self.vp,
+            t_air=self.ta, t_rad=self.lst, t_air0=self.t_air0, e_air=self.vp,
             u=self.windspeed, p=self.pressure, z=self.elevation,
             rs_1=self.rs1, rs24=self.rs24, vza=0,
             aleafv=self.aleafv, aleafn=self.aleafn, aleafl=self.aleafl,
@@ -595,16 +599,6 @@ class Image(object):
         #         .select(['discrete_classification])
         #         .rename(['landcover'])
         #     self.lc_type = ''
-        # # TODO: Eventually remove this option
-        # elif self.landcover_source.upper() == 'GLOBELAND30':
-        #     # GlobeLand30 values need to be set to the lowest even multiple of 10,
-        #     #   since that is currently what is in the landcover.xlsx file.
-        #     # http://www.globallandcover.com/GLC30Download/index.aspx
-        #     lc_coll = ee.ImageCollection('users/cgmorton/GlobeLand30')\
-        #         .filterBounds(self.image.geometry().bounds(1))
-        #     lc_img = ee.Image(lc_coll.mosaic())\
-        #         .divide(10).floor().multiply(10).rename(['landcover'])
-        #     self.lc_type = 'GLOBELAND30'
 
         return lc_img
 
@@ -626,7 +620,6 @@ class Image(object):
             # This approach for getting the version will only work with the new LAI v0.2.0
             #   that was built with a pyproject.toml and pins DisALEXI to Python 3.8+
             self.landsat_lai_version = metadata.metadata('openet-landsat-lai')['Version']
-
         elif type(self.lai_source) is str:
             # Assumptions (for now)
             #   String lai_source is an image collection ID
@@ -634,12 +627,10 @@ class Image(object):
             #   LAI images always need to be scaled
             # CGM - This will raise a .get() error if the image doesn't exist
             lai_coll = ee.ImageCollection(self.lai_source)\
-               .filterMetadata('scene_id', 'equals', self.index)  # yun modified
+               .filterMetadata('scene_id', 'equals', self.index)
             lai_img = ee.Image(lai_coll.first()).select(['LAI'])
             lai_img = lai_img.multiply(ee.Number(lai_img.get('scale_factor')))\
                 .set({'landsat_lai_version': lai_img.get('landsat_lai_version')})
-            # lai_img = lai_img.multiply(ee.Number(0.01))\
-            #     .set({'landsat_lai_version': lai_img.get('landsat_version')})  #yun to test nosat lai
             self.landsat_lai_version = lai_img.get('landsat_lai_version')
         else:
             raise ValueError(f'Unsupported lai_source: {self.lai_source}\n')
@@ -648,69 +639,29 @@ class Image(object):
 
         return lai_img.select([0], ['lai'])
 
-    # TODO: Rename "tir" to "lst" once Collection 2 is fully loaded
     @lazy_property
-    def tir(self):
-        """Sharpened thermal infrared (TIR)"""
-        if utils.is_number(self.tir_source):
-            tir_img = ee.Image.constant(float(self.tir_source))
-        # elif isinstance(self.tir_source, ee.computedobject.ComputedObject):
-        #     tir_img = self.tir_source
-        elif type(self.tir_source) is str:
+    def lst(self):
+        """Sharpened land surface temperature (LST)"""
+        if utils.is_number(self.lst_source):
+            lst_img = ee.Image.constant(float(self.lst_source))
+        elif type(self.lst_source) is str:
             # Assumptions (for now)
-            #   String tir_source is an image collection ID
+            #   String lst_source is an image collection ID
             #   Images are single band and don't need a select()
-            #   TIR images always need to be scaled
+            #   LST images always need to be scaled
             # CGM - This will raise a .get() error if the image doesn't exist
-            tir_coll = ee.ImageCollection(self.tir_source)\
+            lst_coll = ee.ImageCollection(self.lst_source)\
                 .filterMetadata('scene_id', 'equals', self.index)
-            tir_img = ee.Image(tir_coll.first())
-            tir_img = tir_img.multiply(ee.Number(tir_img.get('scale_factor')))\
-                .set({'landsat_lst_version': tir_img.get('landsat_lst_version')})
-            self.sharpen_version = tir_img.get('landsat_lst_version')
+            lst_img = ee.Image(lst_coll.first())
+            lst_img = lst_img.multiply(ee.Number(lst_img.get('scale_factor')))\
+                .set({'landsat_lst_version': lst_img.get('landsat_lst_version')})
+            self.landsat_lst_version = lst_img.get('landsat_lst_version')
         else:
-            raise ValueError(f'Unsupported tir_source: {self.tir_source}\n')
+            raise ValueError(f'Unsupported lst_source: {self.lst_source}\n')
+        # elif isinstance(self.lst_source, ee.computedobject.ComputedObject):
+        #     lst_img = self.lst_source
 
-        return tir_img.select([0], ['tir'])
-
-    # DEADBEEF - Remove when Landsat C01 support is dropped
-    # CGM - This is not being called but maybe should be applied to just the
-    #   Collection 1 TIR image (since it is not LST)
-    # @lazy_property
-    # def lst(self):
-    #     """Return land surface temperature (LST) image"""
-    #     emissivity = self.lai.divide(300).add(0.97)\
-    #         .where(self.ndvi.lte(0), 0.99)\
-    #         .where(self.ndvi.gt(0).And(self.lai.gt(3)), 0.98)
-    #
-    #     # Get properties from image
-    #     k1 = ee.Number(ee.Image(self.image).get('k1_constant'))
-    #     k2 = ee.Number(ee.Image(self.image).get('k2_constant'))
-    #
-    #     # First back out radiance from brightness temperature
-    #     # Then recalculate emissivity corrected Ts
-    #     thermal_rad_toa = self.tir.expression(
-    #         'k1 / (exp(k2 / ts_brightness) - 1)',
-    #         {'ts_brightness': self.tir, 'k1': k1, 'k2': k2},
-    #     )
-    #
-    #     tnb = 0.866  # narrow band transmissivity of air
-    #     rp = 0.91  # path radiance
-    #     rsky = 1.32  # narrow band clear sky downward thermal radiation
-    #     rc = thermal_rad_toa.expression(
-    #         '((thermal_rad_toa - rp) / tnb) - ((1. - emiss) * rsky)',
-    #         {
-    #             'thermal_rad_toa': thermal_rad_toa,
-    #             'emiss': emissivity,
-    #             'rp': rp, 'tnb': tnb, 'rsky': rsky
-    #         },
-    #     )
-    #     lst = rc.expression(
-    #         'k2 / log(emiss * k1 / rc + 1)',
-    #         {'emiss': emissivity, 'rc': rc, 'k1': k1, 'k2': k2},
-    #     )
-    #
-    #     return lst.set(self.properties).rename(['lst'])
+        return lst_img.select([0], ['lst'])
 
     @lazy_property
     def mask(self):
@@ -783,31 +734,14 @@ class Image(object):
                 .filterMetadata('image_id', 'equals', self.id)
                 .limit(1, 'step_size', False)
             )
-            input_img = ee.Image(ta_coll.first())
-
-            ta_img = self.ta_mosaic_min_bias(input_img)
-            # DEADBEEF
-            # # Select the Ta image with the minimum bias
-            # ta_array = input_img.select('step_\\d+_ta').toArray()
-            # bias_array = input_img.select('step_\\d+_bias').toArray()
-            # diff = bias_array.arraySlice(0, 1).subtract(bias_array.arraySlice(0, 0, -1))
-            # bias_array_mask = diff.abs().lt(0.001)
-            # # Make the array the same length by repeating the first value
-            # bias_array_mask = bias_array_mask.arraySlice(0, 0, 1).arrayCat(bias_array_mask, 0)
-            # bias_array_new = bias_array.add(bias_array_mask.multiply(99))
-            # index = bias_array_new.abs().multiply(-1).arrayArgmax()\
-            #     .arraySlice(0, 0, 1).arrayFlatten([['array']])
-            # ta_img = ta_array.arrayGet(index)
-
+            ta_img = ta_mosaic_min_bias(ee.Image(ta_coll.first()))
             if self.ta_smooth_flag:
-                # CGM - The v003 calculations used a radius of 2 instead of 1
                 ta_img = (
                     ta_img.focal_mean(1, 'circle', 'pixels')
                     .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)
                     .resample('bilinear')
-                    .reproject(crs=self.crs,crsTransform=self.transform)
+                    .reproject(crs=self.crs, crsTransform=self.transform)
                 )
-
         elif ta_source_re.match(self.ta_source):
             # CGM - How can I ensure it is an image collection ID?
             ta_coll = (
@@ -815,31 +749,14 @@ class Image(object):
                 .filterMetadata('image_id', 'equals', self.id)
                 .limit(1, 'step_size', False)
             )
-            input_img = ee.Image(ta_coll.first())
-
-            ta_img = self.ta_mosaic_min_bias(input_img)
-            # DEADBEEF
-            # # Select the Ta image with the minimum bias
-            # ta_array = input_img.select('step_\\d+_ta').toArray()
-            # bias_array = input_img.select('step_\\d+_bias').toArray()
-            # diff = bias_array.arraySlice(0, 1).subtract(bias_array.arraySlice(0, 0, -1))
-            # bias_array_mask = diff.abs().lt(0.001)
-            # # Make the array the same length by repeating the first value
-            # bias_array_mask = bias_array_mask.arraySlice(0, 0, 1).arrayCat(bias_array_mask, 0)
-            # bias_array_new = bias_array.add(bias_array_mask.multiply(99))
-            # index = bias_array_new.abs().multiply(-1).arrayArgmax()\
-            #     .arraySlice(0, 0, 1).arrayFlatten([['array']])
-            # ta_img = ta_array.arrayGet(index)
-
+            ta_img = ta_mosaic_min_bias(ee.Image(ta_coll.first()))
             if self.ta_smooth_flag:
-                # CGM - The v003 calculations used a radius of 2 instead of 1
                 ta_img = (
                     ta_img.focal_mean(1, 'circle', 'pixels')
                     .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)
                     .resample('bilinear')
                     .reproject(crs=self.crs, crsTransform=self.transform)
                 )
-
         else:
             raise ValueError(f'Unsupported ta_source: {self.ta_source}\n')
 
@@ -896,10 +813,8 @@ class Image(object):
                 )
             rs1_img = (
                 ee.Image(rs1_img)
-                .resample('bicubic')
-                .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)
-                .resample('bilinear')
-                .reproject(crs=self.crs, crsTransform=self.transform)
+                .resample('bicubic').reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)
+                .resample('bilinear').reproject(crs=self.crs, crsTransform=self.transform)
             )
         elif self.rs_hourly_source.upper() == 'MERRA2':
             # Extract MERRA2 solar images for the target image time
@@ -913,10 +828,12 @@ class Image(object):
                 # rs1_img = utils.interpolate(
                 #     rs1_coll, self.datetime.advance(-0.5, 'hour'), timestep=1)
                 interp_dt = self.datetime.advance(-0.5, 'hour')
-                rs_a_img = ee.Image(rs1_coll.filterDate(
-                    interp_dt.advance(-1, 'hour'), interp_dt).first())
-                rs_b_img = ee.Image(rs1_coll.filterDate(
-                    interp_dt, interp_dt.advance(1, 'hour')).first())
+                rs_a_img = ee.Image(
+                    rs1_coll.filterDate(interp_dt.advance(-1, 'hour'), interp_dt).first()
+                )
+                rs_b_img = ee.Image(
+                    rs1_coll.filterDate(interp_dt, interp_dt.advance(1, 'hour')).first()
+                )
                 t_a = ee.Number(rs_a_img.get('system:time_start'))
                 t_b = ee.Number(rs_b_img.get('system:time_start'))
                 rs1_img = (
@@ -1092,10 +1009,11 @@ class Image(object):
             # Scale output values by 100 since remap values must be integer
             output_values = [v * 100 for k, v in lc_items]
 
-            # Get the remap values from the dataframe
-            #   and apply to the land cover image
+            # Get the remap values from the dataframe and apply to the land cover image
             return (
-                ee.Image(landcover).remap(input_values, output_values).divide(100)
+                ee.Image(landcover)
+                .remap(input_values, output_values)
+                .divide(100)
                 .rename([lc_var])
             )
 
@@ -1112,7 +1030,7 @@ class Image(object):
         self.leaf_width = lc_remap(lc_img, self.lc_type, 'xl')
         self.clump = lc_remap(lc_img, self.lc_type, 'omega')
 
-    # DEADBEEF - Not used any more and will be removed at some point
+    # # DEADBEEF - Not used any more and will be removed at some point
     # # Helper functions for computing Ta (and ET)
     # def ta_coarse(self, ta_img, threshold=0.5):
     #     """Compute the air temperature for each ALEXI ET cell that minimizes
@@ -1131,7 +1049,7 @@ class Image(object):
     #
     #     """
     #     et_fine = tseb.tseb_pt(
-    #         t_air=ta_img, t_rad=self.tir, t_air0=self.t_air0,
+    #         t_air=ta_img, t_rad=self.lst, t_air0=self.t_air0,
     #         e_air=self.vp, u=self.windspeed, p=self.pressure, z=self.elevation,
     #         rs_1=self.rs1, rs24=self.rs24, vza=0,
     #         aleafv=self.aleafv, aleafn=self.aleafn, aleafl=self.aleafl,
@@ -1202,8 +1120,8 @@ class Image(object):
 
         # TODO: Test making a single multi-band image of all of these and making
         #   a single reduceResolution call
-        rr_params = {'reducer': ee.Reducer.median().unweighted(), 'maxPixels': 30000}
         # rr_params = {'reducer': ee.Reducer.mean().unweighted(), 'maxPixels': 30000}
+        rr_params = {'reducer': ee.Reducer.median().unweighted(), 'maxPixels': 30000}
         proj_params = {'crs': self.alexi_crs, 'crsTransform': self.alexi_geo}
 
         # TODO: Check that t_air0 is supposed to be passed to t_air and t_air0 parameters
@@ -1212,7 +1130,7 @@ class Image(object):
             # CGM - The ALEXI image is already at the ALEXI scale and shouldn't need to be reduced
             # et_alexi=self.et_alexi.reduceResolution(**rr_params).reproject(**proj_params),
             t_air=self.t_air0.reduceResolution(**rr_params).reproject(**proj_params),
-            t_rad=self.tir.reduceResolution(**rr_params).reproject(**proj_params),
+            t_rad=self.lst.reduceResolution(**rr_params).reproject(**proj_params),
             t_air0=self.t_air0.reduceResolution(**rr_params).reproject(**proj_params),
             e_air=self.vp.reduceResolution(**rr_params).reproject(**proj_params),
             u=self.windspeed.reduceResolution(**rr_params).reproject(**proj_params),
@@ -1281,7 +1199,7 @@ class Image(object):
         def ta_func(ta):
             """Compute TSEB ET for the target t_air value"""
             et_fine = tseb.tseb_pt(
-                t_air=ta, t_rad=self.tir, t_air0=self.t_air0,
+                t_air=ta, t_rad=self.lst, t_air0=self.t_air0,
                 e_air=self.vp, u=self.windspeed, p=self.pressure,
                 z=self.elevation, rs_1=self.rs1, rs24=self.rs24, vza=0,
                 aleafv=self.aleafv, aleafn=self.aleafn, aleafl=self.aleafl,
@@ -1339,7 +1257,6 @@ class Image(object):
             The number of Ta steps.
         threshold : float, optional
 
-
         Returns
         -------
         image : ee.Image
@@ -1347,11 +1264,11 @@ class Image(object):
 
         """
 
-        # Redefining ta_funct() here allows threshold to be passed into function
+        # Redefining ta_func() here allows threshold to be passed into function
         def ta_func(ta):
             """Compute TSEB ET for the target t_air value"""
             et_fine = tseb.tseb_pt(
-                t_air=ta, t_rad=self.tir, t_air0=self.t_air0,
+                t_air=ta, t_rad=self.lst, t_air0=self.t_air0,
                 e_air=self.vp, u=self.windspeed, p=self.pressure,
                 z=self.elevation, rs_1=self.rs1, rs24=self.rs24, vza=0,
                 aleafv=self.aleafv, aleafn=self.aleafn, aleafl=self.aleafl,
@@ -1402,35 +1319,6 @@ class Image(object):
         # ])
 
         return ee.ImageCollection(ta_coll.map(ta_func)).toBands()
-
-    # TODO: Move to a utils module maybe since it isn't a function of self
-    # TODO: Maybe rename also
-    def ta_mosaic_min_bias(self, ta_mosaic_img):
-        """Return the air temperature with the minimum bias from a mosaic stack
-
-        Parameters
-        ----------
-        ta_mosaic_img : ee.Image
-
-        Returns
-        -------
-        image : ee.Image
-            ALEXI scale single band air temperature image
-
-        """
-        # Select the Ta image with the minimum bias
-        ta_array = ta_mosaic_img.select('step_\\d+_ta').toArray()
-        bias_array = ta_mosaic_img.select('step_\\d+_bias').toArray()
-        diff = bias_array.arraySlice(0, 1).subtract(bias_array.arraySlice(0, 0, -1))
-        bias_array_mask = diff.abs().lt(0.001)
-        # Make the array the same length by repeating the first value
-        bias_array_mask = bias_array_mask.arraySlice(0, 0, 1).arrayCat(bias_array_mask, 0)
-        bias_array_new = bias_array.add(bias_array_mask.multiply(99))
-        index = bias_array_new.abs().multiply(-1).arrayArgmax() \
-            .arraySlice(0, 0, 1).arrayFlatten([['array']])
-        ta_img = ta_array.arrayGet(index)
-
-        return ta_img.rename(['ta'])
 
     # TODO: Move to a utils module maybe since it isn't a function of self
     # TODO: Maybe rename also, ta_mosaic_zero_bias()?
@@ -1536,7 +1424,7 @@ class Image(object):
 
         # Aggregate the Landsat scale ET up to the ALEXI scale
         et_fine = tseb.tseb_pt(
-            t_air=ta_img, t_rad=self.tir, t_air0=self.t_air0,
+            t_air=ta_img, t_rad=self.lst, t_air0=self.t_air0,
             e_air=self.vp, u=self.windspeed, p=self.pressure, z=self.elevation,
             rs_1=self.rs1, rs24=self.rs24, vza=0,
             aleafv=self.aleafv, aleafn=self.aleafn, aleafl=self.aleafl,
@@ -1575,7 +1463,7 @@ class Image(object):
 
         """
         et = tseb.tseb_pt(
-            t_air=ta_img, t_rad=self.tir, t_air0=self.t_air0,
+            t_air=ta_img, t_rad=self.lst, t_air0=self.t_air0,
             e_air=self.vp, u=self.windspeed, p=self.pressure, z=self.elevation,
             rs_1=self.rs1, rs24=self.rs24, vza=0,
             aleafv=self.aleafv, aleafn=self.aleafn, aleafl=self.aleafl,
@@ -1588,3 +1476,33 @@ class Image(object):
         )
         return et.rename(['et']).set(self.properties)
         #     .reproject(crs=self.crs, crsTransform=self.transform)
+
+
+def ta_mosaic_min_bias(ta_mosaic_img):
+    """Return the air temperature with the minimum bias from a mosaic stack
+
+    Parameters
+    ----------
+    ta_mosaic_img : ee.Image
+
+    Returns
+    -------
+    image : ee.Image
+        ALEXI scale single band air temperature image
+
+    """
+    # Select the Ta image with the minimum bias
+    ta_array = ta_mosaic_img.select('step_\\d+_ta').toArray()
+    bias_array = ta_mosaic_img.select('step_\\d+_bias').toArray()
+    diff = bias_array.arraySlice(0, 1).subtract(bias_array.arraySlice(0, 0, -1))
+    bias_array_mask = diff.abs().lt(0.001)
+    # Make the array the same length by repeating the first value
+    bias_array_mask = bias_array_mask.arraySlice(0, 0, 1).arrayCat(bias_array_mask, 0)
+    bias_array_new = bias_array.add(bias_array_mask.multiply(99))
+    index = (
+        bias_array_new.abs().multiply(-1).arrayArgmax()
+        .arraySlice(0, 0, 1).arrayFlatten([['array']])
+    )
+    ta_img = ta_array.arrayGet(index)
+
+    return ta_img.rename(['ta'])
