@@ -637,7 +637,8 @@ class Image(object):
         # elif isinstance(self.lai_source, ee.computedobject.ComputedObject):
         #     lai_img = self.lai_source
 
-        return lai_img.select([0], ['lai'])
+        # Apply the cloud mask since LAI was not read from the masked input image
+        return lai_img.select([0], ['lai']).updateMask(self.cloud_mask)
 
     @lazy_property
     def lst(self):
@@ -661,7 +662,8 @@ class Image(object):
         # elif isinstance(self.lst_source, ee.computedobject.ComputedObject):
         #     lst_img = self.lst_source
 
-        return lst_img.select([0], ['lst'])
+        # Apply the cloud mask since LST was not read from the masked input image
+        return lst_img.select([0], ['lst']).updateMask(self.cloud_mask)
 
     @lazy_property
     def mask(self):
