@@ -104,8 +104,6 @@ def tseb_pt(
 
     """
     mask = lai.double().multiply(0).rename(['mask'])
-    # mask = albedo.multiply(0).rename(['mask'])
-    # geometry = mask.geometry()
 
     # ************************************************************************
     # Apply met bands directly to Landsat image
@@ -138,22 +136,17 @@ def tseb_pt(
 
     # LAI for leaf spherical distribution
     F = lai.multiply(clump)
-    # F = lai.expression('lai * clump', {'lai': lai, 'clump': clump})
 
     # Fraction cover at nadir (view=0)
+    # fc = 1.0 - exp(-0.5 * F)
     fc = F.multiply(-0.5).exp().multiply(-1).add(1.0).clamp(0.01, 0.9)
-    # fc = lai.expression('1.0 - exp(-0.5 * F)', {'F': F}).clamp(0.01, 0.9)
 
     # Compute canopy height and roughness parameters
-    # CGM - Moved from _set_landcover_vars()
+    # hc = hc_min + ((hc_max - hc_min) * fc)
     hc = hc_max.subtract(hc_min).multiply(fc).add(hc_min)
-    # hc = lai.expression(
-    #     'hc_min + ((hc_max - hc_min) * fc)',
-    #     {'hc_min': hc_min, 'hc_max': hc_max, 'fc': fc})
 
     # LAI relative to canopy projection only
     lai_c = lai.divide(fc)
-    # lai_c = lai.expression('lai / fc', {'lai': lai, 'fc': fc})
 
     # Houborg modification (according to Anderson et al. 2005)
     fc_q = (
@@ -164,11 +157,9 @@ def tseb_pt(
 
     # Brutsaert (1982)
     z0m = hc.multiply(0.123)
-    # z0m = hc.expression('hc * 0.123', {'hc': hc})
     # CGM - add(0) is to mimic numpy copy, check if needed
     z0h = z0m.add(0)
     d0 = hc.multiply(2.0 / 3.0)
-    # d0 = hc.expression('hc * (2.0 / 3.0)', {'hc': hc})
 
     # Correction of roughness parameters for water bodies
     # (NDVI < 0 and albedo < 0.05)
@@ -226,13 +217,11 @@ def tseb_pt(
     )
 
     # Latent heat of vaporization (~2.45 at 20 C) [MJ kg-1] (FAO56 3-1)
+    # lambda1 = (2.501 - (2.361e-3 * (t_air - 273.16)))
     lambda1 = t_air.subtract(273.16).multiply(2.361e-3).multiply(-1).add(2.501)
-    # lambda1 = t_air.expression(
-    #     '(2.501 - (2.361e-3 * (t_air - 273.16)))', {'t_air': t_air})
 
     # Psychrometric constant [kPa C-1] (FAO56 3-10)
     g = p.multiply(1.615E-3).divide(lambda1)
-    # g = p.expression('1.615E-3 * p / lambda1', {'p': p, 'lambda1': lambda1})
 
     # ************************************************************************
     a_pt = mask.add(a_pt_in)
@@ -323,7 +312,6 @@ def tseb_pt(
         )
 
         H_c_init = Rn_c.subtract(LE_c_init)
-        # H_c = albedo.expression('Rn_c - LE_c', {'Rn_c': Rn_c, 'LE_c': LE_c})
 
         T_c_iter = tseb_utils.temp_separation_tc(
             H_c_init, fc_q, t_air, t_rad, r_ah_iter, r_s_iter, r_x_iter, r_air, cp
@@ -351,7 +339,7 @@ def tseb_pt(
         # CGM - Is there a reason this isn't up with the H calculation?
         H = H.where(H.eq(0), 10.0)
 
-        # CGM - This won't doing anything at this position in the code.
+        # CGM - This won't do anything at this position in the code.
         #   Commenting out for now.
         # r_ah_iter = r_ah_iter.where(r_ah_iter.eq(0), 10.0)
 
@@ -367,12 +355,12 @@ def tseb_pt(
         r_ah_iter = tseb_utils.compute_r_ah(u_attr=u_attr_iter, d0=d0, z0h=z0h, z_t=z_t, fh=fh)
         r_s_iter = tseb_utils.compute_r_s(
             u_attr=u_attr_iter, T_s=T_s_iter, T_c=T_c_iter, hc=hc, F=lai,
-            d0=d0, z0m=z0m, leaf=leaf, leaf_s=leaf_s, fm_h=fm_h,
+            d0=d0, z0m=z0m, leaf=leaf, leaf_s=leaf_s, fm_h=fm_h
         )
         # CGM - Why is this function is passing "lai" to "F"?
         r_x_iter = tseb_utils.compute_r_x(
             u_attr=u_attr_iter, hc=hc, F=lai, d0=d0, z0m=z0m,
-            xl=leaf_width, leaf_c=leaf_c, fm_h=fm_h,
+            xl=leaf_width, leaf_c=leaf_c, fm_h=fm_h
         )
 
         a_pt_iter = (
@@ -560,8 +548,6 @@ def tseb_invert(
     """
 
     mask = lai.double().multiply(0).rename(['mask'])
-    # mask = albedo.multiply(0).rename(['mask'])
-    # geometry = mask.geometry()
 
     # ************************************************************************
     # Apply met bands directly to Landsat image
@@ -570,7 +556,8 @@ def tseb_invert(
     rs24 = mask.add(rs24).rename(['rs'])
     # t_air = mask.add(t_air).rename(['ta'])
     # u = mask.add(u).rename(['windspeed'])
-    # Yun - estimate total daily latent heat
+
+    # Estimate total daily latent heat (not in tseb_pt())
     LEtot = et_alexi.expression(
         '(et_alexi * 2.45 / (Rsd * 0.0864 / 24)) * Rs',
         {'et_alexi': et_alexi, 'Rsd': rs24, 'Rs': rs_1}
@@ -599,22 +586,17 @@ def tseb_invert(
 
     # LAI for leaf spherical distribution
     F = lai.multiply(clump)
-    # F = lai.expression('lai * clump', {'lai': lai, 'clump': clump})
 
     # Fraction cover at nadir (view=0)
+    # fc = 1.0 - exp(-0.5 * F)
     fc = F.multiply(-0.5).exp().multiply(-1).add(1.0).clamp(0.01, 0.9)
-    # fc = lai.expression('1.0 - exp(-0.5 * F)', {'F': F}).clamp(0.01, 0.9)
 
     # Compute canopy height and roughness parameters
-    # CGM - Moved from _set_landcover_vars()
+    # hc = hc_min + ((hc_max - hc_min) * fc)
     hc = hc_max.subtract(hc_min).multiply(fc).add(hc_min)
-    # hc = lai.expression(
-    #     'hc_min + ((hc_max - hc_min) * fc)',
-    #     {'hc_min': hc_min, 'hc_max': hc_max, 'fc': fc})
 
     # LAI relative to canopy projection only
     lai_c = lai.divide(fc)
-    # lai_c = lai.expression('lai / fc', {'lai': lai, 'fc': fc})
 
     # Houborg modification (according to Anderson et al. 2005)
     fc_q = (
@@ -625,11 +607,9 @@ def tseb_invert(
 
     # Brutsaert (1982)
     z0m = hc.multiply(0.123)
-    # z0m = hc.expression('hc * 0.123', {'hc': hc})
     # CGM - add(0) is to mimic numpy copy, check if needed
     z0h = z0m.add(0)
     d0 = hc.multiply(2.0 / 3.0)
-    # d0 = hc.expression('hc * (2.0 / 3.0)', {'hc': hc})
 
     # Correction of roughness parameters for water bodies
     # (NDVI < 0 and albedo < 0.05)
@@ -650,8 +630,7 @@ def tseb_invert(
     # z_u = lai.multiply(0).add(50)
     # z_t = lai.multiply(0).add(50)
 
-    # Yun - modify z0m when using it at alexi scale
-    # var = 1.0 / ((alog((z_U - D0) / z0m)) * (alog((z_U - D0) / z0m))) in IDL code
+    # Modify z0m when using it at alexi scale (not in tseb_pt())
     z0m = et_alexi.expression(
         '1.0 / ((log((z_U - D0) / z0m)) * (log((z_U - D0) / z0m)))',
         {'z_U': z_u, 'D0': d0, 'z0m': z0m}
@@ -660,6 +639,7 @@ def tseb_invert(
     z0m = et_alexi.expression(
         '(z_U - D0) / (exp(1.0 / sqrt(z0m)))', {'z_U': z_u, 'D0': d0, 'z0m': z0m}
     )
+
     # Redefine z0h
     z0h = z0m.add(0)
 
@@ -695,17 +675,16 @@ def tseb_invert(
 
     # Slope of the saturation vapor pressure [kPa] (FAO56 3-9)
     Ss = t_air.expression(
-        '4098. * e_s / (((t_air - 273.16) + 237.3) ** 2)', {'e_s': e_s, 't_air': t_air}
+        '4098. * e_s / (((t_air - 273.16) + 237.3) ** 2)',
+        {'e_s': e_s, 't_air': t_air}
     )
 
     # Latent heat of vaporization (~2.45 at 20 C) [MJ kg-1] (FAO56 3-1)
+    # lambda1 = (2.501 - (2.361e-3 * (t_air - 273.16)))
     lambda1 = t_air.subtract(273.16).multiply(2.361e-3).multiply(-1).add(2.501)
-    # lambda1 = t_air.expression(
-    #     '(2.501 - (2.361e-3 * (t_air - 273.16)))', {'t_air': t_air})
 
     # Psychrometric constant [kPa C-1] (FAO56 3-10)
     g = p.multiply(1.615E-3).divide(lambda1)
-    # g = p.expression('1.615E-3 * p / lambda1', {'p': p, 'lambda1': lambda1})
 
     # ************************************************************************
     a_pt = mask.add(a_pt_in)
@@ -806,7 +785,6 @@ def tseb_invert(
             .max(0)
         )
         H_c_init = Rn_c.subtract(LE_c_init)
-        # H_c = albedo.expression('Rn_c - LE_c', {'Rn_c': Rn_c, 'LE_c': LE_c})
         H_s = H.subtract(H_c_init)
 
         LE_s = Rn_s.subtract(G).subtract(H_s)

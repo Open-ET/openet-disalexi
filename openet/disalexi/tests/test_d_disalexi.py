@@ -48,10 +48,10 @@ def default_image_args(
         ta_source='CONUS_V006',
         alexi_source='CONUS_V006',
         ta_smooth_flag=False,
-        lai_source='projects/openet/assets/lai/landsat/c02',
-        tir_source='projects/openet/assets/tir/landsat/c02',
+        lai_source='openet-landsat-lai',
+        lst_source='projects/openet/assets/lst/landsat/c02',
         # lai_source=4.2,
-        # tir_source=306.5,
+        # lst_source=306.5,
         et_reference_source=10,
         et_reference_band=None,
         et_reference_factor=1.0,
@@ -65,7 +65,7 @@ def default_image_args(
         'ta_source': ta_source,
         'alexi_source': alexi_source,
         'lai_source': lai_source,
-        'tir_source': tir_source,
+        'lst_source': lst_source,
         'et_reference_source': et_reference_source,
         'et_reference_band': et_reference_band,
         'et_reference_factor': et_reference_factor,
@@ -80,10 +80,10 @@ def default_image_obj(
         ndvi=0.875,
         ta_source='CONUS_V006',
         alexi_source='CONUS_V006',
-        lai_source='projects/openet/assets/lai/landsat/c02',
-        tir_source='projects/openet/assets/tir/landsat/c02',
+        lai_source='openet-landsat-lai',
+        lst_source='projects/openet/assets/lst/landsat/c02',
         # lai_source=4.2,
-        # tir_source=306.5,
+        # lst_source=306.5,
         et_reference_source=10,
         et_reference_band=None,
         et_reference_factor=1.0,
@@ -99,7 +99,7 @@ def default_image_obj(
         ta_source=ta_source,
         alexi_source=alexi_source,
         lai_source=lai_source,
-        tir_source=tir_source,
+        lst_source=lst_source,
         et_reference_source=et_reference_source,
         et_reference_band=et_reference_band,
         et_reference_factor=et_reference_factor,
@@ -154,7 +154,7 @@ def test_Image_ta_mosaic_min_bias(ta_init=290, step_size=5, step_count=4):
     ta_mosaic_img = d_obj.ta_mosaic(
         d_obj.et_alexi.multiply(0).add(ta_init),
         step_size=step_size, step_count=step_count)
-    ta_min_bias = d_obj.ta_mosaic_min_bias(ta_mosaic_img)
+    ta_min_bias = disalexi.ta_mosaic_min_bias(ta_mosaic_img)
     output = utils.point_image_value(ta_min_bias, TEST_POINT)
     assert abs(output['ta'] - 290) < 10
 
@@ -165,7 +165,7 @@ def test_Image_ta_mosaic_interpolate(ta_init=290, step_size=5, step_count=4):
     ta_mosaic_img = d_obj.ta_mosaic(
         d_obj.et_alexi.multiply(0).add(ta_init),
         step_size=step_size, step_count=step_count)
-    ta_interp = d_obj.ta_mosaic_interpolate(ta_mosaic_img)
+    ta_interp = disalexi.ta_mosaic_interpolate(ta_mosaic_img)
     output = utils.point_image_value(ta_interp, TEST_POINT)
     assert abs(output['ta_interp'] - 290) < 10
 
@@ -182,10 +182,10 @@ def test_Image_ta_mosaic_interpolate(ta_init=290, step_size=5, step_count=4):
 def test_Image_ta_mosaic_min_bias_values(ta_values, bias_values, expected):
     d_obj = disalexi.Image(**default_image_args())
     mask_img = d_obj.et_alexi.multiply(0)
-    ta_images = [mask_img.add(x).rename(f'step_{i}_ta')  for i, x in enumerate(ta_values)]
+    ta_images = [mask_img.add(x).rename(f'step_{i}_ta') for i, x in enumerate(ta_values)]
     bias_images = [mask_img.add(x).rename(f'step_{i}_bias') for i, x in enumerate(bias_values)]
     ta_mosaic_img = ee.Image(ta_images + bias_images)
-    ta_interp = d_obj.ta_mosaic_min_bias(ta_mosaic_img)
+    ta_interp = disalexi.ta_mosaic_min_bias(ta_mosaic_img)
     output = utils.point_image_value(ta_interp, TEST_POINT)
     assert abs(output['ta'] - expected) < 1
 
@@ -214,10 +214,10 @@ def test_Image_ta_mosaic_interpolate_values(ta_values, bias_values, expected):
     # Check that a reasonable air temperature value is returned
     d_obj = disalexi.Image(**default_image_args())
     mask_img = d_obj.et_alexi.multiply(0)
-    ta_images = [mask_img.add(x).rename(f'step_{i}_ta')  for i, x in enumerate(ta_values)]
+    ta_images = [mask_img.add(x).rename(f'step_{i}_ta') for i, x in enumerate(ta_values)]
     bias_images = [mask_img.add(x).rename(f'step_{i}_bias') for i, x in enumerate(bias_values)]
     ta_mosaic_img = ee.Image(ta_images + bias_images)
-    ta_interp = d_obj.ta_mosaic_interpolate(ta_mosaic_img)
+    ta_interp = disalexi.ta_mosaic_interpolate(ta_mosaic_img)
     output = utils.point_image_value(ta_interp, TEST_POINT)
     if expected is None:
         assert output['ta_interp'] is None

@@ -87,9 +87,9 @@ class Image(object):
             (the default is 'USGS/NLCD_RELEASES/2019_REL/NLCD').
         ta0_source : {'CFSR'}
             Air temperature source keyword (the default is 'CFSR').
-        rs_daily_source : {'MERRA2', 'CFSR'}
+        rs_daily_source : {'CFSR'}
             Daily solar insolation source keyword (the default is 'CFSR').
-        rs_hourly_source : {'MERRA2', 'CFSR'}
+        rs_hourly_source : {'CFSR'}
             Hourly solar insolation source keyword (the default is 'CFSR').
         windspeed_source : {'CFSV2', 'CFSR'}
             Windspeed source keyword (the default is 'CFSR').
@@ -818,38 +818,6 @@ class Image(object):
                 .resample('bicubic').reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)
                 .resample('bilinear').reproject(crs=self.crs, crsTransform=self.transform)
             )
-        elif self.rs_hourly_source.upper() == 'MERRA2':
-            # Extract MERRA2 solar images for the target image time
-            # Interpolate rs hourly image at image time
-            # Hourly Rs is time average so time starts are 30 minutes early
-            # Move image time 30 minutes earlier to simplify filtering/interpolation
-            # This interpolation scheme will only work for hourly data
-            rs1_coll_id = 'projects/disalexi/merra2/hourly'
-            rs1_coll = ee.ImageCollection(rs1_coll_id).select(['SWGDNCLR'])
-            if self.rs_interp_flag:
-                # rs1_img = utils.interpolate(
-                #     rs1_coll, self.datetime.advance(-0.5, 'hour'), timestep=1)
-                interp_dt = self.datetime.advance(-0.5, 'hour')
-                rs_a_img = ee.Image(
-                    rs1_coll.filterDate(interp_dt.advance(-1, 'hour'), interp_dt).first()
-                )
-                rs_b_img = ee.Image(
-                    rs1_coll.filterDate(interp_dt, interp_dt.advance(1, 'hour')).first()
-                )
-                t_a = ee.Number(rs_a_img.get('system:time_start'))
-                t_b = ee.Number(rs_b_img.get('system:time_start'))
-                rs1_img = (
-                    rs_b_img.subtract(rs_a_img)
-                    .multiply(interp_dt.millis().subtract(t_a).divide(t_b.subtract(t_a)))
-                    .add(rs_a_img)
-                )
-            else:
-                rs1_img = ee.Image(
-                    ee.ImageCollection(rs1_coll)
-                    .filterDate(self.start_date, self.end_date)
-                    .filter(ee.Filter.calendarRange(self.hour_int, self.hour_int, 'hour'))
-                    .first()
-                )
         else:
             raise ValueError(f'Unsupported rs_hourly_source: {self.rs_hourly_source}\n')
 
@@ -862,13 +830,6 @@ class Image(object):
             rs24_img = ee.Image.constant(float(self.rs_daily_source))
         elif isinstance(self.rs_daily_source, ee.computedobject.ComputedObject):
             rs24_img = self.rs_daily_source
-        elif self.rs_daily_source.upper() == 'MERRA2':
-            rs24_coll = (
-                ee.ImageCollection('projects/climate-engine/merra2/daily')
-                .select(['SWGDNCLR'])
-                .filterDate(self.start_date, self.end_date)
-            )
-            rs24_img = ee.Image(rs24_coll.first())
         elif self.rs_daily_source.upper() == 'CFSR':
             rs24_coll_id = 'projects/disalexi/insol_data/global_v001_hourly'
             rs24_coll = (
@@ -1322,89 +1283,6 @@ class Image(object):
 
         return ee.ImageCollection(ta_coll.map(ta_func)).toBands()
 
-    # TODO: Move to a utils module maybe since it isn't a function of self
-    # TODO: Maybe rename also, ta_mosaic_zero_bias()?
-    def ta_mosaic_interpolate(self, ta_mosaic_img):
-        """Interpolate the air temperature for a bias of 0 from a mosaic stack
-
-        Parameters
-        ----------
-        ta_mosaic_img : ee.Image
-
-        Returns
-        -------
-        image : ee.Image
-            ALEXI scale single band air temperature image
-
-        """
-        # Reverse the band order so that we can find the last transition
-        #   from decreasing to increasing with a positive bias
-        ta_bands = ta_mosaic_img.select('step_\\d+_ta').bandNames().reverse()
-        bias_bands = ta_mosaic_img.select('step_\\d+_bias').bandNames().reverse()
-        ta_array = ta_mosaic_img.select(ta_bands).toArray()
-        bias_array = ta_mosaic_img.select(bias_bands).toArray()
-
-        # Assign the bias that are very similar a very large value so that they will not be selected
-        diff_array = bias_array.arraySlice(0, 1).subtract(bias_array.arraySlice(0, 0, -1))
-        adj_bias_mask = diff_array.abs().lt(0.001)
-        # repeat the last value to make the array the same length. array is reversed order.
-        adj_bias_mask = adj_bias_mask.arrayCat(adj_bias_mask.arraySlice(0, -1), 0)
-        adj_bias_array = bias_array.add(adj_bias_mask.multiply(99))
-
-        # Identify the "last" transition from a negative to positive bias
-        # CGM - Having problems with .ceil() limiting result to the image data range
-        #   Multiplying by a big number seemed to fix the issue but this could still
-        #     be a problem with the bias ranges get really small
-        sign_array = bias_array.multiply(1000).ceil().max(0).min(1).int()
-        transition_array = sign_array.arraySlice(0, 0, -1).subtract(sign_array.arraySlice(0, 1))
-        # Insert an extra value at the beginning (of reverse, so actually at end)
-        #   of the transition array so the indexing lines up for all steps
-        transition_array = bias_array.arraySlice(0, 0, 1).multiply(0).arrayCat(transition_array, 0)
-        transition_index = transition_array.arrayArgmax().arrayFlatten([['index']])
-        # Get the max transition value in order to know if there was a transition
-        transition_max = transition_array.arrayReduce(ee.Reducer.max(), [0]).arrayFlatten([['max']])
-
-        # Identify the position of minimum absolute bias
-        min_bias_index = adj_bias_array.abs().multiply(-1).arrayArgmax().arrayFlatten([['index']])
-
-        # Identify the "bracketing" Ta and bias values
-        # If there is a transition, use the "last" transition
-        # If there is not a transition, use the minimum absolute bias for both
-        # Note, the index is for the reversed arrays
-        # B is the "high" value, A is the "low value"
-        index_b = transition_index.subtract(1).max(0).where(transition_max.eq(0), min_bias_index)
-        index_a = (
-            transition_index.min(ta_bands.size().subtract(1))
-            .where(transition_max.eq(0), min_bias_index)
-        )
-        ta_b = ta_array.arrayGet(index_b)
-        ta_a = ta_array.arrayGet(index_a)
-        bias_b = bias_array.arrayGet(index_b)
-        bias_a = bias_array.arrayGet(index_a)
-
-        # Linearly interpolate Ta
-        # Limit the interpolated value to the bracketing values (don't extrapolate)
-        ta_img = (
-            ta_b.subtract(ta_a).divide(bias_b.subtract(bias_a))
-            .multiply(bias_a.multiply(-1)).add(ta_a)
-            .max(ta_a).min(ta_b)
-        )
-        # # Compute the target Ta as the average of the bracketing Ta values
-        # #   instead of interpolating
-        # ta_img = ta_a.add(ta_b).multiply(0.5)
-
-        # # CGM - This is mostly needed at the 10k step size
-        # #   Commenting out for now
-        # # Mask out Ta cells with all negative biases
-        # ta_img = ta_img.updateMask(bias_b.lt(0).And(bias_a.lt(0)).Not())
-
-        # Round to the nearest tenth (should it be hundredth?)
-        return (
-            ta_img.multiply(10).round().divide(10)
-            .addBands([ta_a, bias_a, ta_b, bias_b])
-            .rename(['ta_interp', 'ta_a', 'bias_a', 'ta_b', 'bias_b'])
-        )
-
     def et_coarse(self, ta_img, threshold=0.5):
         """Compute the Landsat ET summed to the ALEXI grid for the
         specified air temperature image
@@ -1478,6 +1356,89 @@ class Image(object):
         )
         return et.rename(['et']).set(self.properties)
         #     .reproject(crs=self.crs, crsTransform=self.transform)
+
+
+# TODO: Maybe rename also, ta_mosaic_zero_bias()?
+def ta_mosaic_interpolate(ta_mosaic_img):
+    """Interpolate the air temperature for a bias of 0 from a mosaic stack
+
+    Parameters
+    ----------
+    ta_mosaic_img : ee.Image
+
+    Returns
+    -------
+    image : ee.Image
+        ALEXI scale single band air temperature image
+
+    """
+    # Reverse the band order so that we can find the last transition
+    #   from decreasing to increasing with a positive bias
+    ta_bands = ta_mosaic_img.select('step_\\d+_ta').bandNames().reverse()
+    bias_bands = ta_mosaic_img.select('step_\\d+_bias').bandNames().reverse()
+    ta_array = ta_mosaic_img.select(ta_bands).toArray()
+    bias_array = ta_mosaic_img.select(bias_bands).toArray()
+
+    # Assign the bias that are very similar a very large value so that they will not be selected
+    diff_array = bias_array.arraySlice(0, 1).subtract(bias_array.arraySlice(0, 0, -1))
+    adj_bias_mask = diff_array.abs().lt(0.001)
+    # repeat the last value to make the array the same length. array is reversed order.
+    adj_bias_mask = adj_bias_mask.arrayCat(adj_bias_mask.arraySlice(0, -1), 0)
+    adj_bias_array = bias_array.add(adj_bias_mask.multiply(99))
+
+    # Identify the "last" transition from a negative to positive bias
+    # CGM - Having problems with .ceil() limiting result to the image data range
+    #   Multiplying by a big number seemed to fix the issue but this could still
+    #     be a problem with the bias ranges get really small
+    sign_array = bias_array.multiply(1000).ceil().max(0).min(1).int()
+    transition_array = sign_array.arraySlice(0, 0, -1).subtract(sign_array.arraySlice(0, 1))
+    # Insert an extra value at the beginning (of reverse, so actually at end)
+    #   of the transition array so the indexing lines up for all steps
+    transition_array = bias_array.arraySlice(0, 0, 1).multiply(0).arrayCat(transition_array, 0)
+    transition_index = transition_array.arrayArgmax().arrayFlatten([['index']])
+    # Get the max transition value in order to know if there was a transition
+    transition_max = transition_array.arrayReduce(ee.Reducer.max(), [0]).arrayFlatten([['max']])
+
+    # Identify the position of minimum absolute bias
+    min_bias_index = adj_bias_array.abs().multiply(-1).arrayArgmax().arrayFlatten([['index']])
+
+    # Identify the "bracketing" Ta and bias values
+    # If there is a transition, use the "last" transition
+    # If there is not a transition, use the minimum absolute bias for both
+    # Note, the index is for the reversed arrays
+    # B is the "high" value, A is the "low value"
+    index_b = transition_index.subtract(1).max(0).where(transition_max.eq(0), min_bias_index)
+    index_a = (
+        transition_index.min(ta_bands.size().subtract(1))
+        .where(transition_max.eq(0), min_bias_index)
+    )
+    ta_b = ta_array.arrayGet(index_b)
+    ta_a = ta_array.arrayGet(index_a)
+    bias_b = bias_array.arrayGet(index_b)
+    bias_a = bias_array.arrayGet(index_a)
+
+    # Linearly interpolate Ta
+    # Limit the interpolated value to the bracketing values (don't extrapolate)
+    ta_img = (
+        ta_b.subtract(ta_a).divide(bias_b.subtract(bias_a))
+        .multiply(bias_a.multiply(-1)).add(ta_a)
+        .max(ta_a).min(ta_b)
+    )
+    # # Compute the target Ta as the average of the bracketing Ta values
+    # #   instead of interpolating
+    # ta_img = ta_a.add(ta_b).multiply(0.5)
+
+    # # CGM - This is mostly needed at the 10k step size
+    # #   Commenting out for now
+    # # Mask out Ta cells with all negative biases
+    # ta_img = ta_img.updateMask(bias_b.lt(0).And(bias_a.lt(0)).Not())
+
+    # Round to the nearest tenth (should it be hundredth?)
+    return (
+        ta_img.multiply(10).round().divide(10)
+        .addBands([ta_a, bias_a, ta_b, bias_b])
+        .rename(['ta_interp', 'ta_a', 'bias_a', 'ta_b', 'bias_b'])
+    )
 
 
 def ta_mosaic_min_bias(ta_mosaic_img):

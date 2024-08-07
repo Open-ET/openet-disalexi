@@ -85,7 +85,7 @@ def default_image_args(
         alexi_source='CONUS_V005',
         ta_smooth_flag=False,
         lai_source=4.2,
-        tir_source=306.5,
+        lst_source=306.5,
         et_reference_source=10,
         et_reference_band=None,
         et_reference_factor=1.0,
@@ -98,7 +98,7 @@ def default_image_args(
         'ta_source': ta_source,
         'alexi_source': alexi_source,
         'lai_source': lai_source,
-        'tir_source': tir_source,
+        'lst_source': lst_source,
         'et_reference_source': et_reference_source,
         'et_reference_band': et_reference_band,
         'et_reference_factor': et_reference_factor,
@@ -114,7 +114,7 @@ def default_image_obj(
         ta_source='CONUS_V005',
         alexi_source='CONUS_V005',
         lai_source=4.2,
-        tir_source=306.5,
+        lst_source=306.5,
         et_reference_source=10,
         et_reference_band=None,
         et_reference_factor=1.0,
@@ -127,7 +127,7 @@ def default_image_obj(
         ta_source=ta_source,
         alexi_source=alexi_source,
         lai_source=lai_source,
-        tir_source=tir_source,
+        lst_source=lst_source,
         et_reference_source=et_reference_source,
         et_reference_band=et_reference_band,
         et_reference_factor=et_reference_factor,
@@ -141,8 +141,8 @@ def test_Image_init_default_parameters():
     m = disalexi.Image(default_image())
     assert m.ta_source == 'CONUS_V006'
     assert m.alexi_source == 'CONUS_V006'
-    assert m.lai_source == 'projects/openet/assets/lai/landsat/c02'
-    assert m.tir_source == 'projects/openet/assets/tir/landsat/c02'
+    assert m.lai_source == 'openet-landsat-lai'
+    assert m.lst_source == 'projects/openet/assets/lst/landsat/c02'
     assert m.elevation_source == 'USGS/SRTMGL1_003'
     assert m.landcover_source == 'USGS/NLCD_RELEASES/2019_REL/NLCD'
     assert m.airpressure_source == 'CFSR'
@@ -153,13 +153,13 @@ def test_Image_init_default_parameters():
     assert m.windspeed_source == 'CFSR'
     # assert m.stabil_iter == 36
     assert m.albedo_iter == 10
-    assert m.rs_interp_flag == True
+    assert m.rs_interp_flag is True
     # assert m.ta_interp_flag == True
-    assert m.ta_smooth_flag == True
-    assert m.et_reference_source == None
-    assert m.et_reference_band == None
-    assert m.et_reference_factor == None
-    assert m.et_reference_resample == None
+    assert m.ta_smooth_flag is True
+    assert m.et_reference_source is None
+    assert m.et_reference_band is None
+    assert m.et_reference_factor is None
+    assert m.et_reference_resample is None
 
 
 # Todo: Break these up into separate functions?
@@ -265,7 +265,7 @@ def test_Image_ta_source_exception():
 
 def test_Image_ta_properties():
     """Test if properties are set on the ET image"""
-    output =  utils.getinfo(default_image_obj().ta)
+    output = utils.getinfo(default_image_obj().ta)
     assert output['bands'][0]['id'] == 'ta'
     assert output['properties']['system:index'] == SCENE_ID
     assert output['properties']['system:time_start'] == SCENE_TIME
@@ -355,8 +355,6 @@ def test_Image_elevation_band_name():
         ['USGS/NLCD_RELEASES/2021_REL/NLCD/2021', TEST_POINT, 82],
         ['USGS/NLCD_RELEASES/2019_REL/NLCD', TEST_POINT, 82],
         ['USGS/NLCD_RELEASES/2019_REL/NLCD/2016', TEST_POINT, 82],
-        ['USGS/NLCD_RELEASES/2016_REL', TEST_POINT, 82],
-        ['USGS/NLCD_RELEASES/2016_REL/2016', TEST_POINT, 82],
         # ['GLOBELAND30', TEST_POINT, 10],
         [ee.Image('USGS/SRTMGL1_003').multiply(0).add(82), TEST_POINT, 82],
         ['82', TEST_POINT, 82],
@@ -390,7 +388,6 @@ def test_Image_landcover_source_invalid(source):
         # Not sure why these tests aren't working
         'USGS/NLCD_RELEASES/2019_REL/NLCD/2021',
         'USGS/NLCD_RELEASES/2021_REL/NLCD/2019',
-        'USGS/NLCD_RELEASES/2016_REL/2019',
     ]
 )
 def test_Image_landcover_source_invalid(source):
@@ -458,7 +455,6 @@ def test_Image_pressure_band_name():
         # CGM - I'm not sure why these two values are different
         #   The intermediate values are identical but end up different after smoothing
         ['CFSR', TEST_POINT, 8594.84901460842],
-        ['MERRA2', TEST_POINT, 8587.4091796875],
         [ee.Image('USGS/SRTMGL1_003').multiply(0).add(10), TEST_POINT, 10],
         ['8587.4091796875', TEST_POINT, 8587.4091796875],
         [8587.4091796875, TEST_POINT, 8587.4091796875],
@@ -484,7 +480,6 @@ def test_Image_rs_daily_band_name():
     'source, xy, expected',
     [
         ['CFSR', TEST_POINT, 936.7493916867359],
-        # ['MERRA2', TEST_POINT, 946.6906],
         [ee.Image('USGS/SRTMGL1_003').multiply(0).add(10), TEST_POINT, 10],
         ['946.6906', TEST_POINT, 946.6906],
         [946.6906, TEST_POINT, 946.6906],
@@ -591,12 +586,13 @@ def test_Image_lai_band_name():
 @pytest.mark.parametrize(
     'source, xy, expected',
     [
-        ['projects/openet/assets/lai/landsat/c02', TEST_POINT, 3.6301],
-        ['projects/openet/assets/lai/landsat/c02', [-121.50822, 38.71776], 0.5750],
-        # CGM - These collections will be removed in the future
+        ['openet-landsat-lai', TEST_POINT, 3.6301],
+        ['openet-landsat-lai', [-121.50822, 38.71776], 0.5750],
+        # # DEADBEEF - These collections will be removed in the future
+        # ['projects/openet/assets/lai/landsat/c02', TEST_POINT, 3.6301],
+        # ['projects/openet/assets/lai/landsat/c02', [-121.50822, 38.71776], 0.5750],
         # ['projects/earthengine-legacy/assets/projects/openet/lai/landsat/c02_unsat', TEST_POINT, 3.6301],
         # ['projects/earthengine-legacy/assets/projects/openet/lai/landsat/c02_unsat', [-121.50822, 38.71776], 0.5750],
-        ['openet-landsat-lai', TEST_POINT, 3.6301],
         ['OPENET-LAI', TEST_POINT, 3.6301],
         ['4.123', TEST_POINT, 4.123],
         [4.123, TEST_POINT, 4.123],
@@ -610,8 +606,9 @@ def test_Image_lai_source(source, xy, expected, tol=0.0001):
 @pytest.mark.parametrize(
     'source',
     [
-        'projects/openet/assets/lai/landsat/c02',
         'openet-landsat-lai',
+        # # DEADBEEF
+        # 'projects/openet/assets/lai/landsat/c02',
         # 4.123,
     ]
 )
@@ -634,26 +631,26 @@ def test_Image_lai_version_property(source):
 #     assert abs(output['lai'] - expected) <= tol
 
 
-def test_Image_tir_band_name():
-    output = utils.getinfo(disalexi.Image(default_image()).tir)['bands'][0]['id']
-    assert output == 'tir'
+def test_Image_lst_band_name():
+    output = utils.getinfo(disalexi.Image(default_image()).lst)['bands'][0]['id']
+    assert output == 'lst'
 
 
 @pytest.mark.parametrize(
     ' source, xy, expected',
     [
-        ['projects/openet/assets/tir/landsat/c02', TEST_POINT, 306.5],
-        ['projects/openet/assets/tir/landsat/c02', [-121.50822, 38.71776], 323.6],
-        # CGM - These collections will be removed in the future
+        ['projects/openet/assets/lst/landsat/c02', TEST_POINT, 304.5],
+        ['projects/openet/assets/lst/landsat/c02', [-121.50822, 38.71776], 323.8],
+        # DEADBEEF - These collections will be removed in the future
         # ['projects/earthengine-legacy/assets/projects/openet/tir/landsat/c02', TEST_POINT, 306.5],
         # ['projects/earthengine-legacy/assets/projects/openet/tir/landsat/c02', [-121.50822, 38.71776], 323.6],
         ['300', TEST_POINT, 300],
         [300, TEST_POINT, 300],
     ]
 )
-def test_Image_tir_source(source, xy, expected, tol=0.0001):
-    output = utils.point_image_value(disalexi.Image(default_image(), tir_source=source).tir, xy)
-    assert abs(output['tir'] - expected) <= tol
+def test_Image_lst_source(source, xy, expected, tol=0.0001):
+    output = utils.point_image_value(disalexi.Image(default_image(), lst_source=source).lst, xy)
+    assert abs(output['lst'] - expected) <= tol
 
 
 # @pytest.mark.parametrize(
@@ -663,9 +660,9 @@ def test_Image_tir_source(source, xy, expected, tol=0.0001):
 #         [[-121.50822, 38.71776], 323.6],
 #     ]
 # )
-# def test_Image_tir_values(xy, expected, tol=0.0001):
-#     output = utils.point_image_value(disalexi.Image(default_image(), tir_source=source).tir, xy)
-#     assert abs(output['tir'] - expected) <= tol
+# def test_Image_lst_values(xy, expected, tol=0.0001):
+#     output = utils.point_image_value(disalexi.Image(default_image(), lst_source=source).lst, xy)
+#     assert abs(output['lst'] - expected) <= tol
 
 
 def test_Image_et_default_values(expected=5.625469759837161, tol=0.0001):
@@ -745,7 +742,7 @@ def test_Image_et_default_values(expected=5.625469759837161, tol=0.0001):
 
 def test_Image_et_properties():
     """Test if properties are set on the ET image"""
-    output =  utils.getinfo(default_image_obj().et)
+    output = utils.getinfo(default_image_obj().et)
     assert output['bands'][0]['id'] == 'et'
     assert output['properties']['system:index'] == SCENE_ID
     assert output['properties']['system:time_start'] == SCENE_TIME
@@ -755,7 +752,7 @@ def test_Image_et_properties():
 
 def test_Image_et_reference_properties():
     """Test if properties are set on the ETr image"""
-    output =  utils.getinfo(default_image_obj().et_reference)
+    output = utils.getinfo(default_image_obj().et_reference)
     assert output['bands'][0]['id'] == 'et_reference'
     assert output['properties']['system:index'] == SCENE_ID
     assert output['properties']['system:time_start'] == SCENE_TIME
@@ -843,9 +840,8 @@ def test_Image_calculate_variables_default():
     'variables, expected',
     [
         [['ndvi'], ['ndvi']],
-        # lst gets renamed to tir for some reason
-        [['lst'], ['tir']],
-        [['ndvi', 'lst'], ['ndvi', 'tir']],
+        [['lst'], ['lst']],
+        [['ndvi', 'lst'], ['ndvi', 'lst']],
         [['mask'], ['mask']],
         [['et_reference'], ['et_reference']],
         # [['et_fraction'], ['et_fraction']],
@@ -865,7 +861,7 @@ def test_Image_calculate_variables_all():
 
 def test_Image_calculate_properties():
     """Test if properties are set on the output image"""
-    output =  utils.getinfo(default_image_obj().calculate(['ndvi']))
+    output = utils.getinfo(default_image_obj().calculate(['ndvi']))
     assert output['properties']['system:index'] == SCENE_ID
     assert output['properties']['system:time_start'] == SCENE_TIME
     assert output['properties']['image_id'] == IMAGE_ID
@@ -875,7 +871,7 @@ def test_Image_calculate_values(tol=0.0001):
     """Test if the calculate method returns values"""
     output_img = disalexi.Image(
             default_image(albedo=0.125, cfmask=0, ndvi=0.875),
-            ta_source=300, alexi_source=10, lai_source=4.7, tir_source=306,
+            ta_source=300, alexi_source=10, lai_source=4.7, lst_source=306,
             elevation_source=10, landcover_source=82,
             rs_daily_source=8600, rs_hourly_source=950, windspeed_source=3.25,
             stability_iterations=6, albedo_iterations=3)\
@@ -1029,6 +1025,6 @@ def test_Image_from_method_kwargs():
 #         [[-121.50822, 38.71776], 323.6],
 #     ]
 # )
-# def test_Image_tir_values(xy, expected, tol=0.0001):
-#     output = utils.point_image_value(disalexi.Image(default_image()).tir, xy)
-#     assert abs(output['tir'] - expected) <= tol
+# def test_Image_lst_values(xy, expected, tol=0.0001):
+#     output = utils.point_image_value(disalexi.Image(default_image()).lst, xy)
+#     assert abs(output['lst'] - expected) <= tol

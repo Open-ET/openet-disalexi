@@ -13,9 +13,9 @@ import openet.disalexi.utils as utils
 # CGM - Scene LE07_044033_20170724 isn't loaded in collection 2 yet
 C02_COLLECTIONS = ['LANDSAT/LC08/C02/T1_L2', 'LANDSAT/LE07/C02/T1_L2']
 C02_SCENE_ID_LIST = sorted(['LC08_044033_20170716', 'LE07_044033_20170708'])
-# TA_SOURCE = 'CONUS_V003'
-# LAI_SOURCE = 'projects/earthengine-legacy/assets/projects/openet/lai/landsat/c02_unsat'
-# TIR_SOURCE = 'projects/earthengine-legacy/assets/projects/openet/tir/landsat/c02'
+# TA_SOURCE = 'CONUS_V006'
+# LAI_SOURCE = 'openet-landsat-lai'
+# TIR_SOURCE = 'projects/openet/assets/lst/landsat/c02'
 
 
 START_DATE = '2017-07-01'
