@@ -45,12 +45,12 @@ class Image(object):
             elevation_source='USGS/SRTMGL1_003',
             # elevation_source='NASA/NASADEM_HGT/001',
             landcover_source='USGS/NLCD_RELEASES/2019_REL/NLCD',
-            ta0_source='CFSR',
+            air_pres_source='CFSR',
+            air_temp_source='CFSR',
             rs_daily_source='CFSR',
             rs_hourly_source='CFSR',
-            windspeed_source='CFSR',
-            vp_source='CFSR',
-            airpressure_source='CFSR',
+            vapor_pres_source='CFSR',
+            wind_speed_source='CFSR',
             stability_iterations=None,
             albedo_iterations=10,
             rs_interp_flag=True,
@@ -85,18 +85,18 @@ class Image(object):
                             'USGS/NLCD_RELEASES/2021_REL/NLCD/2021'}
             Land cover source collection or image ID
             (the default is 'USGS/NLCD_RELEASES/2019_REL/NLCD').
-        ta0_source : {'CFSR'}
+        air_pres_source: {'CFSR'}
+            Air pressure source keyword (the default is 'CFSR').
+        air_temp_source : {'CFSR'}
             Air temperature source keyword (the default is 'CFSR').
         rs_daily_source : {'CFSR'}
             Daily solar insolation source keyword (the default is 'CFSR').
         rs_hourly_source : {'CFSR'}
             Hourly solar insolation source keyword (the default is 'CFSR').
-        windspeed_source : {'CFSV2', 'CFSR'}
-            Windspeed source keyword (the default is 'CFSR').
-        vp_source : {'CFSR'}
+        vapor_pres_source : {'CFSR'}
             Vapour pressure source keyword (the default is 'CFSR').
-        airpressure_source: {'CFSR'}
-            Air pressure source keyword (the default is 'CFSR').
+        wind_speed_source : {'CFSR'}
+            Wind speed source keyword (the default is 'CFSR').
         stability_iterations : int, optional
             Number of stability calculation iterations.  If not set, the
             number will be computed dynamically.
@@ -214,12 +214,12 @@ class Image(object):
         self.lst_source = lst_source
         self.elevation_source = elevation_source
         self.landcover_source = landcover_source
-        self.ta0_source = ta0_source
+        self.air_pres_source = air_pres_source
+        self.air_temp_source = air_temp_source
         self.rs_daily_source = rs_daily_source
         self.rs_hourly_source = rs_hourly_source
-        self.windspeed_source = windspeed_source
-        self.vp_source = vp_source
-        self.airpressure_source = airpressure_source
+        self.vapor_pres_source = vapor_pres_source
+        self.wind_speed_source = wind_speed_source
         if stability_iterations:
             self.stabil_iter = int(stability_iterations + 0.5)
         else:
@@ -418,9 +418,9 @@ class Image(object):
 
         """
         et = tseb.tseb_pt(
-            t_air=self.ta, t_rad=self.lst, t_air0=self.t_air0, e_air=self.vp,
-            u=self.windspeed, p=self.pressure, z=self.elevation,
-            rs_1=self.rs1, rs24=self.rs24, vza=0,
+            t_air=self.ta, t_rad=self.lst, t_air0=self.air_temperature,
+            e_air=self.vapor_pressure, u=self.wind_speed, p=self.air_pressure,
+            z=self.elevation, rs_1=self.rs1, rs24=self.rs24, vza=0,
             aleafv=self.aleafv, aleafn=self.aleafn, aleafl=self.aleafl,
             adeadv=self.adeadv, adeadn=self.adeadn, adeadl=self.adeadl,
             albedo=self.albedo, ndvi=self.ndvi, lai=self.lai,
@@ -765,17 +765,17 @@ class Image(object):
         return ta_img.rename(['ta']).set(self.properties)
 
     @lazy_property
-    def pressure(self):
-        """Air pressure [kPa]"""
-        if utils.is_number(self.airpressure_source):
-            ap_img = ee.Image.constant(float(self.airpressure_source))
-        elif isinstance(self.airpressure_source, ee.computedobject.ComputedObject):
-            ap_img = self.airpressure_source
-        elif self.airpressure_source.upper() == 'ESTIMATE':
+    def air_pressure_coarse(self):
+        """Air pressure [kPa] at coarse (ALEXI) scale"""
+        if utils.is_number(self.air_pres_source):
+            ap_img = ee.Image.constant(float(self.air_pres_source))
+        elif isinstance(self.air_pres_source, ee.computedobject.ComputedObject):
+            ap_img = self.air_pres_source
+        elif self.air_pres_source.upper() == 'ESTIMATE':
             ap_img = self.elevation.expression(
                 '101.3 * (((293.0 - 0.0065 * z) / 293.0) ** 5.26)', {'z': self.elevation}
             )
-        elif self.airpressure_source.upper() == 'CFSR':
+        elif self.air_pres_source.upper() == 'CFSR':
             ap_coll_id = 'projects/disalexi/meteo_data/airpressure/global_v001_3hour'
             ap_coll = ee.ImageCollection(ap_coll_id).select(['airpressure'])
             ap_img = utils.interpolate(ap_coll, self.datetime, timestep=3)
@@ -783,16 +783,55 @@ class Image(object):
                 ee.Image(ap_img)
                 .multiply(self.elevation.multiply(-0.0065).add(293).divide(293.0).pow(5.26))
                 .resample('bicubic').reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)
-                .resample('bilinear').reproject(crs=self.crs, crsTransform=self.transform)
+                # # Resample/reproject to the Landsat scale will happen in non-coarse function
+                # .resample('bilinear').reproject(crs=self.crs, crsTransform=self.transform)
             )
         else:
-            raise ValueError(f'Invalid airpressure_source: {self.airpressure_source}\n')
+            raise ValueError(f'Invalid air_pres_source: {self.air_pres_source}\n')
 
-        return ee.Image(ap_img).rename(['pressure'])
+        return ee.Image(ap_img).rename(['air_pressure'])
 
     @lazy_property
-    def rs1(self):
-        """Hourly solar insolation [W m-2]"""
+    def air_pressure(self):
+        """Air pressure [kPa] at fine (Landsat) scale"""
+        return (
+            self.air_pressure_coarse
+            .resample('bilinear').reproject(crs=self.crs, crsTransform=self.transform)
+        )
+
+    @lazy_property
+    def air_temperature_coarse(self):
+        """Air temperature [K] at coarse (ALEXI) scale"""
+        if utils.is_number(self.air_temp_source):
+            at_img = ee.Image.constant(float(self.air_temp_source))
+        # elif isinstance(self.air_temp_source, ee.computedobject.ComputedObject):
+        #     air_temp_img = self.air_temp_source
+        elif self.air_temp_source.upper() == 'CFSR':
+            at_coll_id = 'projects/disalexi/meteo_data/airtemperature/global_v001_3hour'
+            at_coll = ee.ImageCollection(at_coll_id).select(['temperature'])
+            at_img = utils.interpolate(at_coll, self.datetime, timestep=3)
+            at_img = (
+                ee.Image(at_img)
+                .resample('bicubic').reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)
+                # # Resample/reproject to the Landsat scale will happen in non-coarse function
+                #.resample('bilinear').reproject(crs=self.crs, crsTransform=self.transform)
+            )
+        else:
+            raise ValueError(f'Unsupported air_temp_source: {self.air_temp_source}\n')
+
+        return ee.Image(at_img).rename(['air_temperature'])
+
+    @lazy_property
+    def air_temperature(self):
+        """Air temperature [K] at fine (Landsat) scale"""
+        return (
+            self.air_temperature_coarse
+            .resample('bilinear').reproject(crs=self.crs, crsTransform=self.transform)
+        )
+    
+    @lazy_property
+    def rs1_coarse(self):
+        """Hourly solar insolation [W m-2] at coarse (ALEXI) scale"""
         if utils.is_number(self.rs_hourly_source):
             rs1_img = ee.Image.constant(float(self.rs_hourly_source))
         elif isinstance(self.rs_hourly_source, ee.computedobject.ComputedObject):
@@ -816,7 +855,8 @@ class Image(object):
             rs1_img = (
                 ee.Image(rs1_img)
                 .resample('bicubic').reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)
-                .resample('bilinear').reproject(crs=self.crs, crsTransform=self.transform)
+                # # Resample/reproject to the Landsat scale will happen in non-coarse function
+                #.resample('bilinear').reproject(crs=self.crs, crsTransform=self.transform)
             )
         else:
             raise ValueError(f'Unsupported rs_hourly_source: {self.rs_hourly_source}\n')
@@ -824,8 +864,16 @@ class Image(object):
         return ee.Image(rs1_img).rename(['rs'])
 
     @lazy_property
-    def rs24(self):
-        """Daily (24 hour) solar insolation [W m-2]"""
+    def rs1(self):
+        """Hourly solar insolation [W m-2] at fine (Landsat) scale"""
+        return (
+            self.rs1_coarse
+            .resample('bilinear').reproject(crs=self.crs, crsTransform=self.transform)
+        )
+
+    @lazy_property
+    def rs24_coarse(self):
+        """Daily (24 hour) solar insolation [W m-2] at coarse (ALEXI) scale"""
         if utils.is_number(self.rs_daily_source):
             rs24_img = ee.Image.constant(float(self.rs_daily_source))
         elif isinstance(self.rs_daily_source, ee.computedobject.ComputedObject):
@@ -840,90 +888,94 @@ class Image(object):
             rs24_img = (
                 ee.Image(rs24_coll.sum())
                 .resample('bicubic').reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)
-                .resample('bilinear').reproject(crs=self.crs, crsTransform=self.transform)
+                # # Resample/reproject to the Landsat scale will happen in non-coarse function
+                #.resample('bilinear').reproject(crs=self.crs, crsTransform=self.transform)
             )
         else:
             raise ValueError(f'Unsupported rs_daily_source: {self.rs_daily_source}\n')
 
         return ee.Image(rs24_img).rename(['rs'])
 
-    # TODO: Change the naming of this parameter, it is a little inconsistent.
-    #   The band is called "tair0", but the property is "t_air0".
-    # It might make more sense to change "ta" to something else and rename
-    #   this to "ta".
     @lazy_property
-    def t_air0(self):
-        """Air temperature [K]"""
-        if utils.is_number(self.ta0_source):
-            tair0_img = ee.Image.constant(float(self.ta0_source))
-        # elif isinstance(self.ta0_source, ee.computedobject.ComputedObject):
-        #     tair0_img = self.ta0_source
-        elif self.ta0_source.upper() == 'CFSR':
-            tair0_coll_id = 'projects/disalexi/meteo_data/airtemperature/global_v001_3hour'
-            tair0_coll = ee.ImageCollection(tair0_coll_id).select(['temperature'])
-            tair0_img = utils.interpolate(tair0_coll, self.datetime, timestep=3)
-            tair0_img = (
-                ee.Image(tair0_img)
+    def rs24(self):
+        """Daily (24 hour) solar insolation [W m-2] at fine (Landsat) scale"""
+        return (
+            self.rs24_coarse
+            .resample('bilinear').reproject(crs=self.crs, crsTransform=self.transform)
+        )
+
+    @lazy_property
+    def wind_speed_coarse(self):
+        """Wind speed [m/s] at coarse (ALEXI) scale"""
+        if utils.is_number(self.wind_speed_source):
+            ws_img = ee.Image.constant(float(self.wind_speed_source))
+        elif isinstance(self.wind_speed_source, ee.computedobject.ComputedObject):
+            ws_img = self.wind_speed_source
+        # elif self.wind_speed_source.upper() == 'CFSV2':
+        #     # It would be more correct to compute the magnitude for each image,
+        #     #   then compute the average.
+        #     # Do we need daily, 6hr, or interpolated instantaneous data?
+        #     ws_coll = (
+        #         ee.ImageCollection('NOAA/CFSV2/FOR6H')
+        #         .select(['u-component_of_wind_height_above_ground',
+        #                  'v-component_of_wind_height_above_ground'])
+        #         .filterDate(self.start_date, self.end_date)
+        #     )
+        #     ws_img = ws_coll.mean().expression('sqrt(b(0) ** 2 + b(1) ** 2)')
+        elif self.wind_speed_source.upper() == 'CFSR':
+            ws_coll_id = 'projects/disalexi/meteo_data/windspeed/global_v001_3hour'
+            ws_coll = ee.ImageCollection(ws_coll_id).select(['windspeed'])
+            ws_img = utils.interpolate(ws_coll, self.datetime, timestep=3)
+            ws_img = (
+                ee.Image(ws_img)
                 .resample('bicubic').reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)
-                .resample('bilinear').reproject(crs=self.crs, crsTransform=self.transform)
+                # # Resample/reproject to the Landsat scale will happen in non-coarse function
+                # .resample('bilinear').reproject(crs=self.crs, crsTransform=self.transform)
             )
         else:
-            raise ValueError(f'Unsupported ta0_source: {self.ta0_source}\n')
+            raise ValueError(f'Unsupported wind_speed_source: {self.wind_speed_source}\n')
 
-        return ee.Image(tair0_img).rename(['tair0'])
-
-    @lazy_property
-    def windspeed(self):
-        """Windspeed [m/s]"""
-        if utils.is_number(self.windspeed_source):
-            windspeed_img = ee.Image.constant(float(self.windspeed_source))
-        elif isinstance(self.windspeed_source, ee.computedobject.ComputedObject):
-            windspeed_img = self.windspeed_source
-        elif self.windspeed_source.upper() == 'CFSV2':
-            # It would be more correct to compute the magnitude for each image,
-            #   then compute the average.
-            # Do we need daily, 6hr, or interpolated instantaneous data?
-            windspeed_coll = (
-                ee.ImageCollection('NOAA/CFSV2/FOR6H')
-                .select(['u-component_of_wind_height_above_ground',
-                         'v-component_of_wind_height_above_ground'])
-                .filterDate(self.start_date, self.end_date)
-            )
-            windspeed_img = windspeed_coll.mean().expression('sqrt(b(0) ** 2 + b(1) ** 2)')
-        elif self.windspeed_source.upper() == 'CFSR':
-            windspeed_coll_id = 'projects/disalexi/meteo_data/windspeed/global_v001_3hour'
-            windspeed_coll = ee.ImageCollection(windspeed_coll_id).select(['windspeed'])
-            windspeed_img = utils.interpolate(windspeed_coll, self.datetime, timestep=3)
-            windspeed_img = (
-                ee.Image(windspeed_img)
-                .resample('bicubic').reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)
-                .resample('bilinear').reproject(crs=self.crs, crsTransform=self.transform)
-            )
-        else:
-            raise ValueError(f'Unsupported windspeed_source: {self.windspeed_source}\n')
-
-        return ee.Image(windspeed_img).max(2).min(20).rename(['windspeed'])
+        # TODO: Clamping here will cause slight differences with the existing approach
+        #   It might be more consistent to only clamp the fine scale image
+        return ee.Image(ws_img).max(2).min(20).rename(['wind_speed'])
 
     @lazy_property
-    def vp(self):
-        """Vapor pressure [kPa]"""
-        if utils.is_number(self.vp_source):
-            vp_img = ee.Image.constant(float(self.vp_source))
-        elif isinstance(self.vp_source, ee.computedobject.ComputedObject):
-            vp_img = self.vp_source
-        elif self.vp_source.upper() == 'CFSR':
+    def wind_speed(self):
+        """Wind speed [m/s] at fine (Landsat) scale"""
+        return (
+            self.wind_speed_coarse
+            .resample('bilinear').reproject(crs=self.crs, crsTransform=self.transform)
+        )
+
+    @lazy_property
+    def vapor_pressure_coarse(self):
+        """Vapor pressure [kPa] at coarse (ALEXI) scale"""
+        if utils.is_number(self.vapor_pres_source):
+            vp_img = ee.Image.constant(float(self.vapor_pres_source))
+        elif isinstance(self.vapor_pres_source, ee.computedobject.ComputedObject):
+            vp_img = self.vapor_pres_source
+        elif self.vapor_pres_source.upper() == 'CFSR':
             vp_coll_id = 'projects/disalexi/meteo_data/vp/global_v001_3hour'
             vp_coll = ee.ImageCollection(vp_coll_id).select(['vp'])
             vp_img = utils.interpolate(vp_coll, self.datetime, timestep=3)
             vp_img = (
                 ee.Image(vp_img)
                 .resample('bicubic').reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)
-                .resample('bilinear').reproject(crs=self.crs, crsTransform=self.transform)
+                # # Resample/reproject to the Landsat scale will happen in non-coarse function
+                # .resample('bilinear').reproject(crs=self.crs, crsTransform=self.transform)
             )
         else:
-            raise ValueError(f'Unsupported vp_source: {self.vp_source}\n')
+            raise ValueError(f'Unsupported vapor_pres_source: {self.vapor_pres_source}\n')
 
-        return ee.Image(vp_img).rename(['vp'])
+        return ee.Image(vp_img).rename(['vapor_pressure'])
+
+    @lazy_property
+    def vapor_pressure(self):
+        """Vapor pressure [kPa] at fine (Landsat) scale"""
+        return (
+            self.vapor_pressure_coarse
+            .resample('bilinear').reproject(crs=self.crs, crsTransform=self.transform)
+        )
 
     def set_landcover_vars(self):
         """Compute Land Cover / LAI derived variables
@@ -1012,9 +1064,9 @@ class Image(object):
     #
     #     """
     #     et_fine = tseb.tseb_pt(
-    #         t_air=ta_img, t_rad=self.lst, t_air0=self.t_air0,
-    #         e_air=self.vp, u=self.windspeed, p=self.pressure, z=self.elevation,
-    #         rs_1=self.rs1, rs24=self.rs24, vza=0,
+    #         t_air=ta_img, t_rad=self.lst, t_air0=self.air_temperature,
+    #         e_air=self.vapor_pressure, u=self.wind_speed, p=self.air_pressure,
+    #         z=self.elevation, rs_1=self.rs1, rs24=self.rs24, vza=0,
     #         aleafv=self.aleafv, aleafn=self.aleafn, aleafl=self.aleafl,
     #         adeadv=self.adeadv, adeadn=self.adeadn, adeadl=self.adeadl,
     #         albedo=self.albedo, ndvi=self.ndvi, lai=self.lai,
@@ -1083,24 +1135,34 @@ class Image(object):
 
         # TODO: Test making a single multi-band image of all of these and making
         #   a single reduceResolution call
-        # rr_params = {'reducer': ee.Reducer.mean().unweighted(), 'maxPixels': 30000}
-        rr_params = {'reducer': ee.Reducer.median().unweighted(), 'maxPixels': 30000}
+        rr_params = {'reducer': ee.Reducer.mean().unweighted(), 'maxPixels': 30000}
+        # rr_params = {'reducer': ee.Reducer.median().unweighted(), 'maxPixels': 30000}
         proj_params = {'crs': self.alexi_crs, 'crsTransform': self.alexi_geo}
 
-        # TODO: Check that t_air0 is supposed to be passed to t_air and t_air0 parameters
+        # CGM notes
+        # If we are using the coarse/ALEXI scale version of meteo data
+        #   do we need the reduceResolution() call?
+        # The ALEXI image is already at the ALEXI scale and shouldn't need to be reduced
+        # Intentionally passing measured air temperature in for both t_air and t_air0
         ta_coarse = tseb.tseb_invert(
             et_alexi=self.et_alexi,
-            # CGM - The ALEXI image is already at the ALEXI scale and shouldn't need to be reduced
-            # et_alexi=self.et_alexi.reduceResolution(**rr_params).reproject(**proj_params),
-            t_air=self.t_air0.reduceResolution(**rr_params).reproject(**proj_params),
+            t_air=self.air_temperature_coarse,
+            t_air0=self.air_temperature_coarse,
+            e_air=self.vapor_pressure_coarse,
+            u=self.wind_speed_coarse,
+            p=self.air_pressure_coarse,
+            rs_1=self.rs1_coarse,
+            rs24=self.rs24_coarse,
+            #et_alexi=self.et_alexi.reduceResolution(**rr_params).reproject(**proj_params),
+            #t_air=self.air_temperature.reduceResolution(**rr_params).reproject(**proj_params),
+            #t_air0=self.air_temperature.reduceResolution(**rr_params).reproject(**proj_params),
+            #e_air=self.vapor_pressure.reduceResolution(**rr_params).reproject(**proj_params),
+            #u=self.wind_speed.reduceResolution(**rr_params).reproject(**proj_params),
+            #p=self.air_pressure.reduceResolution(**rr_params).reproject(**proj_params),
+            #rs_1=self.rs1.reduceResolution(**rr_params).reproject(**proj_params),
+            #rs24=self.rs24.reduceResolution(**rr_params).reproject(**proj_params),
             t_rad=self.lst.reduceResolution(**rr_params).reproject(**proj_params),
-            t_air0=self.t_air0.reduceResolution(**rr_params).reproject(**proj_params),
-            e_air=self.vp.reduceResolution(**rr_params).reproject(**proj_params),
-            u=self.windspeed.reduceResolution(**rr_params).reproject(**proj_params),
-            p=self.pressure.reduceResolution(**rr_params).reproject(**proj_params),
             z=self.elevation.reduceResolution(**rr_params).reproject(**proj_params),
-            rs_1=self.rs1.reduceResolution(**rr_params).reproject(**proj_params),
-            rs24=self.rs24.reduceResolution(**rr_params).reproject(**proj_params),
             vza=0,
             aleafv=self.aleafv.reduceResolution(**rr_params).reproject(**proj_params),
             aleafn=self.aleafn.reduceResolution(**rr_params).reproject(**proj_params),
@@ -1124,8 +1186,8 @@ class Image(object):
             albedo_iter=self.albedo_iter,
         )
 
-        # CGM - Does this also need the reduceResolution().reproject() call?
-        #   All the inputs are already at that scale
+        # CGM - Does the output also need the reduceResolution().reproject() call
+        #   if all the inputs are already at the coarse/ALEXI scale?
         return (
             ta_coarse
             # .reduceResolution(reducer=ee.Reducer.mean().unweighted(), maxPixels=30000)
@@ -1162,8 +1224,8 @@ class Image(object):
         def ta_func(ta):
             """Compute TSEB ET for the target t_air value"""
             et_fine = tseb.tseb_pt(
-                t_air=ta, t_rad=self.lst, t_air0=self.t_air0,
-                e_air=self.vp, u=self.windspeed, p=self.pressure,
+                t_air=ta, t_rad=self.lst, t_air0=self.air_temperature,
+                e_air=self.vapor_pressure, u=self.wind_speed, p=self.air_pressure,
                 z=self.elevation, rs_1=self.rs1, rs24=self.rs24, vza=0,
                 aleafv=self.aleafv, aleafn=self.aleafn, aleafl=self.aleafl,
                 adeadv=self.adeadv, adeadn=self.adeadn, adeadl=self.adeadl,
@@ -1231,8 +1293,8 @@ class Image(object):
         def ta_func(ta):
             """Compute TSEB ET for the target t_air value"""
             et_fine = tseb.tseb_pt(
-                t_air=ta, t_rad=self.lst, t_air0=self.t_air0,
-                e_air=self.vp, u=self.windspeed, p=self.pressure,
+                t_air=ta, t_rad=self.lst, t_air0=self.air_temperature,
+                e_air=self.vapor_pressure, u=self.wind_speed, p=self.air_pressure,
                 z=self.elevation, rs_1=self.rs1, rs24=self.rs24, vza=0,
                 aleafv=self.aleafv, aleafn=self.aleafn, aleafl=self.aleafl,
                 adeadv=self.adeadv, adeadn=self.adeadn, adeadl=self.adeadl,
@@ -1304,9 +1366,9 @@ class Image(object):
 
         # Aggregate the Landsat scale ET up to the ALEXI scale
         et_fine = tseb.tseb_pt(
-            t_air=ta_img, t_rad=self.lst, t_air0=self.t_air0,
-            e_air=self.vp, u=self.windspeed, p=self.pressure, z=self.elevation,
-            rs_1=self.rs1, rs24=self.rs24, vza=0,
+            t_air=ta_img, t_rad=self.lst, t_air0=self.air_temperature,
+            e_air=self.vapor_pressure, u=self.wind_speed, p=self.air_pressure,
+            z=self.elevation, rs_1=self.rs1, rs24=self.rs24, vza=0,
             aleafv=self.aleafv, aleafn=self.aleafn, aleafl=self.aleafl,
             adeadv=self.adeadv, adeadn=self.adeadn, adeadl=self.adeadl,
             albedo=self.albedo, ndvi=self.ndvi, lai=self.lai,
@@ -1323,6 +1385,7 @@ class Image(object):
             .rename(['et'])
         )
         et_mask = et_coarse.mask().gte(threshold)
+
         return et_coarse.updateMask(et_mask)
 
     def et_bias(self, et_coarse_img):
@@ -1343,9 +1406,9 @@ class Image(object):
 
         """
         et = tseb.tseb_pt(
-            t_air=ta_img, t_rad=self.lst, t_air0=self.t_air0,
-            e_air=self.vp, u=self.windspeed, p=self.pressure, z=self.elevation,
-            rs_1=self.rs1, rs24=self.rs24, vza=0,
+            t_air=ta_img, t_rad=self.lst, t_air0=self.air_temperature,
+            e_air=self.vapor_pressure, u=self.wind_speed, p=self.air_pressure,
+            z=self.elevation, rs_1=self.rs1, rs24=self.rs24, vza=0,
             aleafv=self.aleafv, aleafn=self.aleafn, aleafl=self.aleafl,
             adeadv=self.adeadv, adeadn=self.adeadn, adeadl=self.adeadl,
             albedo=self.albedo, ndvi=self.ndvi, lai=self.lai,

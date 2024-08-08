@@ -145,12 +145,12 @@ def test_Image_init_default_parameters():
     assert m.lst_source == 'projects/openet/assets/lst/landsat/c02'
     assert m.elevation_source == 'USGS/SRTMGL1_003'
     assert m.landcover_source == 'USGS/NLCD_RELEASES/2019_REL/NLCD'
-    assert m.airpressure_source == 'CFSR'
+    assert m.air_pres_source == 'CFSR'
+    assert m.air_temp_source == 'CFSR'
     assert m.rs_daily_source == 'CFSR'
     assert m.rs_hourly_source == 'CFSR'
-    assert m.ta0_source == 'CFSR'
-    assert m.vp_source == 'CFSR'
-    assert m.windspeed_source == 'CFSR'
+    assert m.vapor_pres_source == 'CFSR'
+    assert m.wind_speed_source == 'CFSR'
     # assert m.stabil_iter == 36
     assert m.albedo_iter == 10
     assert m.rs_interp_flag is True
@@ -403,50 +403,50 @@ def test_Image_landcover_band_name():
 @pytest.mark.parametrize(
     'source, xy, expected',
     [
-        ['CFSR', TEST_POINT, 306.3861390180871],
-        ['306', [-121.50822, 38.71776], 306],
-        [306, [-121.50822, 38.71776], 306],
-    ]
-)
-def test_Image_ta0_source(source, xy, expected, tol=0.0001):
-    output = utils.point_image_value(disalexi.Image(
-        default_image(), ta0_source=source).t_air0, xy)
-    assert abs(output['tair0'] - expected) <= tol
-
-
-def test_Image_ta0_source_exception():
-    with pytest.raises(ValueError):
-        utils.getinfo(disalexi.Image(default_image(), ta0_source='').t_air0)
-
-
-def test_Image_t_air0_band_name():
-    output = utils.getinfo(disalexi.Image(default_image()).t_air0)['bands'][0]['id']
-    assert output == 'tair0'
-
-
-@pytest.mark.parametrize(
-    'source, xy, expected',
-    [
         ['CFSR', TEST_POINT, 100.41703705955021],
         ['ESTIMATE', TEST_POINT, 101.26454311195941],
         ['100.41653321557092', TEST_POINT, 100.41653321557092],
         [100.41653321557092, TEST_POINT, 100.41653321557092],
     ]
 )
-def test_Image_pressure_source(source, xy, expected, tol=0.0001):
+def test_Image_air_pressure_source(source, xy, expected, tol=0.0001):
     output = utils.point_image_value(disalexi.Image(
-        default_image(), airpressure_source=source).pressure, xy)
-    assert abs(output['pressure'] - expected) <= tol
+        default_image(), air_pres_source=source).air_pressure, xy)
+    assert abs(output['air_pressure'] - expected) <= tol
 
 
-def test_Image_pressure_source_exception():
+def test_Image_air_pressure_source_exception():
     with pytest.raises(ValueError):
-        utils.getinfo(disalexi.Image(default_image(), airpressure_source='').pressure)
+        utils.getinfo(disalexi.Image(default_image(), air_pres_source='').air_pressure)
 
 
-def test_Image_pressure_band_name():
-    output = utils.getinfo(disalexi.Image(default_image()).pressure)['bands'][0]['id']
-    assert output == 'pressure'
+def test_Image_air_pressure_band_name():
+    output = utils.getinfo(disalexi.Image(default_image()).air_pressure)['bands'][0]['id']
+    assert output == 'air_pressure'
+
+
+@pytest.mark.parametrize(
+    'source, xy, expected',
+    [
+        ['CFSR', TEST_POINT, 306.3861390180871],
+        ['306', [-121.50822, 38.71776], 306],
+        [306, [-121.50822, 38.71776], 306],
+    ]
+)
+def test_Image_air_temperature_source(source, xy, expected, tol=0.0001):
+    output = utils.point_image_value(disalexi.Image(
+        default_image(), air_temp_source=source).air_temperature, xy)
+    assert abs(output['air_temperature'] - expected) <= tol
+
+
+def test_Image_air_temperature_source_exception():
+    with pytest.raises(ValueError):
+        utils.getinfo(disalexi.Image(default_image(), air_temp_source='').air_temperature)
+
+
+def test_Image_air_temperature_band_name():
+    output = utils.getinfo(disalexi.Image(default_image()).air_temperature)['bands'][0]['id']
+    assert output == 'air_temperature'
 
 
 @pytest.mark.parametrize(
@@ -523,36 +523,36 @@ def test_Image_rs_hourly_band_name():
         [2.001476, TEST_POINT, 2.001476],
     ]
 )
-def test_Image_vp_source(source, xy, expected, tol=0.0001):
+def test_Image_vapor_pressure_source(source, xy, expected, tol=0.0001):
     output = utils.point_image_value(disalexi.Image(
-        default_image(), vp_source=source).vp, xy)
-    assert abs(output['vp'] - expected) <= tol
+        default_image(), vapor_pres_source=source).vapor_pressure, xy)
+    assert abs(output['vapor_pressure'] - expected) <= tol
 
 
-def test_Image_vp_source_exception():
+def test_Image_vapor_pressure_source_exception():
     with pytest.raises(ValueError):
-        utils.getinfo(disalexi.Image(default_image(), vp_source='').vp)
+        utils.getinfo(disalexi.Image(default_image(), vapor_pres_source='').vapor_pressure)
 
 
-def test_Image_vp_band_name():
-    output = utils.getinfo(disalexi.Image(default_image()).vp)['bands'][0]['id']
-    assert output == 'vp'
+def test_Image_vapor_pressure_band_name():
+    output = utils.getinfo(disalexi.Image(default_image()).vapor_pressure)['bands'][0]['id']
+    assert output == 'vapor_pressure'
 
 
 @pytest.mark.parametrize(
     'source, xy, expected',
     [
         ['CFSR', TEST_POINT, 2.814758509561662],
-        ['CFSV2', TEST_POINT, 2.169500185267768],
+        # ['CFSV2', TEST_POINT, 2.169500185267768],
         [ee.Image('USGS/SRTMGL1_003').multiply(0).add(10), TEST_POINT, 10],
         ['2.001476', TEST_POINT, 2.001476],
         [2.001476, TEST_POINT, 2.001476],
     ]
 )
-def test_Image_windspeed_source(source, xy, expected, tol=0.0001):
+def test_Image_wind_speed_source(source, xy, expected, tol=0.0001):
     output = utils.point_image_value(disalexi.Image(
-        default_image(), windspeed_source=source).windspeed, xy)
-    assert abs(output['windspeed'] - expected) <= tol
+        default_image(), wind_speed_source=source).wind_speed, xy)
+    assert abs(output['wind_speed'] - expected) <= tol
 
 
 @pytest.mark.parametrize(
@@ -562,20 +562,20 @@ def test_Image_windspeed_source(source, xy, expected, tol=0.0001):
         [20.0001, TEST_POINT, 20.0000],
     ]
 )
-def test_Image_windspeed_clamping(source, xy, expected, tol=0.0001):
+def test_Image_wind_speed_clamping(source, xy, expected, tol=0.0001):
     output = utils.point_image_value(disalexi.Image(
-        default_image(), windspeed_source=source).windspeed, xy)
-    assert abs(output['windspeed'] - expected) <= tol
+        default_image(), wind_speed_source=source).wind_speed, xy)
+    assert abs(output['wind_speed'] - expected) <= tol
 
 
-def test_Image_windspeed_source_exception():
+def test_Image_wind_speed_source_exception():
     with pytest.raises(ValueError):
-        utils.getinfo(disalexi.Image(default_image(), windspeed_source='').windspeed)
+        utils.getinfo(disalexi.Image(default_image(), wind_speed_source='').wind_speed)
 
 
-def test_Image_windspeed_band_name():
-    output = utils.getinfo(disalexi.Image(default_image()).windspeed)['bands'][0]['id']
-    assert output == 'windspeed'
+def test_Image_wind_speed_band_name():
+    output = utils.getinfo(disalexi.Image(default_image()).wind_speed)['bands'][0]['id']
+    assert output == 'wind_speed'
 
 
 def test_Image_lai_band_name():
@@ -733,8 +733,8 @@ def test_Image_et_default_values(expected=5.625469759837161, tol=0.0001):
 #         default_image(albedo=albedo, cfmask=cfmask, lai=lai, lst=lst, ndvi=ndvi),
 #         ta_source=ta, alexi_source=alexi,
 #         elevation_source=elevation, landcover_source=landcover,
-#         ta0_source=ta0, rs_daily_source=rs_daily, rs_hourly_source=rs_hourly,
-#         windspeed_source=windspeed, lat=lat, lon=lon,
+#         air_temp_source=ta0, rs_daily_source=rs_daily, rs_hourly_source=rs_hourly,
+#         wind_speed_source=windspeed, lat=lat, lon=lon,
 #         stability_iterations=stabil_iter, albedo_iterations=albedo_iter).et
 #     output = utils.point_image_value(output_img, [lon, lat])
 #     assert abs(output['et'] - expected) <= tol
@@ -873,7 +873,7 @@ def test_Image_calculate_values(tol=0.0001):
             default_image(albedo=0.125, cfmask=0, ndvi=0.875),
             ta_source=300, alexi_source=10, lai_source=4.7, lst_source=306,
             elevation_source=10, landcover_source=82,
-            rs_daily_source=8600, rs_hourly_source=950, windspeed_source=3.25,
+            rs_daily_source=8600, rs_hourly_source=950, wind_speed_source=3.25,
             stability_iterations=6, albedo_iterations=3)\
         .calculate(['et'])
     #     .calculate(['et', 'et_reference', 'et_fraction'])

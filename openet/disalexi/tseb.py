@@ -465,11 +465,11 @@ def tseb_invert(
     et_alexi : ee.Image
         ALEXI scale ET [mm].
     t_air : ee.Image
-        Air temperature [K].
+        Iterated air temperature [K].
     t_rad : ee.Image
         Radiometric composite temperature [K].
     t_air0 : ee.Image
-        Measured Air Temperature [K]
+        Measured air Temperature [K]
     e_air : ee.Image
         Vapour pressure [kPa]
     u : ee.Image
