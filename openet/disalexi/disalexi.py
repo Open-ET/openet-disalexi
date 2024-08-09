@@ -1,7 +1,7 @@
-# import datetime
 from importlib import metadata
 import pprint
 import re
+import warnings
 
 import ee
 import openet.lai
@@ -54,7 +54,7 @@ class Image(object):
             stability_iterations=None,
             albedo_iterations=10,
             rs_interp_flag=True,
-            ta_interp_flag=True,
+            #ta_interp_flag=True,
             ta_smooth_flag=True,
             lat=None,
             lon=None,
@@ -109,7 +109,7 @@ class Image(object):
         ta_interp_flag : bool, optional
             If True, interpolate between Ta step images (the default is True).
         ta_smooth_flag : bool, optional
-            If True, smooth and resample Ta imagee (the default is True).
+            If True, smooth and resample Ta image (the default is True).
         lat : ee.Image, optional
             Latitude [deg].  If not set will default to ee.Image.pixelLonLat().
         lon : ee.Image, optional
@@ -227,7 +227,7 @@ class Image(object):
         self.albedo_iter = int(albedo_iterations + 0.5)
         self.rs_interp_flag = utils.boolean(rs_interp_flag)
         # CGM - This does not appear to be used anymore
-        self.ta_interp_flag = utils.boolean(ta_interp_flag)
+        #self.ta_interp_flag = utils.boolean(ta_interp_flag)
         self.ta_smooth_flag = utils.boolean(ta_smooth_flag)
         self.et_min = et_min
 
@@ -570,9 +570,15 @@ class Image(object):
             lc_img = self.landcover_source.rename(['landcover'])
             self.lc_type = 'NLCD'
         elif (re.match('USGS/NLCD_RELEASES/2021_REL/NLCD/\\d{4}', self.landcover_source.upper()) or
-              re.match('USGS/NLCD_RELEASES/2019_REL/NLCD/\\d{4}', self.landcover_source.upper()) or
-              re.match('USGS/NLCD_RELEASES/2016_REL/\\d{4}', self.landcover_source.upper())):
+              re.match('USGS/NLCD_RELEASES/2019_REL/NLCD/\\d{4}', self.landcover_source.upper())):
             # Assume an NLCD image ID was passed in and use it directly
+            lc_img = ee.Image(self.landcover_source.upper()).select(['landcover'])
+            self.lc_type = 'NLCD'
+        elif re.match('USGS/NLCD_RELEASES/2016_REL/\\d{4}', self.landcover_source.upper()):
+            warnings.warn(
+                'The NLCD 2016 release is deprecated and support will be removed in a future version',
+                FutureWarning
+            )
             lc_img = ee.Image(self.landcover_source.upper()).select(['landcover'])
             self.lc_type = 'NLCD'
         elif self.landcover_source.upper() == 'USGS/NLCD_RELEASES/2019_REL/NLCD':
@@ -597,8 +603,10 @@ class Image(object):
             )
             self.lc_type = 'NLCD'
         elif self.landcover_source.upper() == 'USGS/NLCD_RELEASES/2016_REL':
-            # If the image collection is passed in, assume the target is CONUS
-            #   and select a close year
+            warnings.warn(
+                'The NLCD 2016 release is deprecated and support will be removed in a future version',
+                FutureWarning
+            )
             year_remap = ee.Dictionary({
                 '1999': '2001', '2000': '2001', '2001': '2001', '2002': '2001',
                 '2003': '2004', '2004': '2004', '2005': '2004',
@@ -748,6 +756,8 @@ class Image(object):
             'CONUS_V004': 'projects/openet/disalexi/tair/conus_v004_1k',
             'CONUS_V005': 'projects/openet/disalexi/tair/conus_v005_1k',
             'CONUS_V006': 'projects/openet/disalexi/tair/conus_v006_1k',
+            # 'CONUS_V006': 'projects/openet/disalexi/tair/conus_v006',
+            # 'CONUS_V007': 'projects/openet/disalexi/tair/conus_v007',
         }
         ta_source_re = re.compile(
             '(projects/earthengine-legacy/assets/)?'
@@ -756,14 +766,26 @@ class Image(object):
             re.IGNORECASE
         )
 
-        # if self.ta_source is None:
-        #     raise ValueError('ta_source must be set to compute et')
         if utils.is_number(self.ta_source):
             ta_img = ee.Image.constant(float(self.ta_source))
             #     .set({'ta_iteration': 'constant'})
         elif isinstance(self.ta_source, ee.computedobject.ComputedObject):
             ta_img = ee.Image(self.ta_source)
-            #     .set({'ta_iteration': 'image'})
+        elif (ta_source_re.match(self.ta_source) and
+                ('1k' not in self.ta_source) and ('10k' not in self.ta_source)):
+            # CGM - How can I ensure it is an image collection ID?
+            ta_img = ee.Image(
+                ee.ImageCollection(self.ta_source)
+                .filterMetadata('image_id', 'equals', self.id).first()
+                .select('ta_interp')
+            )
+            if self.ta_smooth_flag:
+                ta_img = (
+                    ta_img.focal_mean(1, 'circle', 'pixels')
+                    .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)
+                    .resample('bilinear')
+                    .reproject(crs=self.crs, crsTransform=self.transform)
+                )
         elif self.ta_source.upper() in ta_keyword_sources.keys():
             ta_coll_id = ta_keyword_sources[self.ta_source.upper()]
             ta_coll = (
@@ -796,6 +818,8 @@ class Image(object):
                 )
         else:
             raise ValueError(f'Unsupported ta_source: {self.ta_source}\n')
+        # if self.ta_source is None:
+        #     raise ValueError('ta_source must be set to compute et')
 
         return ta_img.rename(['ta']).set(self.properties)
 
@@ -1080,13 +1104,14 @@ class Image(object):
         self.leaf_width = lc_remap(lc_img, self.lc_type, 'xl')
         self.clump = lc_remap(lc_img, self.lc_type, 'omega')
 
-    # TODO: Figure out better names for these ta coarse ta_direct functions
-    #   ta_direct might ta_initial or ta_coarse_initial?
-    def ta_coarse(self, step_size, step_count):
+    # def ta_coarse(self, step_size, step_count):
+    def ta_coarse(self, offsets=[-20, -12, -7, -4, -2, -1, 0, 1, 2, 4, 7, 12, 20]):
         """Compute coarse scale air temperature estimate
 
         Parameters
         ----------
+        offsets : list
+            Air temperature offset values to use when generating mosaic
 
         Returns
         -------
@@ -1095,22 +1120,20 @@ class Image(object):
 
         """
         # Compute the initial Ta from the meteorology
-        # Decide what this band should be called in the output image
-        ta_direct_img = self.ta_direct().round().rename(['ta_direct'])
-        # # Round to the nearest 10th
-        # ta_direct_img = self.ta_direct().multiply(10).round().divide(10).rename(['ta_direct'])
+        ta_initial_img = self.ta_coarse_initial().rename(['ta_initial'])
 
-        # Compute the Ta 1k steps from the initial Ta image
-        ta_1k_steps_img = self.ta_mosaic(
-            ta_img=ta_direct_img, step_size=step_size, step_count=step_count,
+        # Compute the Ta mosaic from the initial Ta image
+        ta_mosaic_img = self.ta_mosaic(
+            ta_img=ta_initial_img, offsets=offsets,
+            # ta_img=ta_initial_img, step_size=step_size, step_count=step_count,
         )
 
         # Interpolate the minimum bias Ta from the 1k steps
-        ta_img = self.ta_mosaic_interpolate(ta_1k_steps_img)
+        ta_final_img = ta_mosaic_interpolate(ta_mosaic_img)
 
-        return ta_direct_img.addBands(ta_img).set(self.properties)
+        return ta_initial_img.addBands(ta_final_img).set(self.properties)
 
-    def ta_direct(self):
+    def ta_coarse_initial(self):
         """Compute initial coarse scale air temperature estimate from meteorology
 
         Parameters
@@ -1125,16 +1148,17 @@ class Image(object):
 
         # TODO: Test making a single multi-band image of all of these and making
         #   a single reduceResolution call
+        # TODO: Test out using a median reducer instead the mean
         rr_params = {'reducer': ee.Reducer.mean().unweighted(), 'maxPixels': 30000}
         # rr_params = {'reducer': ee.Reducer.median().unweighted(), 'maxPixels': 30000}
         proj_params = {'crs': self.alexi_crs, 'crsTransform': self.alexi_geo}
 
         # CGM notes
-        # If we are using the coarse/ALEXI scale version of meteo data
-        #   do we need the reduceResolution() call?
-        # The ALEXI image is already at the ALEXI scale and shouldn't need to be reduced
         # Intentionally passing measured air temperature in for both t_air and t_air0
-        ta_coarse = tseb.tseb_invert(
+        # If we are using the coarse/ALEXI scale version of all the meteo data,
+        #   do we need the reduceResolution() calls?
+        # The ALEXI image is already at the ALEXI scale and shouldn't need to be reduced
+        ta_invert = tseb.tseb_invert(
             et_alexi=self.et_alexi,
             t_air=self.air_temperature_coarse,
             t_air0=self.air_temperature_coarse,
@@ -1179,13 +1203,17 @@ class Image(object):
         # CGM - Does the output also need the reduceResolution().reproject() call
         #   if all the inputs are already at the coarse/ALEXI scale?
         return (
-            ta_coarse
+            ta_invert
             # .reduceResolution(reducer=ee.Reducer.mean().unweighted(), maxPixels=30000)
             # .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)
-            .rename(['ta'])
+            .round()
+            # # Round to nearest tenth
+            # .multiply(10).round().divide(10)
+            .rename(['ta_initial'])
             .set(self.properties)
         )
 
+    # TODO: Maybe rename as ta_coarse_mosaic()
     # def ta_mosaic(self, ta_img, step_size, step_count, threshold=0.5):
     #     step_size : float
     #         The size of each Ta step.
@@ -1194,8 +1222,9 @@ class Image(object):
     def ta_mosaic(
             self,
             ta_img,
-            ta_offsets=[-20, -12, -7, -4, -2, -1, 0, 1, 2, 4, 7, 12, 20],
-            #ta_offsets=[-16, -11, -7, -4, -2, -1, 0, 1, 2, 4, 7, 11, 16],
+            offsets=[-20, -12, -7, -4, -2, -1, 0, 1, 2, 4, 7, 12, 20],
+            #offsets=[-16, -11, -7, -4, -2, -1, 0, 1, 2, 4, 7, 11, 16],
+            #offsets=[-6, -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6],
             threshold=0.5
     ):
         """Compute the air temperature for each ALEXI ET cell that minimizes
@@ -1205,7 +1234,7 @@ class Image(object):
         Parameters
         ----------
         ta_img : ee.Image
-        ta_offsets : list
+        offsets : list
             Air temperature offset values to use when generating mosaic
         threshold : float, optional
 
@@ -1265,7 +1294,7 @@ class Image(object):
         #   rounding or reduceResolution/projection error
         ta_coll = ee.ImageCollection([
             ta_img.add(j).set({'system:index': 'step_{:02d}'.format(i)})
-            for i, j in enumerate(ta_offsets)
+            for i, j in enumerate(offsets)
         ])
         # ta_coll = ee.ImageCollection([
         #     ta_img.add(j * step_size).set({'system:index': 'step_{:02d}'.format(i)})
