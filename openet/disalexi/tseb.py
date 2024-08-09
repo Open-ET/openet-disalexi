@@ -114,10 +114,7 @@ def tseb_pt(
     # u = mask.add(u).rename(['windspeed'])
 
     # ************************************************************************
-    # CGM - Moved from disalexi.py to here since these are not parameters
-    #   you would typically vary and could be functions of the input images.
-    # CGM - time and t_noon could probably be moved into compute_G0 since that
-    #   is the only place they are used.
+    # time and t_noon could be moved into compute_G0 since that is the only place they are used
     time = ee.Date(datetime).get('hour').add(ee.Date(datetime).get('minute').divide(60))
     if lat is None:
         lat = ee.Image.pixelLonLat().select(['latitude'])
@@ -132,7 +129,7 @@ def tseb_pt(
 
     # ************************************************************************
     # Correct Clumping Factor
-    f_green = 1.
+    f_green = 1.0
 
     # LAI for leaf spherical distribution
     F = lai.multiply(clump)
@@ -255,10 +252,9 @@ def tseb_pt(
     # cp = ee.Image.constant(1004.16)
 
     # Assume neutral conditions on first iteration (use t_air for Ts and Tc)
-    # CGM - Using lai for F to match Python code
     u_attr = tseb_utils.compute_u_attr(u=u, d0=d0, z0m=z0m, z_u=z_u, fm=0)
     r_ah = tseb_utils.compute_r_ah(u_attr=u_attr, d0=d0, z0h=z0h, z_t=z_t, fh=0)
-    # CGM - Why is this function is passing "lai" to "F"?
+    # CGM - Why is this function passing "lai" to "F"?
     r_s = tseb_utils.compute_r_s(
         u_attr=u_attr, T_s=t_air, T_c=t_air, hc=hc, F=lai, d0=d0, z0m=z0m,
         leaf=leaf, leaf_s=leaf_s, fm_h=0
@@ -564,10 +560,7 @@ def tseb_invert(
     )
 
     # ************************************************************************
-    # CGM - Moved from disalexi.py to here since these are not parameters
-    #   you would typically vary and could be functions of the input images.
-    # CGM - time and t_noon could probably be moved into compute_G0 since that
-    #   is the only place they are used.
+    # time and t_noon could be moved into compute_G0 since that is the only place they are used
     time = ee.Date(datetime).get('hour').add(ee.Date(datetime).get('minute').divide(60))
     if lat is None:
         lat = ee.Image.pixelLonLat().select(['latitude'])
@@ -582,7 +575,7 @@ def tseb_invert(
 
     # ************************************************************************
     # Correct Clumping Factor
-    f_green = 1.
+    f_green = 1.0
 
     # LAI for leaf spherical distribution
     F = lai.multiply(clump)
@@ -724,7 +717,6 @@ def tseb_invert(
     # cp = ee.Image.constant(1004.16)
 
     # Assume neutral conditions on first iteration (use t_air for Ts and Tc)
-    # CGM - Using lai for F to match Python code
     u_attr = tseb_utils.compute_u_attr(u=u, d0=d0, z0m=z0m, z_u=z_u, fm=0)
     r_ah = tseb_utils.compute_r_ah(u_attr=u_attr, d0=d0, z0h=z0h, z_t=z_t, fh=0)
     # CGM - Why is this function passing "lai" to "F"?
@@ -737,15 +729,11 @@ def tseb_invert(
     )
 
     T_c = t_air.multiply(1)
-    # DEADBEEF - In IDL, this calculation is in C, not K?
+    # Modified from tseb_pt() approach
     T_s = et_alexi.expression(
         '(((t_rad - 273.16) - (fc_q * (T_c - 273.16))) / (1 - fc_q)) + 273.16',
         {'t_rad': t_rad, 'T_c': T_c, 'fc_q': fc_q}
     )
-    # T_s = lai.expression(
-    #     '(t_rad - (fc_q * T_c)) / (1 - fc_q)',
-    #     {'t_rad': t_rad, 'T_c': T_c, 'fc_q': fc_q}
-    # )
 
     # CGM - Initialize to match t_air shape
     # This doesn't seem to do anything, commenting out for now
@@ -806,7 +794,7 @@ def tseb_invert(
             u_attr=u_attr_iter, T_s=T_s_iter, T_c=T_c_iter, hc=hc, F=lai,
             d0=d0, z0m=z0m, leaf=leaf, leaf_s=leaf_s, fm_h=fm_h
         )
-        # CGM - Why is this function is passing "lai" to "F"?
+        # CGM - Why is this function passing "lai" to "F"?
         r_x_iter = tseb_utils.compute_r_x(
             u_attr=u_attr_iter, hc=hc, F=lai, d0=d0, z0m=z0m,
             xl=leaf_width, leaf_c=leaf_c, fm_h=fm_h

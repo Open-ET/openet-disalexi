@@ -430,6 +430,41 @@ class Image(object):
             stabil_iter=self.stabil_iter, albedo_iter=self.albedo_iter,
             et_min=self.et_min,
         )
+
+        # # Hui modify
+        # et_coarse_new = (
+        #     ee.Image(et)
+        #     .reproject(crs=self.crs, crsTransform=self.transform)
+        #     .reduceResolution(reducer=ee.Reducer.mean().unweighted(), maxPixels=30000)
+        #     .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)
+        # )
+        #
+        # # ALEXI <= 0.1
+        # bias_1 = et_coarse_new.subtract(self.et_alexi.updateMask(self.et_alexi.eq(0.1)))
+        # et_mape_1 = bias_1.abs().divide(self.et_alexi.updateMask(self.et_alexi.eq(0.1))).multiply(100)
+        # et_mape_mask_1 = et_mape_1.lt(200)
+        # # 0.1 < ALEXI <= 1, we use 150 % as threshold.
+        # bias_2 = et_coarse_new.subtract(self.et_alexi.updateMask(self.et_alexi.gt(0.1).And(self.et_alexi.lte(1))))
+        # et_mape_2 = bias_2.abs().divide(
+        #     self.et_alexi.updateMask(self.et_alexi.gt(0.1).And(self.et_alexi.lte(1)))).multiply(100)
+        # et_mape_mask_2 = et_mape_2.lt(150)
+        # # 1 < ALEXI <= 8, we use 50%
+        # bias_3 = et_coarse_new.subtract(self.et_alexi.updateMask(self.et_alexi.gt(1).And(self.et_alexi.lte(8))))
+        # et_mape_3 = bias_3.abs().divide(
+        #     self.et_alexi.updateMask(self.et_alexi.gt(1).And(self.et_alexi.lte(8)))).multiply(100)
+        # et_mape_mask_3 = et_mape_3.lt(50)
+        # # ALEXI >= 8, we use 30%
+        # bias_4 = et_coarse_new.subtract(self.et_alexi.updateMask(self.et_alexi.gte(8)))
+        # et_mape_4 = bias_4.abs().divide(self.et_alexi.updateMask(self.et_alexi.gte(8))).multiply(100)
+        # et_mape_mask_4 = et_mape_4.lt(30)
+        #
+        # combined_et_mask = (
+        #     et_mape_mask_1.unmask(0).Or(et_mape_mask_2.unmask(0))
+        #     .Or(et_mape_mask_3.unmask(0)).Or(et_mape_mask_4.unmask(0))
+        # )
+        #
+        # return et.rename(['et']).updateMask(combined_et_mask).set(self.properties)
+
         return et.rename(['et']).set(self.properties)
 
     @lazy_property
@@ -1039,57 +1074,11 @@ class Image(object):
         self.adeadv = lc_remap(lc_img, self.lc_type, 'adeadv')
         self.adeadn = lc_remap(lc_img, self.lc_type, 'adeadn')
         self.adeadl = lc_remap(lc_img, self.lc_type, 'adeadl')
-        # Yun modified to use hmax for hmin too!!!
+        # Yun modified to use hmax for hmin too
         self.hc_min = lc_remap(lc_img, self.lc_type, 'hmax')
         self.hc_max = lc_remap(lc_img, self.lc_type, 'hmax')
         self.leaf_width = lc_remap(lc_img, self.lc_type, 'xl')
         self.clump = lc_remap(lc_img, self.lc_type, 'omega')
-
-    # # DEADBEEF - Not used any more and will be removed at some point
-    # # Helper functions for computing Ta (and ET)
-    # def ta_coarse(self, ta_img, threshold=0.5):
-    #     """Compute the air temperature for each ALEXI ET cell that minimizes
-    #     the bias between Landsat scale ET and ALEXI ET for a fixed range of
-    #     air temperature values
-    #
-    #     Parameters
-    #     ----------
-    #     ta_img : ee.Image
-    #     threshold : float, optional
-    #
-    #     Returns
-    #     -------
-    #     image : ee.Image
-    #         ALEXI scale air temperature image
-    #
-    #     """
-    #     et_fine = tseb.tseb_pt(
-    #         t_air=ta_img, t_rad=self.lst, t_air0=self.air_temperature,
-    #         e_air=self.vapor_pressure, u=self.wind_speed, p=self.air_pressure,
-    #         z=self.elevation, rs_1=self.rs1, rs24=self.rs24, vza=0,
-    #         aleafv=self.aleafv, aleafn=self.aleafn, aleafl=self.aleafl,
-    #         adeadv=self.adeadv, adeadn=self.adeadn, adeadl=self.adeadl,
-    #         albedo=self.albedo, ndvi=self.ndvi, lai=self.lai,
-    #         clump=self.clump, leaf_width=self.leaf_width,
-    #         hc_min=self.hc_min, hc_max=self.hc_max,
-    #         datetime=self.datetime, lat=self.lat, lon=self.lon,
-    #         stabil_iter=self.stabil_iter, albedo_iter=self.albedo_iter,
-    #     )
-    #
-    #     # Aggregate the Landsat scale ET up to the ALEXI scale
-    #     et_coarse = (
-    #         ee.Image(et_fine)
-    #         .reproject(crs=self.crs, crsTransform=self.transform)
-    #         .reduceResolution(reducer=ee.Reducer.mean().unweighted(), maxPixels=30000)
-    #         .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)
-    #     )
-    #     et_mask = et_coarse.mask().gte(threshold)
-    #     bias = et_coarse.subtract(self.et_alexi)
-    #     return (
-    #         ee.Image([ta_img, bias, et_coarse])
-    #         .updateMask(et_mask)
-    #         .rename(['ta', 'bias', 'et'])
-    #     )
 
     # TODO: Figure out better names for these ta coarse ta_direct functions
     #   ta_direct might ta_initial or ta_coarse_initial?
@@ -1106,9 +1095,10 @@ class Image(object):
 
         """
         # Compute the initial Ta from the meteorology
-        # Round to the nearest 10th
         # Decide what this band should be called in the output image
-        ta_direct_img = self.ta_direct().multiply(10).round().divide(10).rename(['ta_direct'])
+        ta_direct_img = self.ta_direct().round().rename(['ta_direct'])
+        # # Round to the nearest 10th
+        # ta_direct_img = self.ta_direct().multiply(10).round().divide(10).rename(['ta_direct'])
 
         # Compute the Ta 1k steps from the initial Ta image
         ta_1k_steps_img = self.ta_mosaic(
@@ -1196,8 +1186,18 @@ class Image(object):
             .set(self.properties)
         )
 
-    # CGM - What is the difference between this function and ta_mosaic()?
-    def ta_qm(self, ta_img, step_size, step_count, threshold=0.5):
+    # def ta_mosaic(self, ta_img, step_size, step_count, threshold=0.5):
+    #     step_size : float
+    #         The size of each Ta step.
+    #     step_count : int
+    #         The number of Ta steps.
+    def ta_mosaic(
+            self,
+            ta_img,
+            ta_offsets=[-20, -12, -7, -4, -2, -1, 0, 1, 2, 4, 7, 12, 20],
+            #ta_offsets=[-16, -11, -7, -4, -2, -1, 0, 1, 2, 4, 7, 11, 16],
+            threshold=0.5
+    ):
         """Compute the air temperature for each ALEXI ET cell that minimizes
         the bias between Landsat scale ET and ALEXI ET for a fixed range of
         air temperature values
@@ -1205,81 +1205,8 @@ class Image(object):
         Parameters
         ----------
         ta_img : ee.Image
-        step_size : float
-            The size of each Ta step.
-        step_count : int
-            The number of Ta steps.
-        threshold : float, optional
-
-        Returns
-        -------
-        image : ee.Image
-            ALEXI scale air temperature image
-
-        """
-
-        # CGM - This is basically identical to ta_coarse()
-        # Can't use ta_coarse since a mapped function can only have one input
-        # Redefining it here allows threshold to be passed in
-        def ta_func(ta):
-            """Compute TSEB ET for the target t_air value"""
-            et_fine = tseb.tseb_pt(
-                t_air=ta, t_rad=self.lst, t_air0=self.air_temperature,
-                e_air=self.vapor_pressure, u=self.wind_speed, p=self.air_pressure,
-                z=self.elevation, rs_1=self.rs1, rs24=self.rs24, vza=0,
-                aleafv=self.aleafv, aleafn=self.aleafn, aleafl=self.aleafl,
-                adeadv=self.adeadv, adeadn=self.adeadn, adeadl=self.adeadl,
-                albedo=self.albedo, ndvi=self.ndvi, lai=self.lai,
-                clump=self.clump, leaf_width=self.leaf_width,
-                hc_min=self.hc_min, hc_max=self.hc_max,
-                datetime=self.datetime, lat=self.lat, lon=self.lon,
-                stabil_iter=self.stabil_iter, albedo_iter=self.albedo_iter,
-            )
-
-            # Aggregate the Landsat scale ET up to the ALEXI scale
-            et_coarse = (
-                ee.Image(et_fine)
-                .reproject(crs=self.crs, crsTransform=self.transform)
-                .reduceResolution(reducer=ee.Reducer.mean().unweighted(), maxPixels=30000)
-                .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)
-            )
-            et_mask = et_coarse.mask().gte(threshold)
-            bias = et_coarse.subtract(self.alexi_et)
-            # Invert the abs(bias) since quality mosaic sorts descending
-            qm_bias = bias.abs().multiply(-1)
-
-            return (
-                ee.Image([qm_bias, ta, bias, et_coarse])
-                .updateMask(et_mask)
-                .rename(['qm_bias', 'ta', 'bias', 'et'])
-            )
-
-        # Get output for a range of Ta values
-        # Mapping over the list seemed a little slower than the FC
-        ta_coll = ee.ImageCollection([
-            ta_img.add(i * step_size) for i in range(step_count + 1)
-        ])
-
-        # Return the air temperature associated with the lowest difference
-        #   in ET from the ALEXI ET value
-        return (
-            ee.ImageCollection(ta_coll.map(ta_func))
-            .qualityMosaic('qm_bias')
-            .select(['ta', 'bias', 'et'])
-        )
-
-    def ta_mosaic(self, ta_img, step_size, step_count, threshold=0.5):
-        """Compute the air temperature for each ALEXI ET cell that minimizes
-        the bias between Landsat scale ET and ALEXI ET for a fixed range of
-        air temperature values
-
-        Parameters
-        ----------
-        ta_img : ee.Image
-        step_size : float
-            The size of each Ta step.
-        step_count : int
-            The number of Ta steps.
+        ta_offsets : list
+            Air temperature offset values to use when generating mosaic
         threshold : float, optional
 
         Returns
@@ -1312,6 +1239,8 @@ class Image(object):
                 .reduceResolution(reducer=ee.Reducer.mean().unweighted(), maxPixels=30000)
                 .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)
             )
+
+            # Count the number of Landsat pixels in the aggregation
             agg_count_reducer = (
                 ee.Reducer.count()
                 .combine(reducer2=ee.Reducer.countEvery(), outputPrefix='all', sharedInputs=False)
@@ -1323,102 +1252,31 @@ class Image(object):
                 .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)
             )
             et_perc = et_agg.select(['et_count']).divide(et_agg.select(['et_allcount']))
-            et_mask = et_perc.gt(threshold)
-            # et_mask = et_coarse.mask().gte(threshold)
+
             bias = et_coarse.subtract(self.et_alexi)
             return (
-                ee.Image([ta, bias]).updateMask(et_mask)
+                ee.Image([ta, bias])
+                .updateMask(et_perc.gt(threshold))
                 .rename(['ta', 'bias'])
                 .set({'system:index': ee.Image(ta).get('system:index')})
             )
 
-        # CGM - Adding one extra Ta step and beginning and end to handle
+        # CGM - Adding one extra Ta step at beginning and end to handle
         #   rounding or reduceResolution/projection error
         ta_coll = ee.ImageCollection([
-            ta_img.add(j * step_size).set({'system:index': 'step_{}'.format(i)})
-            for i, j in enumerate(range(-step_count // 2, step_count // 2 + 1))
+            ta_img.add(j).set({'system:index': 'step_{:02d}'.format(i)})
+            for i, j in enumerate(ta_offsets)
         ])
         # ta_coll = ee.ImageCollection([
-        #     ta_img.add(i * step_size).set({'system:index': 'step_{}'.format(i)})
+        #     ta_img.add(j * step_size).set({'system:index': 'step_{:02d}'.format(i)})
+        #     for i, j in enumerate(range(-step_count // 2, step_count // 2 + 1))
+        # ])
+        # ta_coll = ee.ImageCollection([
+        #     ta_img.add(i * step_size).set({'system:index': 'step_{:02d}'.format(i)})
         #     for i in range(step_count + 1)
         # ])
 
         return ee.ImageCollection(ta_coll.map(ta_func)).toBands()
-
-    def et_coarse(self, ta_img, threshold=0.5):
-        """Compute the Landsat ET summed to the ALEXI grid for the
-        specified air temperature image
-
-        Parameters
-        ----------
-        ta_img : ee.Image
-        threshold : float, optional
-
-        Returns
-        -------
-        image : ee.Image
-            ALEXI scale ET image
-
-        """
-
-        # ta_fine = self.lst.multiply(0).add(ta).rename(['ta'])
-        # ta_coarse = self.alexi_et.multiply(0).add(ta).rename(['ta'])
-
-        # Aggregate the Landsat scale ET up to the ALEXI scale
-        et_fine = tseb.tseb_pt(
-            t_air=ta_img, t_rad=self.lst, t_air0=self.air_temperature,
-            e_air=self.vapor_pressure, u=self.wind_speed, p=self.air_pressure,
-            z=self.elevation, rs_1=self.rs1, rs24=self.rs24, vza=0,
-            aleafv=self.aleafv, aleafn=self.aleafn, aleafl=self.aleafl,
-            adeadv=self.adeadv, adeadn=self.adeadn, adeadl=self.adeadl,
-            albedo=self.albedo, ndvi=self.ndvi, lai=self.lai,
-            clump=self.clump, leaf_width=self.leaf_width,
-            hc_min=self.hc_min, hc_max=self.hc_max,
-            datetime=self.datetime, lat=self.lat, lon=self.lon,
-            stabil_iter=self.stabil_iter, albedo_iter=self.albedo_iter,
-        )
-        et_coarse = (
-            et_fine
-            .reproject(crs=self.crs, crsTransform=self.transform)
-            .reduceResolution(reducer=ee.Reducer.mean().unweighted(), maxPixels=30000)
-            .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)
-            .rename(['et'])
-        )
-        et_mask = et_coarse.mask().gte(threshold)
-
-        return et_coarse.updateMask(et_mask)
-
-    def et_bias(self, et_coarse_img):
-        """Compute the bias between the computed ET and the ALEXI ET"""
-        return et_coarse_img.subtract(self.et_alexi).rename(['bias'])
-
-    def et_fine(self, ta_img):
-        """Compute Landsat scale DisALEXI ET
-
-        Parameters
-        ----------
-        ta_img : ee.Images
-
-        Returns
-        -------
-        image : ee.Image
-            DisALEXI ET image
-
-        """
-        et = tseb.tseb_pt(
-            t_air=ta_img, t_rad=self.lst, t_air0=self.air_temperature,
-            e_air=self.vapor_pressure, u=self.wind_speed, p=self.air_pressure,
-            z=self.elevation, rs_1=self.rs1, rs24=self.rs24, vza=0,
-            aleafv=self.aleafv, aleafn=self.aleafn, aleafl=self.aleafl,
-            adeadv=self.adeadv, adeadn=self.adeadn, adeadl=self.adeadl,
-            albedo=self.albedo, ndvi=self.ndvi, lai=self.lai,
-            clump=self.clump, leaf_width=self.leaf_width,
-            hc_min=self.hc_min, hc_max=self.hc_max,
-            datetime=self.datetime, lat=self.lat, lon=self.lon,
-            stabil_iter=self.stabil_iter, albedo_iter=self.albedo_iter,
-        )
-        return et.rename(['et']).set(self.properties)
-        #     .reproject(crs=self.crs, crsTransform=self.transform)
 
 
 # TODO: Maybe rename also, ta_mosaic_zero_bias()?
