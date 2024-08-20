@@ -993,8 +993,9 @@ def main(
                     'image_id': image_id,
                     'landsat_lai_version': landsat_lai_version,
                     'landsat_lst_version': landsat_lst_version,
-                    'model_name': model_name,
+                    'model_name': model_metadata['Name'],
                     'model_version': model_metadata["Version"],
+                    # 'model_name': model_name,
                     # 'model_version': openet.disalexi.__version__,
                     'scene_id': scene_id,
                     'tool_name': TOOL_NAME,
@@ -1116,11 +1117,11 @@ def main(
                     continue
 
                 # Write the export task info the openet-dri project datastore
-                if log_tasks:
+                if log_tasks and task_id:
                     logging.debug('  Writing datastore entity')
                     try:
                         task_obj = datastore.Entity(
-                            key=datastore_client.key('Task', task.status()['id']),
+                            key=datastore_client.key('Task', task_id),
                             exclude_from_indexes=['properties'],
                         )
                         for k, v in task.status().items():

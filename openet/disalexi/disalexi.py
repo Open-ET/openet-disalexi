@@ -431,7 +431,9 @@ class Image(object):
             et_min=self.et_min,
         )
 
-        # # Hui modify
+        # # Filter out pixels that are very different than ALEXI values
+        # # Calculate the relative difference between aggregated ET and ALEXI as a percentage value
+        # # Apply different threshold of the relative difference for different ALEXI range.
         # et_coarse_new = (
         #     ee.Image(et)
         #     .reproject(crs=self.crs, crsTransform=self.transform)
@@ -439,29 +441,28 @@ class Image(object):
         #     .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)
         # )
         #
-        # # ALEXI <= 0.1
-        # bias_1 = et_coarse_new.subtract(self.et_alexi.updateMask(self.et_alexi.eq(0.1)))
-        # et_mape_1 = bias_1.abs().divide(self.et_alexi.updateMask(self.et_alexi.eq(0.1))).multiply(100)
-        # et_mape_mask_1 = et_mape_1.lt(200)
-        # # 0.1 < ALEXI <= 1, we use 150 % as threshold.
-        # bias_2 = et_coarse_new.subtract(self.et_alexi.updateMask(self.et_alexi.gt(0.1).And(self.et_alexi.lte(1))))
-        # et_mape_2 = bias_2.abs().divide(
-        #     self.et_alexi.updateMask(self.et_alexi.gt(0.1).And(self.et_alexi.lte(1)))).multiply(100)
-        # et_mape_mask_2 = et_mape_2.lt(150)
-        # # 1 < ALEXI <= 8, we use 50%
-        # bias_3 = et_coarse_new.subtract(self.et_alexi.updateMask(self.et_alexi.gt(1).And(self.et_alexi.lte(8))))
-        # et_mape_3 = bias_3.abs().divide(
-        #     self.et_alexi.updateMask(self.et_alexi.gt(1).And(self.et_alexi.lte(8)))).multiply(100)
-        # et_mape_mask_3 = et_mape_3.lt(50)
-        # # ALEXI >= 8, we use 30%
-        # bias_4 = et_coarse_new.subtract(self.et_alexi.updateMask(self.et_alexi.gte(8)))
-        # et_mape_4 = bias_4.abs().divide(self.et_alexi.updateMask(self.et_alexi.gte(8))).multiply(100)
-        # et_mape_mask_4 = et_mape_4.lt(30)
+        # # ALEXI <= 0.1, we use 200% as threshold
+        # # TODO: The eq(0.1) should probably be .eq(et_min), .lte(0.1), or .lte(et_min)
+        # #   in case the et_min threshold changes
+        # alexi_1 = self.et_alexi.updateMask(self.et_alexi.eq(0.1))
+        # mask_1 = et_coarse_new.subtract(alexi_1).abs().divide(alexi_1).lt(2.0).unmask(0)
         #
-        # combined_et_mask = (
-        #     et_mape_mask_1.unmask(0).Or(et_mape_mask_2.unmask(0))
-        #     .Or(et_mape_mask_3.unmask(0)).Or(et_mape_mask_4.unmask(0))
-        # )
+        # # 0.1 < ALEXI <= 1, we use 150% as threshold
+        # alexi_2 = self.et_alexi.updateMask(self.et_alexi.gt(0.1).And(self.et_alexi.lte(1)))
+        # mask_2 = et_coarse_new.subtract(alexi_2).abs().divide(alexi_2).lt(1.5).unmask(0)
+        #
+        # # 1 < ALEXI <= 8, we use 50% as threshold
+        # alexi_3 = self.et_alexi.updateMask(self.et_alexi.gt(1).And(self.et_alexi.lte(8)))
+        # mask_3 = et_coarse_new.subtract(alexi_3).abs().divide(alexi_3).lt(0.5).unmask(0)
+        #
+        # # TODO: The .gte(8) should probably be .gt(8) since the equals condition
+        # #   is already being checked above and to be consistent with the other ranges
+        # # ALEXI >= 8, we use 30% as threshold
+        # alexi_4 = self.et_alexi.updateMask(self.et_alexi.gte(8))
+        # mask_4 = et_coarse_new.subtract(alexi_4).abs().divide(alexi_4).lt(0.3).unmask(0)
+        #
+        # # Combine the masks for the separate ranges
+        # combined_et_mask = mask_1.Or(mask_2).Or(mask_3).Or(mask_4)
         #
         # return et.rename(['et']).updateMask(combined_et_mask).set(self.properties)
 
@@ -569,8 +570,8 @@ class Image(object):
             # If the source is an ee.Image assume it is an NLCD image
             lc_img = self.landcover_source.rename(['landcover'])
             self.lc_type = 'NLCD'
-        elif (re.match('USGS/NLCD_RELEASES/2021_REL/NLCD/\\d{4}', self.landcover_source.upper()) or
-              re.match('USGS/NLCD_RELEASES/2019_REL/NLCD/\\d{4}', self.landcover_source.upper())):
+        elif (re.match('USGS/NLCD_RELEASES/2021_REL/NLCD/\\d{4}', self.landcover_source, re.I) or
+              re.match('USGS/NLCD_RELEASES/2019_REL/NLCD/\\d{4}', self.landcover_source, re.I)):
             # Assume an NLCD image ID was passed in and use it directly
             lc_img = ee.Image(self.landcover_source.upper()).select(['landcover'])
             self.lc_type = 'NLCD'
@@ -581,24 +582,55 @@ class Image(object):
             )
             lc_img = ee.Image(self.landcover_source.upper()).select(['landcover'])
             self.lc_type = 'NLCD'
-        elif self.landcover_source.upper() == 'USGS/NLCD_RELEASES/2019_REL/NLCD':
-            # If the image collection is passed in, assume the target is CONUS
-            #   and select a close year
-            # Clamp the year to 1999-2019 for now
+        elif self.landcover_source.upper() == 'USGS/NLCD_RELEASES/2021_REL/NLCD':
+            # Automatically switch to the 2019 release for all years before 2020
+            #   since the 2021 Release does not currently contain earlier images
+            # Use the 2021 release and image for all years on or after 2020
+            #   but intentionally limit end year to 2021 for now
             year_remap = ee.Dictionary({
-                '1999': '2001', '2000': '2001', '2001': '2001', '2002': '2001',
-                '2003': '2004', '2004': '2004', '2005': '2004',
-                '2006': '2006', '2007': '2006',
-                '2008': '2008', '2009': '2008',
-                '2010': '2011', '2011': '2011', '2012': '2011',
-                '2013': '2013', '2014': '2013',
-                '2015': '2016', '2016': '2016', '2017': '2016',
-                '2018': '2019', '2019': '2019',
+                '1999': 2001, '2000': 2001, '2001': 2001, '2002': 2001,
+                '2003': 2004, '2004': 2004, '2005': 2004,
+                '2006': 2006, '2007': 2006,
+                '2008': 2008, '2009': 2008,
+                '2010': 2011, '2011': 2011, '2012': 2011,
+                '2013': 2013, '2014': 2013,
+                '2015': 2016, '2016': 2016, '2017': 2016,
+                '2018': 2019, '2019': 2019,
+                '2020': 2021, '2021': 2021,
+            })
+            nlcd_year = year_remap.get(self.year.min(2021).max(1999).format('%d'))
+            # The filterDate calls are probably not needed,
+            # but adding just in case additional years get added to either collection
+            lc_img = (
+                ee.ImageCollection(self.landcover_source)
+                .filterDate('2020-01-01', '2022-01-01')
+                .select(['landcover'])
+                .merge(
+                    ee.ImageCollection('USGS/NLCD_RELEASES/2019_REL/NLCD')
+                    .filterDate('2001-01-01', '2020-01-01')
+                    .select(['landcover'])
+                )
+                .filter(ee.Filter.calendarRange(nlcd_year, nlcd_year, 'year'))
+                .first()
+            )
+            self.lc_type = 'NLCD'
+            # TODO: Save the actual land cover source image as a property?
+            # self.landcover_source = lc_img.get('system:index')
+        elif self.landcover_source.upper() == 'USGS/NLCD_RELEASES/2019_REL/NLCD':
+            year_remap = ee.Dictionary({
+                '1999': 2001, '2000': 2001, '2001': 2001, '2002': 2001,
+                '2003': 2004, '2004': 2004, '2005': 2004,
+                '2006': 2006, '2007': 2006,
+                '2008': 2008, '2009': 2008,
+                '2010': 2011, '2011': 2011, '2012': 2011,
+                '2013': 2013, '2014': 2013,
+                '2015': 2016, '2016': 2016, '2017': 2016,
+                '2018': 2019, '2019': 2019,
             })
             nlcd_year = year_remap.get(self.year.min(2019).max(1999).format('%d'))
             lc_img = (
                 ee.ImageCollection(self.landcover_source)
-                .filter(ee.Filter.equals('system:index', nlcd_year))
+                .filter(ee.Filter.calendarRange(nlcd_year, nlcd_year, 'year'))
                 .first().select(['landcover'])
             )
             self.lc_type = 'NLCD'
@@ -762,7 +794,7 @@ class Image(object):
         ta_source_re = re.compile(
             '(projects/earthengine-legacy/assets/)?'
             'projects/(\\w+/)?(assets/)?'
-            'disalexi/ta(ir)?/(conus|global)_v\\d{3}\\w?(_\\w+)',
+            'disalexi/ta(ir)?/(conus|global)_v\\d{3}\\w?(_\\w+)?',
             re.IGNORECASE
         )
 
@@ -771,22 +803,9 @@ class Image(object):
             #     .set({'ta_iteration': 'constant'})
         elif isinstance(self.ta_source, ee.computedobject.ComputedObject):
             ta_img = ee.Image(self.ta_source)
-        elif (ta_source_re.match(self.ta_source) and
-                ('1k' not in self.ta_source) and ('10k' not in self.ta_source)):
-            # CGM - How can I ensure it is an image collection ID?
-            ta_img = ee.Image(
-                ee.ImageCollection(self.ta_source)
-                .filterMetadata('image_id', 'equals', self.id).first()
-                .select('ta_interp')
-            )
-            if self.ta_smooth_flag:
-                ta_img = (
-                    ta_img.focal_mean(1, 'circle', 'pixels')
-                    .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)
-                    .resample('bilinear')
-                    .reproject(crs=self.crs, crsTransform=self.transform)
-                )
-        elif self.ta_source.upper() in ta_keyword_sources.keys():
+        elif ((self.ta_source.upper() in ta_keyword_sources.keys()) and
+              (('1k' in ta_keyword_sources[self.ta_source.upper()]) or
+               ('10k' in ta_keyword_sources[self.ta_source.upper()]))):
             ta_coll_id = ta_keyword_sources[self.ta_source.upper()]
             ta_coll = (
                 ee.ImageCollection(ta_coll_id)
@@ -801,8 +820,8 @@ class Image(object):
                     .resample('bilinear')
                     .reproject(crs=self.crs, crsTransform=self.transform)
                 )
-        elif ta_source_re.match(self.ta_source):
-            # CGM - How can I ensure it is an image collection ID?
+        elif (ta_source_re.match(self.ta_source) and
+              (('1k' in self.ta_source) or ('10k' in self.ta_source))):
             ta_coll = (
                 ee.ImageCollection(self.ta_source)
                 .filterMetadata('image_id', 'equals', self.id)
@@ -816,6 +835,17 @@ class Image(object):
                     .resample('bilinear')
                     .reproject(crs=self.crs, crsTransform=self.transform)
                 )
+        elif ta_source_re.match(self.ta_source):
+            # For now assuming Ta source has the correct band (ta_smooth or ta_interp)
+            #   and an image_id property
+            ta_img = ee.Image(
+                ee.ImageCollection(self.ta_source)
+                .filterMetadata('image_id', 'equals', self.id)
+                .first()
+                .select('ta_smooth' if self.ta_smooth_flag else 'ta_interp')
+                .resample('bilinear')
+                .reproject(crs=self.crs, crsTransform=self.transform)
+            )
         else:
             raise ValueError(f'Unsupported ta_source: {self.ta_source}\n')
         # if self.ta_source is None:
@@ -1123,15 +1153,24 @@ class Image(object):
         ta_initial_img = self.ta_coarse_initial().rename(['ta_initial'])
 
         # Compute the Ta mosaic from the initial Ta image
-        ta_mosaic_img = self.ta_mosaic(
-            ta_img=ta_initial_img, offsets=offsets,
-            # ta_img=ta_initial_img, step_size=step_size, step_count=step_count,
-        )
+        ta_mosaic_img = self.ta_mosaic(ta_img=ta_initial_img, offsets=offsets)
 
         # Interpolate the minimum bias Ta from the 1k steps
-        ta_final_img = ta_mosaic_interpolate(ta_mosaic_img)
+        ta_interp_img = ta_mosaic_interpolate(ta_mosaic_img)
 
-        return ta_initial_img.addBands(ta_final_img).set(self.properties)
+        # Apply simple smoothing to the interpolated Ta band and save as "ta_smooth"
+        # This will fill small 1 pixel holes
+        if self.ta_smooth_flag:
+            ta_interp_img = ta_interp_img.addBands(
+                ta_interp_img.select('ta_interp')
+                .focal_mean(1, 'circle', 'pixels')
+                # CGM - Testing without reproject call, but it may be needed
+                # .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)
+                .multiply(10).round().divide(10)
+                .rename('ta_smooth')
+            )
+
+        return ta_initial_img.addBands(ta_interp_img).set(self.properties)
 
     def ta_coarse_initial(self):
         """Compute initial coarse scale air temperature estimate from meteorology
@@ -1382,6 +1421,10 @@ def ta_mosaic_interpolate(ta_mosaic_img):
     # #   Commenting out for now
     # # Mask out Ta cells with all negative biases
     # ta_img = ta_img.updateMask(bias_b.lt(0).And(bias_a.lt(0)).Not())
+
+    # Mask out Ta cells outside the interpolation range
+    # if extrapolate_mask:
+    ta_img = ta_img.updateMask(ta_a.lt(ta_b))
 
     # Round to the nearest tenth (should it be hundredth?)
     return (

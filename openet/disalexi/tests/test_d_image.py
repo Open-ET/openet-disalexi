@@ -81,8 +81,8 @@ def default_image(
 def default_image_args(
         albedo=0.125,
         cfmask=0, ndvi=0.875,
-        ta_source='CONUS_V005',
-        alexi_source='CONUS_V005',
+        ta_source='CONUS_V006',
+        alexi_source='CONUS_V006',
         ta_smooth_flag=False,
         lai_source=4.2,
         lst_source=306.5,
@@ -353,6 +353,7 @@ def test_Image_elevation_band_name():
     'source, xy, expected',
     [
         ['USGS/NLCD_RELEASES/2021_REL/NLCD/2021', TEST_POINT, 82],
+        ['USGS/NLCD_RELEASES/2021_REL/NLCD', TEST_POINT, 82],
         ['USGS/NLCD_RELEASES/2019_REL/NLCD', TEST_POINT, 82],
         ['USGS/NLCD_RELEASES/2019_REL/NLCD/2016', TEST_POINT, 82],
         # ['GLOBELAND30', TEST_POINT, 10],
@@ -404,7 +405,8 @@ def test_Image_landcover_band_name():
     'source, xy, expected',
     [
         ['CFSR', TEST_POINT, 100.41703705955021],
-        ['ESTIMATE', TEST_POINT, 101.26454311195941],
+        ['ESTIMATE', TEST_POINT, 101.26278266363842],
+        # ['ESTIMATE', TEST_POINT, 101.26454311195941],
         ['100.41653321557092', TEST_POINT, 100.41653321557092],
         [100.41653321557092, TEST_POINT, 100.41653321557092],
     ]
