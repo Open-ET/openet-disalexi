@@ -145,8 +145,7 @@ def tseb_pt(
 
     # Houborg modification (according to Anderson et al. 2005)
     fc_q = (
-        lai
-        .expression('1 - (exp(-0.5 * f / cos(vza)))', {'f': f, 'vza': vza})
+        lai.expression('1 - (exp(-0.5 * f / cos(vza)))', {'f': f, 'vza': vza})
         .clamp(0.05, 0.90)
     )
 
@@ -202,11 +201,11 @@ def tseb_pt(
 
     # Slope of the saturation vapor pressure [kPa] (FAO56 3-9)
     # Ss = 4098 * e_s / (((t_air - 273.16) + 237.3) ** 2)
-    #Ss = t_air.subtract(273.16).add(237.3).pow(-2).multiply(e_s).multiply(4098)
-    Ss = t_air.expression(
-        '4098. * e_s / (((t_air - 273.16) + 237.3) ** 2)',
-        {'e_s': e_s, 't_air': t_air}
-    )
+    Ss = t_air.subtract(273.16).add(237.3).pow(-2).multiply(e_s).multiply(4098)
+    #Ss = t_air.expression(
+    #    '4098. * e_s / (((t_air - 273.16) + 237.3) ** 2)',
+    #    {'e_s': e_s, 't_air': t_air}
+    #)
 
     # Latent heat of vaporization (~2.45 at 20 C) [MJ kg-1] (FAO56 3-1)
     # lambda1 = (2.501 - (2.361e-3 * (t_air - 273.16)))
@@ -288,18 +287,18 @@ def tseb_pt(
 
         g = tseb_utils.compute_G0(rn, rn_s, ef_s_iter, water_mask, lon, datetime)
 
-        #le_c_init = (
-        #    Ss.add(gamma).pow(-1).multiply(Ss).multiply(a_pt_iter).multiply(f_green)
-        #    .multiply(rn_c).max(0)
-        #)
         le_c_init = (
-            albedo
-            .expression(
-                'f_green * (a_pt * Ss / (Ss + g)) * rn_c',
-                {'f_green': f_green, 'a_pt': a_pt_iter, 'Ss': Ss, 'g': gamma, 'rn_c': rn_c}
-            )
-            .max(0)
+            Ss.add(gamma).pow(-1).multiply(Ss).multiply(a_pt_iter).multiply(f_green)
+            .multiply(rn_c).max(0)
         )
+        #le_c_init = (
+        #    albedo
+        #    .expression(
+        #        'f_green * (a_pt * Ss / (Ss + g)) * rn_c',
+        #        {'f_green': f_green, 'a_pt': a_pt_iter, 'Ss': Ss, 'g': gamma, 'rn_c': rn_c}
+        #    )
+        #    .max(0)
+        #)
 
         h_c_init = rn_c.subtract(le_c_init)
 
@@ -311,20 +310,20 @@ def tseb_pt(
             t_c_iter, t_s_iter, fc_q, t_air, r_ah_iter, r_s_iter, r_x_iter
         )
 
-        #h_s = t_s_iter.subtract(t_ac).multiply(cp).multiply(r_air).divide(r_s_iter)
-        #h_c = t_c_iter.subtract(t_ac).multiply(cp).multiply(r_air).divide(r_x_iter)
-        #h = h_s.add(h_c)
-        #h = h.where(h.eq(0), 10.0)
-        h_s = albedo.expression(
-            'r_air * cp * (t_s - t_ac) / r_s',
-            {'r_air': r_air, 'cp': cp, 't_s': t_s_iter, 't_ac': t_ac, 'r_s': r_s_iter}
-        )
-        h_c = albedo.expression(
-            'r_air * cp * (t_c - t_ac) / r_x',
-            {'r_air': r_air, 'cp': cp, 't_c': t_c_iter, 't_ac': t_ac, 'r_x': r_x_iter}
-        )
-        h = albedo.expression('h_s + h_c', {'h_s': h_s, 'h_c': h_c})
+        h_s = t_s_iter.subtract(t_ac).multiply(cp).multiply(r_air).divide(r_s_iter)
+        h_c = t_c_iter.subtract(t_ac).multiply(cp).multiply(r_air).divide(r_x_iter)
+        h = h_s.add(h_c)
         h = h.where(h.eq(0), 10.0)
+        #h_s = albedo.expression(
+        #    'r_air * cp * (t_s - t_ac) / r_s',
+        #    {'r_air': r_air, 'cp': cp, 't_s': t_s_iter, 't_ac': t_ac, 'r_s': r_s_iter}
+        #)
+        #h_c = albedo.expression(
+        #    'r_air * cp * (t_c - t_ac) / r_x',
+        #    {'r_air': r_air, 'cp': cp, 't_c': t_c_iter, 't_ac': t_ac, 'r_x': r_x_iter}
+        #)
+        #h = albedo.expression('h_s + h_c', {'h_s': h_s, 'h_c': h_c})
+        #h = h.where(h.eq(0), 10.0)
 
         le_s = rn_s.subtract(g).subtract(h_s)
         le_c = rn_c.subtract(h_c)
@@ -657,11 +656,11 @@ def tseb_invert(
 
     # Slope of the saturation vapor pressure [kPa] (FAO56 3-9)
     # Ss = 4098 * e_s / (((t_air - 273.16) + 237.3) ** 2)
-    #Ss = t_air.subtract(273.16).add(237.3).pow(-2).multiply(e_s).multiply(4098)
-    Ss = t_air.expression(
-        '4098. * e_s / (((t_air - 273.16) + 237.3) ** 2)',
-        {'e_s': e_s, 't_air': t_air}
-    )
+    Ss = t_air.subtract(273.16).add(237.3).pow(-2).multiply(e_s).multiply(4098)
+    #Ss = t_air.expression(
+    #    '4098. * e_s / (((t_air - 273.16) + 237.3) ** 2)',
+    #    {'e_s': e_s, 't_air': t_air}
+    #)
 
     # Latent heat of vaporization (~2.45 at 20 C) [MJ kg-1] (FAO56 3-1)
     # lambda1 = (2.501 - (2.361e-3 * (t_air - 273.16)))
@@ -754,17 +753,17 @@ def tseb_invert(
         # Yun - use the ALEXI ET to get daily LE and then to get H
         h = rn.subtract(le_tot).subtract(g)
 
-        #le_c_init = (
-        #    Ss.add(gamma).pow(-1).multiply(Ss).multiply(a_pt_iter).multiply(f_green)
-        #    .multiply(rn_c).max(0)
-        #)
         le_c_init = (
-            et_alexi
-            .expression(
-                'f_green * (a_pt * Ss / (Ss + g)) * rn_c',
-                {'f_green': f_green, 'a_pt': a_pt_iter, 'Ss': Ss, 'g': gamma, 'rn_c': rn_c})
-            .max(0)
+            Ss.add(gamma).pow(-1).multiply(Ss).multiply(a_pt_iter).multiply(f_green)
+            .multiply(rn_c).max(0)
         )
+        #le_c_init = (
+        #    et_alexi
+        #    .expression(
+        #        'f_green * (a_pt * Ss / (Ss + g)) * rn_c',
+        #        {'f_green': f_green, 'a_pt': a_pt_iter, 'Ss': Ss, 'g': gamma, 'rn_c': rn_c})
+        #    .max(0)
+        #)
 
         h_c_init = rn_c.subtract(le_c_init)
         h_s = h.subtract(h_c_init)
