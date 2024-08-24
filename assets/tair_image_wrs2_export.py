@@ -245,29 +245,20 @@ def main(
     except Exception as e:
         raise e
 
-    # try:
-    #     output_type = str(ini['EXPORT']['output_type'])
-    # except KeyError:
-    #     output_type = 'float'
-    #     # output_type = 'int16'
-    #     logging.debug(f'  output_type: not set in INI, defaulting to {output_type}')
-    # except Exception as e:
-    #     raise e
-    #
-    # try:
-    #     scale_factor = int(ini['EXPORT']['scale_factor'])
-    # except KeyError:
-    #     scale_factor = 1
-    #     # scale_factor = 10000
-    #     logging.debug(f'  scale_factor: not set in INI, defaulting to {scale_factor}')
-    # except Exception as e:
-    #     raise e
-
     try:
         export_id_name = '_' + str(ini['EXPORT']['export_id_name'])
     except KeyError:
         export_id_name = ''
         logging.debug('  export_id_name: not set in INI, defaulting to ""')
+    except Exception as e:
+        raise e
+
+    try:
+        retile = int(ini['EXPORT']['retile'])
+    except KeyError:
+        retile = 0
+        #retile = 256
+        logging.debug(f'  retile: not set in INI, defaulting to {retile}')
     except Exception as e:
         raise e
 
@@ -355,9 +346,6 @@ def main(
     #     for k, v in dict(ini['TAIR']).items()
     # }
 
-    if 'retile' not in tair_args.keys():
-        tair_args['retile'] = 0
-
     logging.info('\nDISALEXI Parameters')
     if 'stability_iterations' in model_args.keys():
         logging.info(f'  Stabil iter: {int(model_args["stability_iterations"])}')
@@ -365,7 +353,6 @@ def main(
 
     logging.info('\nTAIR Parameters')
     logging.info(f'  Offsets: {tair_args["offsets"]}')
-    logging.debug(f'  Retile:  {tair_args["retile"]}')
 
 
     # Initialize Earth Engine
@@ -909,63 +896,6 @@ def main(
                     offsets=[int(t.strip()) for t in tair_args["offsets"].split(',')],
                 )
 
-
-                # DEADBEEF
-                # CGM - For testing just output the Ta direct image
-                # export_img = d_obj.ta_direct().rename(['ta_direct'])
-
-                # export_img = d_obj.ta_coarse(
-                #     # step_size=tair_args['step_size'],
-                #     # step_count=tair_args['step_count'],
-                # )
-
-                # # Compute the initial Ta from the meteorology
-                # ta_direct_img = d_obj.ta_direct()
-
-                # # print(ta_direct_img.reduceRegion(ee.Reducer.first(), ee.Geometry.Point(-121.56, 38.2), 4000).getInfo())
-                # # print(ta_direct_img.reduceRegion(ee.Reducer.first(), ee.Geometry.Point(-121.52, 38.2), 4000).getInfo())
-                # # print(ta_direct_img.reduceRegion(ee.Reducer.first(), ee.Geometry.Point(-122.16, 39.48), 4000).getInfo())
-                # # print(ta_direct_img.reduceRegion(ee.Reducer.first(), ee.Geometry.Point(-122.72, 39.00), 4000).getInfo())
-                # # input('ENTER')
-                #
-                # # Compute the Ta 1k steps from the initial Ta image
-                # ta_1k_steps_img = d_obj.ta_mosaic(
-                #     ta_img=ta_direct_img,
-                #     step_size=tair_args['step_size'],
-                #     step_count=tair_args['step_count'],
-                # )
-                #
-                # # import pprint
-                # # pprint.pprint(ta_1k_steps_img.reduceRegion(ee.Reducer.first(), ee.Geometry.Point(-121.56, 38.2), 4000).getInfo())
-                # # pprint.pprint(ta_1k_steps_img.reduceRegion(ee.Reducer.first(), ee.Geometry.Point(-121.52, 38.2), 4000).getInfo())
-                # # pprint.pprint(ta_1k_steps_img.reduceRegion(ee.Reducer.first(), ee.Geometry.Point(-122.16, 39.48), 4000).getInfo())
-                # # pprint.pprint(ta_1k_steps_img.reduceRegion(ee.Reducer.first(), ee.Geometry.Point(-122.72, 39.00), 4000).getInfo())
-                # # input('ENTER')
-                #
-                # ta_img = d_obj.ta_min_bias(ta_1k_steps_img)
-                #
-                # # print(ta_img.reduceRegion(ee.Reducer.first(), ee.Geometry.Point(-121.56, 38.2), 4000).getInfo())
-                # # print(ta_img.reduceRegion(ee.Reducer.first(), ee.Geometry.Point(-121.52, 38.2), 4000).getInfo())
-                # # print(ta_img.reduceRegion(ee.Reducer.first(), ee.Geometry.Point(-122.16, 39.48), 4000).getInfo())
-                # # print(ta_img.reduceRegion(ee.Reducer.first(), ee.Geometry.Point(-122.72, 39.00), 4000).getInfo())
-                # # input('ENTER')
-                #
-                # export_img = (
-                #     ee.Image([ta_img, ta_direct_img])
-                #     .rename(['ta', 'ta_direct'])
-                # )
-
-                # print(export_img.reduceRegion(ee.Reducer.first(), ee.Geometry.Point(-121.56, 38.2), 4000).getInfo())
-                # print(export_img.reduceRegion(ee.Reducer.first(), ee.Geometry.Point(-121.52, 38.2), 4000).getInfo())
-                # print(export_img.reduceRegion(ee.Reducer.first(), ee.Geometry.Point(-122.16, 39.48), 4000).getInfo())
-                # print(export_img.reduceRegion(ee.Reducer.first(), ee.Geometry.Point(-122.72, 39.00), 4000).getInfo())
-                # input('ENTER')
-
-
-                # TODO: Test if the retile is still needed
-                if tair_args['retile'] and (tair_args['retile'] > 1):
-                    export_img = export_img.retile(tair_args['retile'])
-
                 properties = {
                     # Custom properties
                     'build_date': datetime.today().strftime('%Y-%m-%d'),
@@ -1005,6 +935,9 @@ def main(
                 properties.update(model_args)
                 properties.update(tair_args)
                 export_img = export_img.set(properties)
+
+                if retile in [2, 4, 8, 16, 32, 64, 128]:
+                    export_img = export_img.retile(retile)
 
                 # CGM: We could pre-compute (or compute once and then save)
                 #   the crs, transform, and shape since they should (will?) be

@@ -445,7 +445,7 @@ class Image(object):
         return (
             et.rename(['et'])
             .updateMask(combined_et_mask)
-            .retile(2)
+            #.retile(64)
             .set(self.properties)
         )
 
@@ -1139,6 +1139,10 @@ class Image(object):
 
         # Interpolate the minimum bias Ta from the 1k steps
         ta_interp_img = ta_mosaic_interpolate(ta_mosaic_img)
+
+        # TODO: Should the retile parameter be hardcoded?
+        #   If so, where should it go in this function?
+        # ta_interp_img = ta_interp_img.retile(4)
 
         # Apply simple smoothing to the interpolated Ta band and save as "ta_smooth"
         # This will fill small 1 pixel holes
