@@ -13,9 +13,9 @@ ne3_xy = [-96.43968912903934, 41.17964494123755]
 
 
 @pytest.mark.parametrize(
-    't_air, t_rad, t_air0, e_air, u,'
-    'p, z, Rs_1, '
-    'Rs24, vza,'
+    't_air, t_rad, t_air0, '
+    'e_air, u, p, z, '
+    'rs_1, rs24, vza,'
     'aleafv, aleafn, aleafl, adeadv, adeadn, adeadl,'
     'albedo, ndvi, lai, clump,'
     'hc_min, hc_max, leaf_width, datetime, lon, lat, a_pt_in, '
@@ -56,7 +56,7 @@ ne3_xy = [-96.43968912903934, 41.17964494123755]
     ]
 )
 def test_tseb_pt(
-        t_air, t_rad, t_air0, e_air, u, p, z, Rs_1, Rs24, vza,
+        t_air, t_rad, t_air0, e_air, u, p, z, rs_1, rs24, vza,
         aleafv, aleafn, aleafl, adeadv, adeadn, adeadl,
         albedo, ndvi, lai, clump,
         hc_min, hc_max, leaf_width, datetime, lon, lat, a_pt_in,
@@ -74,7 +74,7 @@ def test_tseb_pt(
         # t_air0=mask.add(t_air0),
         e_air=ee.Image.constant(e_air), u=ee.Image.constant(u),
         p=ee.Image.constant(p), z=ee.Image.constant(z),
-        rs_1=ee.Image.constant(Rs_1), rs24=ee.Image.constant(Rs24),
+        rs_1=ee.Image.constant(rs_1), rs24=ee.Image.constant(rs24),
         vza=ee.Image.constant(vza),
         aleafv=ee.Image.constant(aleafv), aleafn=ee.Image.constant(aleafn),
         aleafl=ee.Image.constant(aleafl), adeadv=ee.Image.constant(adeadv),
