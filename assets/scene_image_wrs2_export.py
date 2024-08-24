@@ -355,9 +355,6 @@ def main(
     #     for k, v in dict(ini['TAIR']).items()
     # }
 
-    # DEADBEEF - Tair cell size parameter is not used anywhere
-    # if 'cell_size' not in tair_args.keys():
-    #     tair_args['cell_size'] = 30
     if 'retile' not in tair_args.keys():
         tair_args['retile'] = 0
 
@@ -369,12 +366,6 @@ def main(
     logging.info('\nTAIR Parameters')
     logging.info(f'  Offsets: {tair_args["offsets"]}')
     logging.debug(f'  Retile:  {tair_args["retile"]}')
-    # DEADBEEF - Source and start are not used in Ta direct calculation
-    # logging.info(f'  Source:     {tair_args["source_coll"]}')
-    # logging.info(f'  Ta Start:   {tair_args["ta_start"]}')
-    # logging.debug(f'  Cell size:  {tair_args["cell_size"]}')
-    #logging.info(f'  Step Size:  {tair_args["step_size"]}')
-    #logging.debug(f'  Step Count: {tair_args["step_count"]}')
 
 
     # Initialize Earth Engine
@@ -469,7 +460,7 @@ def main(
     # Get an ET image to set the Ta values to
     logging.debug('\nALEXI ET properties')
     alexi_coll_id = model_args['alexi_source']
-
+    alexi_crs = 'EPSG:4326'
     if ((alexi_coll_id.upper() == 'CONUS_V006') or
             alexi_coll_id.endswith('projects/ee-tulipyangyun-2/assets/alexi/ALEXI_V006')):
         alexi_coll_id = 'projects/ee-tulipyangyun-2/assets/alexi/ALEXI_V006'
@@ -494,20 +485,9 @@ def main(
         # alexi_geo = [0.04, 0.0, -125.02, 0.0, -0.04, 49.78]
         alexi_cs = 0.04
         alexi_x, alexi_y = -125.02, 49.78
-    elif alexi_coll_id.upper() == 'CONUS_V003':
-        alexi_coll_id = 'projects/earthengine-legacy/assets/projects/disalexi/alexi/CONUS_V003'
-        alexi_mask_id = 'projects/earthengine-legacy/assets/projects/disalexi/alexi/conus_v002_mask'
-        alexi_mask = ee.Image(alexi_mask_id).double().multiply(0)
-        # alexi_geo = [0.04, 0.0, -125.04, 0.0, -0.04, 49.8]
-        alexi_cs = 0.04
-        alexi_x, alexi_y = -125.04, 49.8
     else:
         raise ValueError(f'unsupported ALEXI source: {alexi_coll_id}')
-    # alexi_coll = ee.ImageCollection(alexi_coll_id)
-    # alexi_proj = alexi_mask.projection().getInfo()
-    # alexi_geo = alexi_proj['transform']
-    # alexi_crs = alexi_proj['crs']
-    alexi_crs = 'EPSG:4326'
+
     logging.debug(f'  Collection: {alexi_coll_id}')
 
 
@@ -870,7 +850,7 @@ def main(
 
                 # Manually check if the source LAI and LST images are present
                 # Eventually this should/could be done inside the model instead
-                if 'lai_source' in model_args.keys() and type(model_args['lai_source']) is str:
+                if ('lai_source' in model_args.keys()) and (type(model_args['lai_source']) is str):
                     if model_args['lai_source'].lower() in ['openet-landsat-lai', 'openet-lai']:
                         landsat_lai_version = metadata.metadata('openet-landsat-lai')['Version']
                     else:
@@ -889,7 +869,7 @@ def main(
                             logging.info(f'  {scene_id} - Could not get LAI properties, skipping')
                         continue
 
-                if 'lst_source' in model_args.keys() and type(model_args['lst_source']) is str:
+                if ('lst_source' in model_args.keys()) and (type(model_args['lst_source']) is str):
                     # Assumptions: string lst_source is an image collection ID
                     lst_coll = ee.ImageCollection(model_args['lst_source'])\
                         .filterMetadata('scene_id', 'equals', scene_id)
@@ -928,6 +908,7 @@ def main(
                 export_img = d_obj.ta_coarse(
                     offsets=[int(t.strip()) for t in tair_args["offsets"].split(',')],
                 )
+
 
                 # DEADBEEF
                 # CGM - For testing just output the Ta direct image

@@ -169,13 +169,8 @@ def tseb_pt(
     z0h = z0h.where(z0h.eq(0), 0.001)
     z0m = z0m.where(z0m.eq(0), 0.01)
 
-    # DEADBEEF
-    # z_u = ee.Number(50.0)
-    # z_t = ee.Number(50.0)
-    z_u = ee.Image.constant(30.0)
-    z_t = ee.Image.constant(30.0)
-    # z_u = lai.multiply(0).add(50)
-    # z_t = lai.multiply(0).add(50)
+    z_u = 30.0
+    z_t = 30.0
 
     # Parameters for In-Canopy Wind Speed Extinction
     leaf = lai.expression(
@@ -248,8 +243,7 @@ def tseb_pt(
         '101.3 * (((t_air - (0.0065 * z)) / t_air) ** 5.26) / 1.01 / t_air / 0.287',
         {'t_air': t_air, 'z': z}
     )
-    cp = ee.Number(1004.16)
-    # cp = ee.Image.constant(1004.16)
+    cp = 1004.16
 
     # Assume neutral conditions on first iteration (use t_air for Ts and Tc)
     u_attr = tseb_utils.compute_u_attr(u=u, d0=d0, z0m=z0m, z_u=z_u, fm=0)
@@ -264,7 +258,6 @@ def tseb_pt(
     )
 
     T_c = t_air.multiply(1)
-    # DEADBEEF - In IDL, this calculation is in C, not K?
     T_s = lai.expression(
         '(((t_rad - 273.16) - (fc_q * (T_c - 273.16))) / (1 - fc_q)) + 273.16',
         {'t_rad': t_rad, 'T_c': T_c, 'fc_q': fc_q}
@@ -274,9 +267,10 @@ def tseb_pt(
     #     {'t_rad': t_rad, 'T_c': T_c, 'fc_q': fc_q}
     # )
 
-    # CGM - Initialize to match t_air shape
-    # This doesn't seem to do anything, commenting out for now
+    # CGM - This doesn't seem to do anything, commenting out for now
     # H_iter = t_air.multiply(0).add(200.16)
+
+    # CGM - Initialize to match t_air shape
     EF_s = t_air.multiply(0)
 
     # ************************************************************************
@@ -326,14 +320,12 @@ def tseb_pt(
             {'r_air': r_air, 'cp': cp, 'T_c': T_c_iter, 'T_ac': T_ac, 'r_x': r_x_iter}
         )
         H = albedo.expression('H_s + H_c', {'H_s': H_s, 'H_c': H_c})
+        H = H.where(H.eq(0), 10.0)
 
         LE_s = Rn_s.subtract(G).subtract(H_s)
         LE_c = Rn_c.subtract(H_c)
         # LE_s = albedo.expression('Rn_s - G - H_s', {'Rn_s': Rn_s, 'G': G, 'H_s': H_s})
         # LE_c = albedo.expression('Rn_c - H_c', {'Rn_c': Rn_c, 'H_c': H_c})
-
-        # CGM - Is there a reason this isn't up with the H calculation?
-        H = H.where(H.eq(0), 10.0)
 
         # CGM - This won't do anything at this position in the code.
         #   Commenting out for now.
@@ -615,13 +607,8 @@ def tseb_invert(
     z0h = z0h.where(z0h.eq(0), 0.001)
     z0m = z0m.where(z0m.eq(0), 0.01)
 
-    # DEADBEEF
-    # z_u = ee.Number(50.0)
-    # z_t = ee.Number(50.0)
-    z_u = ee.Image.constant(30.0)
-    z_t = ee.Image.constant(30.0)
-    # z_u = lai.multiply(0).add(50)
-    # z_t = lai.multiply(0).add(50)
+    z_u = 30.0
+    z_t = 30.0
 
     # Modify z0m when using it at alexi scale (not in tseb_pt())
     z0m = et_alexi.expression(
@@ -713,8 +700,7 @@ def tseb_invert(
         '101.3 * (((t_air - (0.0065 * z)) / t_air) ** 5.26) / 1.01 / t_air / 0.287',
         {'t_air': t_air, 'z': z}
     )
-    cp = ee.Number(1004.16)
-    # cp = ee.Image.constant(1004.16)
+    cp = 1004.16
 
     # Assume neutral conditions on first iteration (use t_air for Ts and Tc)
     u_attr = tseb_utils.compute_u_attr(u=u, d0=d0, z0m=z0m, z_u=z_u, fm=0)
@@ -735,9 +721,10 @@ def tseb_invert(
         {'t_rad': t_rad, 'T_c': T_c, 'fc_q': fc_q}
     )
 
-    # CGM - Initialize to match t_air shape
-    # This doesn't seem to do anything, commenting out for now
+    # CGM - This doesn't seem to do anything, commenting out for now
     # H_iter = t_air.multiply(0).add(200.16)
+
+    # CGM - Initialize to match t_air shape
     EF_s = t_air.multiply(0)
 
     # ************************************************************************
@@ -807,7 +794,7 @@ def tseb_invert(
         T_ac = tseb_utils.temp_separation_tac(
             T_c_iter, T_s_iter, fc_q, ta_iter, r_ah_iter, r_s_iter, r_x_iter
         )
-        ta_iter = T_ac.subtract(H.multiply(r_ah_iter).divide(r_air.multiply(1004.16)))
+        ta_iter = T_ac.subtract(H.multiply(r_ah_iter).divide(r_air.multiply(cp)))
 
         a_pt_iter = (
             a_pt_iter

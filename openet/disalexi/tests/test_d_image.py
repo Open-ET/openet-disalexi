@@ -111,8 +111,8 @@ def default_image_obj(
         albedo=0.125,
         cfmask=0,
         ndvi=0.875,
-        ta_source='CONUS_V005',
-        alexi_source='CONUS_V005',
+        ta_source='CONUS_V006',
+        alexi_source='CONUS_V006',
         lai_source=4.2,
         lst_source=306.5,
         et_reference_source=10,
@@ -142,19 +142,19 @@ def test_Image_init_default_parameters():
     assert m.ta_source == 'CONUS_V006'
     assert m.alexi_source == 'CONUS_V006'
     assert m.lai_source == 'openet-landsat-lai'
+    #assert m.lai_source == 'projects/openet/assets/lai/landsat/c02'
     assert m.lst_source == 'projects/openet/assets/lst/landsat/c02'
     assert m.elevation_source == 'USGS/SRTMGL1_003'
-    assert m.landcover_source == 'USGS/NLCD_RELEASES/2019_REL/NLCD'
+    assert m.landcover_source == 'USGS/NLCD_RELEASES/2021_REL/NLCD'
     assert m.air_pres_source == 'CFSR'
     assert m.air_temp_source == 'CFSR'
     assert m.rs_daily_source == 'CFSR'
     assert m.rs_hourly_source == 'CFSR'
     assert m.vapor_pres_source == 'CFSR'
     assert m.wind_speed_source == 'CFSR'
-    # assert m.stabil_iter == 36
+    # assert m.stabil_iter == 10
     assert m.albedo_iter == 10
     assert m.rs_interp_flag is True
-    # assert m.ta_interp_flag == True
     assert m.ta_smooth_flag is True
     assert m.et_reference_source is None
     assert m.et_reference_band is None
@@ -219,16 +219,7 @@ def test_Image_init_date_properties():
         ['CONUS_V006', [-121.50822, 38.71776], 297.32998269291346],
         ['CONUS_V005', TEST_POINT, 298.047307556939],
         ['CONUS_V005', [-121.50822, 38.71776], 297.32998269291346],
-        # ['CONUS_V004', TEST_POINT, 298.1013811163322],
-        # ['CONUS_V004', [-121.50822, 38.71776], 300.04066476402267],
-        # ['CONUS_V003', TEST_POINT, 300.99823651442586],
-        # ['CONUS_V003', [-121.50822, 38.71776], 300.4560056192083],
-        # ['projects/openet/disalexi/tair/conus_v003_1k', TEST_POINT, 300.99823651442586],
-        # ['projects/earthengine-legacy/assets/projects/openet/disalexi/tair/conus_v003_1k',
-        # CGM - I'm not sure why the test values below don't work anymore when
-        #   Ta shouldn't have changed.
-        # ['CONUS_V003', TEST_POINT, 298.1013811163322],
-        # ['CONUS_V003', [-121.50822, 38.71776], 300.04066476402267],
+        # ['projects/openet/assets/disalexi/tair/conus_v006_1k', TEST_POINT, 300.99823651442586],
         # TEST_POINT, 300.99823651442586],
         [ee.Image('USGS/SRTMGL1_003').multiply(0).add(10), TEST_POINT, 10],
         ['294.8', TEST_POINT, 294.8],  # Check constant values
@@ -286,16 +277,12 @@ def test_Image_ta_properties():
         ['LC08_044033_20200708', 'CONUS_V005', TEST_POINT, 17.999324798583984 * 0.408],
         ['LC08_044033_20200724', 'CONUS_V005', TEST_POINT, 17.819684982299805 * 0.408],
         [None, 'CONUS_V005', TEST_POINT, 12.765579223632812 * 0.408],
+        [None, 'projects/ee-tulipyangyun-2/assets/alexi/ALEXI_V006',
+         TEST_POINT, 12.765579223632812 * 0.408],
         [None, 'projects/ee-tulipyangyun-2/assets/alexi/ALEXI_V005',
          TEST_POINT, 12.765579223632812 * 0.408],
         ['LC08_044033_20200708', 'CONUS_V004', TEST_POINT, 16.58306312561035 * 0.408],
         ['LC08_044033_20200724', 'CONUS_V004', TEST_POINT, 16.664167404174805 * 0.408],
-        ['LC08_044033_20200708', 'CONUS_V003', TEST_POINT, 15.465087890625 * 0.408],
-        ['LC08_044033_20200724', 'CONUS_V003', TEST_POINT, 14.467782974243164 * 0.408],
-        ['LC08_044033_20170716', 'CONUS_V003', TEST_POINT, 12.03880786895752 * 0.408],
-        [None, 'projects/disalexi/alexi/CONUS_V003', TEST_POINT, 12.03880786895752 * 0.408],
-        [None, 'projects/earthengine-legacy/assets/projects/disalexi/alexi/CONUS_V003',
-         TEST_POINT, 12.03880786895752 * 0.408],
         [None, ee.Image('USGS/SRTMGL1_003').multiply(0).add(10), TEST_POINT, 10],
         [None, '10.382039', TEST_POINT, 10.382039],
         [None, 10.382039, TEST_POINT, 10.382039],
@@ -309,7 +296,6 @@ def test_Image_alexi_source(scene_id, source, xy, expected, tol=0.0001):
     output = utils.point_image_value(disalexi.Image(
         default_image(scene_id=scene_id, scene_time=scene_time),
         alexi_source=source).et_alexi, xy)
-    print(output['et_alexi']/0.408)
     assert abs(output['et_alexi'] - expected) <= tol
 
 

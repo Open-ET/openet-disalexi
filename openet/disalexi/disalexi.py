@@ -39,12 +39,11 @@ class Image(object):
             ta_source='CONUS_V006',
             alexi_source='CONUS_V006',
             lai_source='openet-landsat-lai',
-            lst_source='projects/openet/assets/lst/landsat/c02',
             # lai_source='projects/openet/assets/lai/landsat/c02',
-            # tir_source='projects/openet/assets/tir/landsat/c02',
+            lst_source='projects/openet/assets/lst/landsat/c02',
             elevation_source='USGS/SRTMGL1_003',
             # elevation_source='NASA/NASADEM_HGT/001',
-            landcover_source='USGS/NLCD_RELEASES/2019_REL/NLCD',
+            landcover_source='USGS/NLCD_RELEASES/2021_REL/NLCD',
             air_pres_source='CFSR',
             air_temp_source='CFSR',
             rs_daily_source='CFSR',
@@ -54,7 +53,6 @@ class Image(object):
             stability_iterations=None,
             albedo_iterations=10,
             rs_interp_flag=True,
-            #ta_interp_flag=True,
             ta_smooth_flag=True,
             lat=None,
             lon=None,
@@ -70,7 +68,7 @@ class Image(object):
         ta_source : {'CONUS_V003', 'CONUS_V004', 'CONUS_V005', 'CONUS_V006'}
             ALEXI scale air temperature image collection ID.
             The default is 'CONUS_V006'.
-        alexi_source : {'CONUS_V003', 'CONUS_V004', 'CONUS_V005', 'CONUS_V006'}
+        alexi_source : {'CONUS_V004', 'CONUS_V005', 'CONUS_V006'}
             ALEXI ET image collection ID (the default is 'CONUS_V006').
         lai_source : string
             LAI image collection ID or "openet-landsat-lai" to compute dynamically
@@ -80,11 +78,12 @@ class Image(object):
         elevation_source : str, ee.Image
             Elevation source keyword or asset (the default is USGS/SRTMGL1_003).
             Units must be in meters.
-        landcover_source : {'USGS/NLCD_RELEASES/2019_REL/NLCD',
+        landcover_source : {'USGS/NLCD_RELEASES/2021_REL/NLCD',
+                            'USGS/NLCD_RELEASES/2019_REL/NLCD',
                             'USGS/NLCD_RELEASES/2019_REL/NLCD/2016',
                             'USGS/NLCD_RELEASES/2021_REL/NLCD/2021'}
             Land cover source collection or image ID
-            (the default is 'USGS/NLCD_RELEASES/2019_REL/NLCD').
+            (the default is 'USGS/NLCD_RELEASES/2021_REL/NLCD').
         air_pres_source: {'CFSR'}
             Air pressure source keyword (the default is 'CFSR').
         air_temp_source : {'CFSR'}
@@ -106,8 +105,6 @@ class Image(object):
             If True, interpolate incoming solar radiation.
             If False, select image with same date and hour.
             The default is True.
-        ta_interp_flag : bool, optional
-            If True, interpolate between Ta step images (the default is True).
         ta_smooth_flag : bool, optional
             If True, smooth and resample Ta image (the default is True).
         lat : ee.Image, optional
@@ -226,8 +223,6 @@ class Image(object):
             self.stabil_iter = None
         self.albedo_iter = int(albedo_iterations + 0.5)
         self.rs_interp_flag = utils.boolean(rs_interp_flag)
-        # CGM - This does not appear to be used anymore
-        #self.ta_interp_flag = utils.boolean(ta_interp_flag)
         self.ta_smooth_flag = utils.boolean(ta_smooth_flag)
         self.et_min = et_min
 
@@ -299,9 +294,6 @@ class Image(object):
                 self.alexi_crs = 'EPSG:4326'
             elif self.alexi_source.upper() == 'CONUS_V004':
                 self.alexi_geo = [0.04, 0, -125.02, 0, -0.04, 49.78]
-                self.alexi_crs = 'EPSG:4326'
-            elif self.alexi_source.upper() == 'CONUS_V003':
-                self.alexi_geo = [0.04, 0, -125.04, 0, -0.04, 49.8]
                 self.alexi_crs = 'EPSG:4326'
             else:
                 # Assume ALEXI source is an image collection ID if it is a string
@@ -431,42 +423,31 @@ class Image(object):
             et_min=self.et_min,
         )
 
-        # # Filter out pixels that are very different than ALEXI values
-        # # Calculate the relative difference between aggregated ET and ALEXI as a percentage value
-        # # Apply different threshold of the relative difference for different ALEXI range.
-        # et_coarse_new = (
-        #     ee.Image(et)
-        #     .reproject(crs=self.crs, crsTransform=self.transform)
-        #     .reduceResolution(reducer=ee.Reducer.mean().unweighted(), maxPixels=30000)
-        #     .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)
-        # )
-        #
-        # # ALEXI <= 0.1, we use 200% as threshold
-        # # TODO: The eq(0.1) should probably be .eq(et_min), .lte(0.1), or .lte(et_min)
-        # #   in case the et_min threshold changes
-        # alexi_1 = self.et_alexi.updateMask(self.et_alexi.eq(0.1))
-        # mask_1 = et_coarse_new.subtract(alexi_1).abs().divide(alexi_1).lt(2.0).unmask(0)
-        #
-        # # 0.1 < ALEXI <= 1, we use 150% as threshold
-        # alexi_2 = self.et_alexi.updateMask(self.et_alexi.gt(0.1).And(self.et_alexi.lte(1)))
-        # mask_2 = et_coarse_new.subtract(alexi_2).abs().divide(alexi_2).lt(1.5).unmask(0)
-        #
-        # # 1 < ALEXI <= 8, we use 50% as threshold
-        # alexi_3 = self.et_alexi.updateMask(self.et_alexi.gt(1).And(self.et_alexi.lte(8)))
-        # mask_3 = et_coarse_new.subtract(alexi_3).abs().divide(alexi_3).lt(0.5).unmask(0)
-        #
-        # # TODO: The .gte(8) should probably be .gt(8) since the equals condition
-        # #   is already being checked above and to be consistent with the other ranges
-        # # ALEXI >= 8, we use 30% as threshold
-        # alexi_4 = self.et_alexi.updateMask(self.et_alexi.gte(8))
-        # mask_4 = et_coarse_new.subtract(alexi_4).abs().divide(alexi_4).lt(0.3).unmask(0)
-        #
-        # # Combine the masks for the separate ranges
-        # combined_et_mask = mask_1.Or(mask_2).Or(mask_3).Or(mask_4)
-        #
-        # return et.rename(['et']).updateMask(combined_et_mask).set(self.properties)
-
-        return et.rename(['et']).set(self.properties)
+        # Filter out pixels that are very different than ALEXI values
+        # Calculate the relative difference between aggregated ET and ALEXI as a percentage value
+        # Apply different threshold of the relative difference for different ALEXI range.
+        #   ALEXI <= 0.1, we use 200% as threshold
+        #   0.1 < ALEXI <= 1.0, we use 150% as threshold
+        #   1.0 < ALEXI <= 8.0, we use 50% as threshold
+        #   ALEXI >= 8.0, we use 30% as threshold
+        et_coarse_new = (
+            et.reproject(crs=self.crs, crsTransform=self.transform)
+            .reduceResolution(reducer=ee.Reducer.mean().unweighted(), maxPixels=30000)
+            .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)
+        )
+        alexi_diff = et_coarse_new.subtract(self.et_alexi).abs().divide(self.et_alexi)
+        combined_et_mask = (
+            alexi_diff.lt(2.0).And(self.et_alexi.lte(0.1))
+            .Or(alexi_diff.lt(1.5).And(self.et_alexi.gt(0.1)).And(self.et_alexi.lte(1.0)))
+            .Or(alexi_diff.lt(0.5).And(self.et_alexi.gt(1.0)).And(self.et_alexi.lte(8.0)))
+            .Or(alexi_diff.lt(0.3).And(self.et_alexi.gt(8.0)))
+        )
+        return (
+            et.rename(['et'])
+            .updateMask(combined_et_mask)
+            .retile(2)
+            .set(self.properties)
+        )
 
     @lazy_property
     def et_reference(self):
@@ -511,7 +492,6 @@ class Image(object):
 
         """
         alexi_keyword_sources = {
-            'CONUS_V003': 'projects/disalexi/alexi/CONUS_V003',
             'CONUS_V004': 'projects/disalexi/alexi/CONUS_V004',
             'CONUS_V005': 'projects/ee-tulipyangyun-2/assets/alexi/ALEXI_V005',
             'CONUS_V006': 'projects/ee-tulipyangyun-2/assets/alexi/ALEXI_V006',
@@ -784,7 +764,6 @@ class Image(object):
 
         """
         ta_keyword_sources = {
-            'CONUS_V003': 'projects/openet/disalexi/tair/conus_v003_1k',
             'CONUS_V004': 'projects/openet/disalexi/tair/conus_v004_1k',
             'CONUS_V005': 'projects/openet/disalexi/tair/conus_v005_1k',
             'CONUS_V006': 'projects/openet/disalexi/tair/conus_v006_1k',
@@ -929,7 +908,7 @@ class Image(object):
             rs1_coll_id = 'projects/disalexi/insol_data/global_v001_hourly'
             rs1_coll = ee.ImageCollection(rs1_coll_id).select(['insolation'])
             if self.rs_interp_flag:
-                # TODO: Check if the CFSR instolation are instantaneous or accumulations
+                # TODO: Check if the CFSR insolation are instantaneous or accumulations
                 rs1_img = utils.interpolate(rs1_coll, self.datetime, timestep=1)
             else:
                 # Select the source image before the image time
@@ -1134,8 +1113,11 @@ class Image(object):
         self.leaf_width = lc_remap(lc_img, self.lc_type, 'xl')
         self.clump = lc_remap(lc_img, self.lc_type, 'omega')
 
-    # def ta_coarse(self, step_size, step_count):
-    def ta_coarse(self, offsets=[-20, -12, -7, -4, -2, -1, 0, 1, 2, 4, 7, 12, 20]):
+    def ta_coarse(
+            self,
+            offsets=[-12, -7, -4, -2, -1, 0, 1, 2, 4, 7, 12],
+            #offsets=[-5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5],
+    ):
         """Compute coarse scale air temperature estimate
 
         Parameters
@@ -1192,11 +1174,8 @@ class Image(object):
         # rr_params = {'reducer': ee.Reducer.median().unweighted(), 'maxPixels': 30000}
         proj_params = {'crs': self.alexi_crs, 'crsTransform': self.alexi_geo}
 
-        # CGM notes
         # Intentionally passing measured air temperature in for both t_air and t_air0
-        # If we are using the coarse/ALEXI scale version of all the meteo data,
-        #   do we need the reduceResolution() calls?
-        # The ALEXI image is already at the ALEXI scale and shouldn't need to be reduced
+        # The "coarse" images are already at the ALEXI scale and shouldn't need to be reduced
         ta_invert = tseb.tseb_invert(
             et_alexi=self.et_alexi,
             t_air=self.air_temperature_coarse,
@@ -1206,14 +1185,6 @@ class Image(object):
             p=self.air_pressure_coarse,
             rs_1=self.rs1_coarse,
             rs24=self.rs24_coarse,
-            #et_alexi=self.et_alexi.reduceResolution(**rr_params).reproject(**proj_params),
-            #t_air=self.air_temperature.reduceResolution(**rr_params).reproject(**proj_params),
-            #t_air0=self.air_temperature.reduceResolution(**rr_params).reproject(**proj_params),
-            #e_air=self.vapor_pressure.reduceResolution(**rr_params).reproject(**proj_params),
-            #u=self.wind_speed.reduceResolution(**rr_params).reproject(**proj_params),
-            #p=self.air_pressure.reduceResolution(**rr_params).reproject(**proj_params),
-            #rs_1=self.rs1.reduceResolution(**rr_params).reproject(**proj_params),
-            #rs24=self.rs24.reduceResolution(**rr_params).reproject(**proj_params),
             t_rad=self.lst.reduceResolution(**rr_params).reproject(**proj_params),
             z=self.elevation.reduceResolution(**rr_params).reproject(**proj_params),
             vza=0,
@@ -1233,8 +1204,6 @@ class Image(object):
             datetime=self.datetime,
             lat=self.et_alexi.multiply(0).add(ee.Image.pixelLonLat().select('latitude')),
             lon=self.et_alexi.multiply(0).add(ee.Image.pixelLonLat().select('longitude')),
-            # lat=self.lat,
-            # lon=self.lon,
             stabil_iter=self.stabil_iter,
             albedo_iter=self.albedo_iter,
         )
@@ -1243,8 +1212,6 @@ class Image(object):
         #   if all the inputs are already at the coarse/ALEXI scale?
         return (
             ta_invert
-            # .reduceResolution(reducer=ee.Reducer.mean().unweighted(), maxPixels=30000)
-            # .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)
             .round()
             # # Round to nearest tenth
             # .multiply(10).round().divide(10)
@@ -1253,17 +1220,11 @@ class Image(object):
         )
 
     # TODO: Maybe rename as ta_coarse_mosaic()
-    # def ta_mosaic(self, ta_img, step_size, step_count, threshold=0.5):
-    #     step_size : float
-    #         The size of each Ta step.
-    #     step_count : int
-    #         The number of Ta steps.
     def ta_mosaic(
             self,
             ta_img,
-            offsets=[-20, -12, -7, -4, -2, -1, 0, 1, 2, 4, 7, 12, 20],
-            #offsets=[-16, -11, -7, -4, -2, -1, 0, 1, 2, 4, 7, 11, 16],
-            #offsets=[-6, -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6],
+            offsets=[-12, -7, -4, -2, -1, 0, 1, 2, 4, 7, 12],
+            #offsets=[-5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5],
             threshold=0.5
     ):
         """Compute the air temperature for each ALEXI ET cell that minimizes
@@ -1298,6 +1259,7 @@ class Image(object):
                 hc_min=self.hc_min, hc_max=self.hc_max,
                 datetime=self.datetime, lat=self.lat, lon=self.lon,
                 stabil_iter=self.stabil_iter, albedo_iter=self.albedo_iter,
+                et_min=self.et_min,
             )
 
             # Aggregate the Landsat scale ET up to the ALEXI scale
@@ -1329,20 +1291,10 @@ class Image(object):
                 .set({'system:index': ee.Image(ta).get('system:index')})
             )
 
-        # CGM - Adding one extra Ta step at beginning and end to handle
-        #   rounding or reduceResolution/projection error
         ta_coll = ee.ImageCollection([
             ta_img.add(j).set({'system:index': 'step_{:02d}'.format(i)})
             for i, j in enumerate(offsets)
         ])
-        # ta_coll = ee.ImageCollection([
-        #     ta_img.add(j * step_size).set({'system:index': 'step_{:02d}'.format(i)})
-        #     for i, j in enumerate(range(-step_count // 2, step_count // 2 + 1))
-        # ])
-        # ta_coll = ee.ImageCollection([
-        #     ta_img.add(i * step_size).set({'system:index': 'step_{:02d}'.format(i)})
-        #     for i in range(step_count + 1)
-        # ])
 
         return ee.ImageCollection(ta_coll.map(ta_func)).toBands()
 
@@ -1417,14 +1369,14 @@ def ta_mosaic_interpolate(ta_mosaic_img):
     # #   instead of interpolating
     # ta_img = ta_a.add(ta_b).multiply(0.5)
 
+    # Mask out Ta cells outside the interpolation range
+    # if extrapolate_mask:
+    ta_img = ta_img.updateMask(ta_a.lt(ta_b))
+
     # # CGM - This is mostly needed at the 10k step size
     # #   Commenting out for now
     # # Mask out Ta cells with all negative biases
     # ta_img = ta_img.updateMask(bias_b.lt(0).And(bias_a.lt(0)).Not())
-
-    # Mask out Ta cells outside the interpolation range
-    # if extrapolate_mask:
-    ta_img = ta_img.updateMask(ta_a.lt(ta_b))
 
     # Round to the nearest tenth (should it be hundredth?)
     return (
