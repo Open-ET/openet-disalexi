@@ -442,10 +442,12 @@ class Image(object):
             .Or(alexi_diff.lt(0.5).And(self.et_alexi.gt(1.0)).And(self.et_alexi.lte(8.0)))
             .Or(alexi_diff.lt(0.3).And(self.et_alexi.gt(8.0)))
         )
+
+        # Remove retile call if et masking above is not applied!
         return (
             et.rename(['et'])
             .updateMask(combined_et_mask)
-            #.retile(64)
+            .retile(128)
             .set(self.properties)
         )
 
