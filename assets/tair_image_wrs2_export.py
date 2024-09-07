@@ -254,10 +254,9 @@ def main(
         raise e
 
     try:
-        retile = int(ini['EXPORT']['retile'])
+        retile = int(ini['TAIR']['retile'])
     except KeyError:
-        retile = 0
-        #retile = 256
+        retile = 4
         logging.debug(f'  retile: not set in INI, defaulting to {retile}')
     except Exception as e:
         raise e
@@ -936,7 +935,7 @@ def main(
                 properties.update(tair_args)
                 export_img = export_img.set(properties)
 
-                if retile in [2, 4, 8, 16, 32, 64, 128]:
+                if retile and retile in [2, 4, 8, 16, 32, 64, 128]:
                     export_img = export_img.retile(retile)
 
                 # CGM: We could pre-compute (or compute once and then save)
@@ -980,12 +979,13 @@ def main(
                 # for i in range(1, max_retries):
                 #     try:
                 task = ee.batch.Export.image.toAsset(
-                   image=export_img,
-                   description=export_id,
-                   assetId=asset_id,
-                   crs=alexi_crs,
-                   crsTransform='[' + ','.join(list(map(str, export_geo))) + ']',
-                   dimensions='{0}x{1}'.format(*export_shape),
+                    image=export_img,
+                    description=export_id,
+                    assetId=asset_id,
+                    crs=alexi_crs,
+                    crsTransform='[' + ','.join(list(map(str, export_geo))) + ']',
+                    dimensions='{0}x{1}'.format(*export_shape),
+                    #shardSize=64,
                 )
                 #     # except ee.ee_exception.EEException as e:
                 #     except Exception as e:
