@@ -231,16 +231,15 @@ def tseb_pt(
         albedo, rs_1, f, fc, aleafv, aleafn, aleafl, adeadv, adeadn, adeadl, zs, albedo_iter
     )
 
-    # CGM - Moved emissivity calculation to separate function.
-    #   I removed the Rs0 check.
     e_atm = tseb_utils.emissivity(t_air)
-    # p = t_air.expression(
-    #     '101.3 * (((t_air - (0.0065 * z)) / t_air) ** 5.26)', {'t_air': t_air, 'z': z}
-    # )
+
     # Density of air? (kg m-3)
-    r_air = t_air.expression(
-        '101.3 * (((t_air - (0.0065 * z)) / t_air) ** 5.26) / 1.01 / t_air / 0.287',
-        {'t_air': t_air, 'z': z}
+    # CGM - Intentionally making this a function of t_air instead of z
+    # r_air = 101.3 * (((t_air - (0.0065 * z)) / t_air) ** 5.26) / 1.01 / t_air / 0.287
+    r_air = (
+        #z.multiply(-0.0065).add(t_air).divide(t_air).pow(5.26).divide(t_air)
+        t_air.subtract(z.multiply(0.0065)).divide(t_air).pow(5.26).divide(t_air)
+        .multiply(101.3 / 1.01 / 0.287)
     )
     cp = 1004.16
 
@@ -287,18 +286,12 @@ def tseb_pt(
 
         g = tseb_utils.compute_G0(rn, rn_s, ef_s_iter, water_mask, lon, datetime)
 
+        # le_c_init = f_green * (a_pt_iter * Ss / (Ss + gamma)) * rn_c
+        # le_c_init[le_c_init < 0] = 0
         le_c_init = (
             Ss.add(gamma).pow(-1).multiply(Ss).multiply(a_pt_iter).multiply(f_green)
             .multiply(rn_c).max(0)
         )
-        #le_c_init = (
-        #    albedo
-        #    .expression(
-        #        'f_green * (a_pt * Ss / (Ss + g)) * rn_c',
-        #        {'f_green': f_green, 'a_pt': a_pt_iter, 'Ss': Ss, 'g': gamma, 'rn_c': rn_c}
-        #    )
-        #    .max(0)
-        #)
 
         h_c_init = rn_c.subtract(le_c_init)
 
@@ -690,18 +683,15 @@ def tseb_invert(
         albedo, rs_1, f, fc, aleafv, aleafn, aleafl, adeadv, adeadn, adeadl, zs, albedo_iter
     )
 
-    # CGM - Moved emissivity calculation to separate function.
-    #   I removed the Rs0 check.
     e_atm = tseb_utils.emissivity(t_air)
-    # p = t_air.expression(
-    #     '101.3 * (((t_air - (0.0065 * z)) / t_air) ** 5.26)',
-    #     {'t_air': t_air, 'z': z}
-    # )
 
     # Density of air? (kg m-3)
-    r_air = t_air.expression(
-        '101.3 * (((t_air - (0.0065 * z)) / t_air) ** 5.26) / 1.01 / t_air / 0.287',
-        {'t_air': t_air, 'z': z}
+    # CGM - Intentionally making this a function of t_air instead of z
+    # r_air = 101.3 * (((t_air - (0.0065 * z)) / t_air) ** 5.26) / 1.01 / t_air / 0.287
+    r_air = (
+        #z.multiply(-0.0065).add(t_air).divide(t_air).pow(5.26).divide(t_air)
+        t_air.subtract(z.multiply(0.0065)).divide(t_air).pow(5.26).divide(t_air)
+        .multiply(101.3 / 1.01 / 0.287)
     )
     cp = 1004.16
 
@@ -753,17 +743,12 @@ def tseb_invert(
         # Yun - use the ALEXI ET to get daily LE and then to get H
         h = rn.subtract(le_tot).subtract(g)
 
+        # le_c_init = f_green * (a_pt_iter * Ss / (Ss + gamma)) * rn_c
+        # le_c_init[le_c_init < 0] = 0
         le_c_init = (
             Ss.add(gamma).pow(-1).multiply(Ss).multiply(a_pt_iter).multiply(f_green)
             .multiply(rn_c).max(0)
         )
-        #le_c_init = (
-        #    et_alexi
-        #    .expression(
-        #        'f_green * (a_pt * Ss / (Ss + g)) * rn_c',
-        #        {'f_green': f_green, 'a_pt': a_pt_iter, 'Ss': Ss, 'g': gamma, 'rn_c': rn_c})
-        #    .max(0)
-        #)
 
         h_c_init = rn_c.subtract(le_c_init)
         h_s = h.subtract(h_c_init)

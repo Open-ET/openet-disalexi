@@ -54,8 +54,8 @@ class Image(object):
             albedo_iterations=10,
             rs_interp_flag=True,
             ta_smooth_flag=True,
-            lat=None,
-            lon=None,
+            latitude=None,
+            longitude=None,
             et_min=0.01,
             **kwargs
     ):
@@ -107,9 +107,9 @@ class Image(object):
             The default is True.
         ta_smooth_flag : bool, optional
             If True, smooth and resample Ta image (the default is True).
-        lat : ee.Image, optional
+        latitude : ee.Image, optional
             Latitude [deg].  If not set will default to ee.Image.pixelLonLat().
-        lon : ee.Image, optional
+        longitude : ee.Image, optional
             Longitude [deg].  If not set will default to ee.Image.pixelLonLat().
         et_min : float, optional
             Minimum output ET value. (the default is 0.01).
@@ -254,21 +254,21 @@ class Image(object):
                 self.et_reference_resample.lower() not in resample_methods):
             raise ValueError('Unsupported et_reference_resample method\n')
 
-        if lat is None:
-            self.lat = self.ndvi.multiply(0).add(ee.Image.pixelLonLat().select(['latitude']))
-        elif utils.is_number(lat):
-            self.lat = ee.Image.constant(lat)
-        elif isinstance(lat, ee.computedobject.ComputedObject):
-            self.lat = lat
+        if latitude is None:
+            self.latitude = self.ndvi.multiply(0).add(ee.Image.pixelLonLat().select(['latitude']))
+        elif utils.is_number(latitude):
+            self.latitude = ee.Image.constant(latitude)
+        elif isinstance(latitude, ee.computedobject.ComputedObject):
+            self.latitude = latitude
         else:
             raise ValueError('invalid lat parameter')
 
-        if lon is None:
-            self.lon = self.ndvi.multiply(0).add(ee.Image.pixelLonLat().select(['longitude']))
-        elif utils.is_number(lon):
-            self.lon = ee.Image.constant(lon)
-        elif isinstance(lon, ee.computedobject.ComputedObject):
-            self.lon = lon
+        if longitude is None:
+            self.longitude = self.ndvi.multiply(0).add(ee.Image.pixelLonLat().select(['longitude']))
+        elif utils.is_number(longitude):
+            self.longitude = ee.Image.constant(longitude)
+        elif isinstance(longitude, ee.computedobject.ComputedObject):
+            self.longitude = longitude
         else:
             raise ValueError('invalid lon parameter')
 
@@ -284,27 +284,35 @@ class Image(object):
         # self.crs = image.select([0]).projection().getInfo()['crs']
         # self.transform = image.select([0]).projection().getInfo()['transform']
 
-        # CGM - This should probably be set in et_alexi() but that wasn't working
-        if type(self.alexi_source) is str:
-            if self.alexi_source.upper() == 'CONUS_V006':
-                self.alexi_geo = [0.04, 0, -125.02, 0, -0.04, 49.78]
-                self.alexi_crs = 'EPSG:4326'
-            elif self.alexi_source.upper() == 'CONUS_V005':
-                self.alexi_geo = [0.04, 0, -125.02, 0, -0.04, 49.78]
-                self.alexi_crs = 'EPSG:4326'
-            elif self.alexi_source.upper() == 'CONUS_V004':
-                self.alexi_geo = [0.04, 0, -125.02, 0, -0.04, 49.78]
-                self.alexi_crs = 'EPSG:4326'
-            else:
-                # Assume ALEXI source is an image collection ID if it is a string
-                #   but doesn't match on any of the keywords.
-                alexi_img = ee.Image(ee.ImageCollection(self.alexi_source).first())
-                self.alexi_geo = ee.List(ee.Dictionary(
-                    ee.Algorithms.Describe(alexi_img.projection())).get('transform'))
-                self.alexi_crs = alexi_img.projection().crs()
-        else:
-            self.alexi_geo = [0.04, 0, -125.04, 0, -0.04, 49.8]
-            self.alexi_crs = 'EPSG:4326'
+        # CGM - Hardcoding to the CONUS transform and ancillary assets since they
+        #   are identical for all versions and global is not yet supported
+        self.alexi_geo = [0.04, 0, -125.04, 0, -0.04, 49.8]
+        self.alexi_crs = 'EPSG:4326'
+        self.alexi_elev = ee.Image('projects/openet/assets/alexi/ancillary/conus/v006/elevation')
+        self.alexi_lat = ee.Image('projects/openet/assets/alexi/ancillary/conus/v006/latitude')
+        self.alexi_lon = ee.Image('projects/openet/assets/alexi/ancillary/conus/v006/longitude')
+
+        # # CGM - This should probably be set in et_alexi() but that wasn't working
+        # if type(self.alexi_source) is str:
+        #     if self.alexi_source.upper() == 'CONUS_V006':
+        #         self.alexi_geo = [0.04, 0, -125.02, 0, -0.04, 49.78]
+        #         self.alexi_crs = 'EPSG:4326'
+        #     elif self.alexi_source.upper() == 'CONUS_V005':
+        #         self.alexi_geo = [0.04, 0, -125.02, 0, -0.04, 49.78]
+        #         self.alexi_crs = 'EPSG:4326'
+        #     elif self.alexi_source.upper() == 'CONUS_V004':
+        #         self.alexi_geo = [0.04, 0, -125.02, 0, -0.04, 49.78]
+        #         self.alexi_crs = 'EPSG:4326'
+        #     else:
+        #         # Assume ALEXI source is an image collection ID if it is a string
+        #         #   but doesn't match on any of the keywords.
+        #         alexi_img = ee.Image(ee.ImageCollection(self.alexi_source).first())
+        #         self.alexi_geo = ee.List(ee.Dictionary(
+        #             ee.Algorithms.Describe(alexi_img.projection())).get('transform'))
+        #         self.alexi_crs = alexi_img.projection().crs()
+        # else:
+        #     self.alexi_geo = [0.04, 0, -125.04, 0, -0.04, 49.8]
+        #     self.alexi_crs = 'EPSG:4326'
 
     @classmethod
     def from_image_id(cls, image_id, **kwargs):
@@ -418,7 +426,7 @@ class Image(object):
             albedo=self.albedo, ndvi=self.ndvi, lai=self.lai,
             clump=self.clump, leaf_width=self.leaf_width,
             hc_min=self.hc_min, hc_max=self.hc_max,
-            datetime=self.datetime, lat=self.lat, lon=self.lon,
+            datetime=self.datetime, lat=self.latitude, lon=self.longitude,
             stabil_iter=self.stabil_iter, albedo_iter=self.albedo_iter,
             et_min=self.et_min,
         )
@@ -842,19 +850,20 @@ class Image(object):
         elif isinstance(self.air_pres_source, ee.computedobject.ComputedObject):
             ap_img = self.air_pres_source
         elif self.air_pres_source.upper() == 'ESTIMATE':
-            ap_img = self.elevation.expression(
-                '101.3 * (((293.0 - 0.0065 * z) / 293.0) ** 5.26)', {'z': self.elevation}
-            )
+            # pressure = 101.3 * (((293.0 - 0.0065 * elevation) / 293.0) ** 5.26)
+            ap_img = self.alexi_elev.multiply(-0.0065).add(293).divide(293.0).pow(5.26).multiply(101.3)
         elif self.air_pres_source.upper() == 'CFSR':
             ap_coll_id = 'projects/disalexi/meteo_data/airpressure/global_v001_3hour'
             ap_coll = ee.ImageCollection(ap_coll_id).select(['airpressure'])
             ap_img = utils.interpolate(ap_coll, self.datetime, timestep=3)
             ap_img = (
                 ee.Image(ap_img)
-                .multiply(self.elevation.multiply(-0.0065).add(293).divide(293.0).pow(5.26))
-                .resample('bicubic').reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)
+                .resample('bicubic')
+                .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)
+                .multiply(self.alexi_elev.multiply(-0.0065).add(293).divide(293.0).pow(5.26))
                 # # Resample/reproject to the Landsat scale will happen in non-coarse function
-                # .resample('bilinear').reproject(crs=self.crs, crsTransform=self.transform)
+                # .resample('bilinear')
+                # .reproject(crs=self.crs, crsTransform=self.transform)
             )
         else:
             raise ValueError(f'Invalid air_pres_source: {self.air_pres_source}\n')
@@ -866,7 +875,8 @@ class Image(object):
         """Air pressure [kPa] at fine (Landsat) scale"""
         return (
             self.air_pressure_coarse
-            .resample('bilinear').reproject(crs=self.crs, crsTransform=self.transform)
+            .resample('bilinear')
+            .reproject(crs=self.crs, crsTransform=self.transform)
         )
 
     @lazy_property
@@ -882,9 +892,11 @@ class Image(object):
             at_img = utils.interpolate(at_coll, self.datetime, timestep=3)
             at_img = (
                 ee.Image(at_img)
-                .resample('bicubic').reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)
+                .resample('bicubic')
+                .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)
                 # # Resample/reproject to the Landsat scale will happen in non-coarse function
-                #.resample('bilinear').reproject(crs=self.crs, crsTransform=self.transform)
+                #.resample('bilinear')
+                # .reproject(crs=self.crs, crsTransform=self.transform)
             )
         else:
             raise ValueError(f'Unsupported air_temp_source: {self.air_temp_source}\n')
@@ -896,7 +908,8 @@ class Image(object):
         """Air temperature [K] at fine (Landsat) scale"""
         return (
             self.air_temperature_coarse
-            .resample('bilinear').reproject(crs=self.crs, crsTransform=self.transform)
+            .resample('bilinear')
+            .reproject(crs=self.crs, crsTransform=self.transform)
         )
     
     @lazy_property
@@ -924,9 +937,11 @@ class Image(object):
                 )
             rs1_img = (
                 ee.Image(rs1_img)
-                .resample('bicubic').reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)
+                .resample('bicubic')
+                .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)
                 # # Resample/reproject to the Landsat scale will happen in non-coarse function
-                #.resample('bilinear').reproject(crs=self.crs, crsTransform=self.transform)
+                #.resample('bilinear')
+                # .reproject(crs=self.crs, crsTransform=self.transform)
             )
         else:
             raise ValueError(f'Unsupported rs_hourly_source: {self.rs_hourly_source}\n')
@@ -938,7 +953,8 @@ class Image(object):
         """Hourly solar insolation [W m-2] at fine (Landsat) scale"""
         return (
             self.rs1_coarse
-            .resample('bilinear').reproject(crs=self.crs, crsTransform=self.transform)
+            .resample('bilinear')
+            .reproject(crs=self.crs, crsTransform=self.transform)
         )
 
     @lazy_property
@@ -957,9 +973,11 @@ class Image(object):
             )
             rs24_img = (
                 ee.Image(rs24_coll.sum())
-                .resample('bicubic').reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)
+                .resample('bicubic')
+                .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)
                 # # Resample/reproject to the Landsat scale will happen in non-coarse function
-                #.resample('bilinear').reproject(crs=self.crs, crsTransform=self.transform)
+                #.resample('bilinear')
+                # .reproject(crs=self.crs, crsTransform=self.transform)
             )
         else:
             raise ValueError(f'Unsupported rs_daily_source: {self.rs_daily_source}\n')
@@ -971,7 +989,8 @@ class Image(object):
         """Daily (24 hour) solar insolation [W m-2] at fine (Landsat) scale"""
         return (
             self.rs24_coarse
-            .resample('bilinear').reproject(crs=self.crs, crsTransform=self.transform)
+            .resample('bilinear')
+            .reproject(crs=self.crs, crsTransform=self.transform)
         )
 
     @lazy_property
@@ -998,9 +1017,11 @@ class Image(object):
             ws_img = utils.interpolate(ws_coll, self.datetime, timestep=3)
             ws_img = (
                 ee.Image(ws_img)
-                .resample('bicubic').reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)
+                .resample('bicubic')
+                .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)
                 # # Resample/reproject to the Landsat scale will happen in non-coarse function
-                # .resample('bilinear').reproject(crs=self.crs, crsTransform=self.transform)
+                # .resample('bilinear')
+                # .reproject(crs=self.crs, crsTransform=self.transform)
             )
         else:
             raise ValueError(f'Unsupported wind_speed_source: {self.wind_speed_source}\n')
@@ -1014,7 +1035,8 @@ class Image(object):
         """Wind speed [m/s] at fine (Landsat) scale"""
         return (
             self.wind_speed_coarse
-            .resample('bilinear').reproject(crs=self.crs, crsTransform=self.transform)
+            .resample('bilinear')
+            .reproject(crs=self.crs, crsTransform=self.transform)
         )
 
     @lazy_property
@@ -1030,9 +1052,11 @@ class Image(object):
             vp_img = utils.interpolate(vp_coll, self.datetime, timestep=3)
             vp_img = (
                 ee.Image(vp_img)
-                .resample('bicubic').reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)
+                .resample('bicubic')
+                .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)
                 # # Resample/reproject to the Landsat scale will happen in non-coarse function
-                # .resample('bilinear').reproject(crs=self.crs, crsTransform=self.transform)
+                # .resample('bilinear')
+                # .reproject(crs=self.crs, crsTransform=self.transform)
             )
         else:
             raise ValueError(f'Unsupported vapor_pres_source: {self.vapor_pres_source}\n')
@@ -1044,7 +1068,8 @@ class Image(object):
         """Vapor pressure [kPa] at fine (Landsat) scale"""
         return (
             self.vapor_pressure_coarse
-            .resample('bilinear').reproject(crs=self.crs, crsTransform=self.transform)
+            .resample('bilinear')
+            .reproject(crs=self.crs, crsTransform=self.transform)
         )
 
     def set_landcover_vars(self):
@@ -1192,7 +1217,7 @@ class Image(object):
             rs_1=self.rs1_coarse,
             rs24=self.rs24_coarse,
             t_rad=self.lst.reduceResolution(**rr_params).reproject(**proj_params),
-            z=self.elevation.reduceResolution(**rr_params).reproject(**proj_params),
+            z=self.alexi_elev,
             vza=0,
             aleafv=self.aleafv.reduceResolution(**rr_params).reproject(**proj_params),
             aleafn=self.aleafn.reduceResolution(**rr_params).reproject(**proj_params),
@@ -1208,8 +1233,8 @@ class Image(object):
             hc_min=self.hc_min.reduceResolution(**rr_params).reproject(**proj_params),
             hc_max=self.hc_max.reduceResolution(**rr_params).reproject(**proj_params),
             datetime=self.datetime,
-            lat=self.et_alexi.multiply(0).add(ee.Image.pixelLonLat().select('latitude')),
-            lon=self.et_alexi.multiply(0).add(ee.Image.pixelLonLat().select('longitude')),
+            lat=self.alexi_lat,
+            lon=self.alexi_lon,
             stabil_iter=self.stabil_iter,
             albedo_iter=self.albedo_iter,
         )
@@ -1263,11 +1288,12 @@ class Image(object):
                 albedo=self.albedo, ndvi=self.ndvi, lai=self.lai,
                 clump=self.clump, leaf_width=self.leaf_width,
                 hc_min=self.hc_min, hc_max=self.hc_max,
-                datetime=self.datetime, lat=self.lat, lon=self.lon,
+                datetime=self.datetime, lat=self.latitude, lon=self.longitude,
                 stabil_iter=self.stabil_iter, albedo_iter=self.albedo_iter,
                 et_min=self.et_min,
             )
 
+            # TODO: Test if these two calls can be combined into one
             # Aggregate the Landsat scale ET up to the ALEXI scale
             et_coarse = (
                 ee.Image(et_fine)
