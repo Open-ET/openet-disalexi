@@ -853,7 +853,7 @@ def main(
                             landsat_lai_version = lai_info['properties']['landsat_lai_version']
                         except:
                             logging.info(f'  {scene_id} - Could not get LAI properties, skipping')
-                        continue
+                            continue
 
                 if ('lst_source' in model_args.keys()) and (type(model_args['lst_source']) is str):
                     # Assumptions: string lst_source is an image collection ID
@@ -1008,8 +1008,9 @@ def main(
                 #   Need to only retry on specific errors, otherwise exit
                 try:
                     task.start()
-                except:
+                except Exception as e:
                     logging.warning(f'  {scene_id} - Export task was not started, skipping')
+                    logging.warning(f'  {scene_id} - {e}')
                     continue
                 # for i in range(1, max_retries):
                 #     try:
