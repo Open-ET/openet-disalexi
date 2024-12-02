@@ -2,11 +2,11 @@
 name = "openet-disalexi"
 version = "0.0.35"
 authors = [
-    { name = "Yun Yang", email = "yun.yang@msstate.edu" },
+    { name = "Yun Yang", email = "yy2356@cornell.edu" },
     { name = "Martha Anderson", email = "martha.anderson@usda.gov" },
 ]
 maintainers = [
-    { name = "Yun Yang", email = "yun.yang@msstate.edu" },
+    { name = "Yun Yang", email = "yy2356@cornell.edu" },
     { name = "Charles Morton", email = "charles.morton@dri.edu" },
 ]
 description = "Earth Engine based DisALEXI model"
@@ -20,7 +20,7 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 dependencies = [
-    "earthengine-api>=0.1.367",
+    "earthengine-api>=0.1.392",
     "openet-core>=0.4.0",
     "openet-landsat-lai>=0.2.0",
     # "openet-refet-gee>=0.2.0",
