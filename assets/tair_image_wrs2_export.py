@@ -106,6 +106,7 @@ def main(
     # List of path/rows to skip
     wrs2_skip_list = [
         'p049r026',  # Vancouver Island, Canada
+        'p048r028',  # OR/WA Coast
         # 'p047r031',  # North California coast
         'p042r037',  # San Nicholas Island, California
         # 'p041r037',  # South California coast
