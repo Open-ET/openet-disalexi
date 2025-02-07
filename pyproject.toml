@@ -1,6 +1,6 @@
 [project]
 name = "openet-disalexi"
-version = "0.0.35"
+version = "0.0.36"
 authors = [
     { name = "Yun Yang", email = "yy2356@cornell.edu" },
     { name = "Martha Anderson", email = "martha.anderson@usda.gov" },

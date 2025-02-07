@@ -264,25 +264,16 @@ def test_Image_ta_properties():
    # assert output['properties']['ta_iteration'] > 0
 
 
-# CGM - Added the scene_id for this test since the ALEXI_V004 is only currently
-#   loaded for 2020 and 2021 and I needed a quick way to switch the datetime.
+# CGM - Added the scene_id for this test to make it easy to switch the datetime
 # I also modified the default_image to take the scene_id & scene_time parameters
-# This could all be removed once ALEXI V004 is loaded for more years.
 @pytest.mark.parametrize(
     'scene_id, source, xy, expected',
     [
         # ALEXI ET is currently in MJ m-2 d-1
         ['LC08_044033_20200708', 'CONUS_V006', TEST_POINT, 17.999324798583984 * 0.408],
         ['LC08_044033_20200724', 'CONUS_V006', TEST_POINT, 17.819684982299805 * 0.408],
-        ['LC08_044033_20200708', 'CONUS_V005', TEST_POINT, 17.999324798583984 * 0.408],
-        ['LC08_044033_20200724', 'CONUS_V005', TEST_POINT, 17.819684982299805 * 0.408],
-        [None, 'CONUS_V005', TEST_POINT, 12.765579223632812 * 0.408],
         [None, 'projects/ee-tulipyangyun-2/assets/alexi/ALEXI_V006',
          TEST_POINT, 12.765579223632812 * 0.408],
-        [None, 'projects/ee-tulipyangyun-2/assets/alexi/ALEXI_V005',
-         TEST_POINT, 12.765579223632812 * 0.408],
-        ['LC08_044033_20200708', 'CONUS_V004', TEST_POINT, 16.58306312561035 * 0.408],
-        ['LC08_044033_20200724', 'CONUS_V004', TEST_POINT, 16.664167404174805 * 0.408],
         [None, ee.Image('USGS/SRTMGL1_003').multiply(0).add(10), TEST_POINT, 10],
         [None, '10.382039', TEST_POINT, 10.382039],
         [None, 10.382039, TEST_POINT, 10.382039],

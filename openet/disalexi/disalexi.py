@@ -65,10 +65,10 @@ class Image(object):
         ----------
         image : ee.Image
             Prepped image
-        ta_source : {'CONUS_V003', 'CONUS_V004', 'CONUS_V005', 'CONUS_V006'}
+        ta_source : {'CONUS_V006'}
             ALEXI scale air temperature image collection ID.
             The default is 'CONUS_V006'.
-        alexi_source : {'CONUS_V004', 'CONUS_V005', 'CONUS_V006'}
+        alexi_source : {'CONUS_V006'}
             ALEXI ET image collection ID (the default is 'CONUS_V006').
         lai_source : string
             LAI image collection ID or "openet-landsat-lai" to compute dynamically
@@ -148,18 +148,6 @@ class Image(object):
             'image_id': self.id,
         }
 
-        # # Build SCENE_ID from the (possibly merged) system:index
-        # scene_id = ee.List(ee.String(self.index).split('_')).slice(-3)
-        # self.scene_id = (
-        #     ee.String(scene_id.get(0)).cat('_')
-        #     .cat(ee.String(scene_id.get(1))).cat('_')
-        #     .cat(ee.String(scene_id.get(2)))
-        # )
-
-        # # Build WRS2_TILE from the scene_id
-        # self.wrs2_tile = ee.String('p').cat(self.scene_id.slice(5, 8)) \
-        #     .cat('r').cat(self.scene_id.slice(8, 11))
-
         # Set server side date/time properties using the 'system:time_start'
         self.datetime = ee.Date(self.time_start)
         self.year = ee.Number(self.datetime.get('year'))
@@ -171,9 +159,6 @@ class Image(object):
         #     ee.Date.fromYMD(1970, 1, 3), 'day').mod(8).add(1).int()
 
         # # Set server side date/time properties using the 'system:time_start'
-        # self.datetime = ee.Date(image.get('system:time_start'))
-        # self.date = ee.Date(self.datetime.format('yyyy-MM-dd'))
-        # self.doy = ee.Number(self.datetime.getRelative('day', 'year')).add(1).double()
         self.hour = ee.Number(self.datetime.getFraction('day')).multiply(24)
         self.hour_int = self.hour.floor()
         # Time used in IDL is hours and fractional minutes (no seconds)
@@ -295,12 +280,6 @@ class Image(object):
         # # CGM - This should probably be set in et_alexi() but that wasn't working
         # if type(self.alexi_source) is str:
         #     if self.alexi_source.upper() == 'CONUS_V006':
-        #         self.alexi_geo = [0.04, 0, -125.02, 0, -0.04, 49.78]
-        #         self.alexi_crs = 'EPSG:4326'
-        #     elif self.alexi_source.upper() == 'CONUS_V005':
-        #         self.alexi_geo = [0.04, 0, -125.02, 0, -0.04, 49.78]
-        #         self.alexi_crs = 'EPSG:4326'
-        #     elif self.alexi_source.upper() == 'CONUS_V004':
         #         self.alexi_geo = [0.04, 0, -125.02, 0, -0.04, 49.78]
         #         self.alexi_crs = 'EPSG:4326'
         #     else:
@@ -431,33 +410,29 @@ class Image(object):
             et_min=self.et_min,
         )
 
-        # Filter out pixels that are very different than ALEXI values
-        # Calculate the relative difference between aggregated ET and ALEXI as a percentage value
-        # Apply different threshold of the relative difference for different ALEXI range.
-        #   ALEXI <= 0.1, we use 200% as threshold
-        #   0.1 < ALEXI <= 1.0, we use 150% as threshold
-        #   1.0 < ALEXI <= 8.0, we use 50% as threshold
-        #   ALEXI >= 8.0, we use 30% as threshold
-        et_coarse_new = (
-            et.reproject(crs=self.crs, crsTransform=self.transform)
-            .reduceResolution(reducer=ee.Reducer.mean().unweighted(), maxPixels=30000)
-            .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)
-        )
-        alexi_diff = et_coarse_new.subtract(self.et_alexi).abs().divide(self.et_alexi)
-        combined_et_mask = (
-            alexi_diff.lt(2.0).And(self.et_alexi.lte(0.1))
-            .Or(alexi_diff.lt(1.5).And(self.et_alexi.gt(0.1)).And(self.et_alexi.lte(1.0)))
-            .Or(alexi_diff.lt(0.5).And(self.et_alexi.gt(1.0)).And(self.et_alexi.lte(8.0)))
-            .Or(alexi_diff.lt(0.3).And(self.et_alexi.gt(8.0)))
-        )
+        # CGM - Commented out for EECU testing
+        # # Filter out pixels that are very different than the ALEXI values
+        # # Calculate the relative difference between aggregated ET and ALEXI as a percentage value
+        # # Apply different threshold of the relative difference for different ALEXI range.
+        # #   ALEXI <= 0.1, we use 200% as threshold
+        # #   0.1 < ALEXI <= 1.0, we use 150% as threshold
+        # #   1.0 < ALEXI <= 8.0, we use 50% as threshold
+        # #   ALEXI >= 8.0, we use 30% as threshold
+        # et_coarse_new = (
+        #     et.reproject(crs=self.crs, crsTransform=self.transform)
+        #     .reduceResolution(reducer=ee.Reducer.mean().unweighted(), maxPixels=30000)
+        #     .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)
+        # )
+        # alexi_diff = et_coarse_new.subtract(self.et_alexi).abs().divide(self.et_alexi)
+        # combined_et_mask = (
+        #     alexi_diff.lt(2.0).And(self.et_alexi.lte(0.1))
+        #     .Or(alexi_diff.lt(1.5).And(self.et_alexi.gt(0.1)).And(self.et_alexi.lte(1.0)))
+        #     .Or(alexi_diff.lt(0.5).And(self.et_alexi.gt(1.0)).And(self.et_alexi.lte(8.0)))
+        #     .Or(alexi_diff.lt(0.3).And(self.et_alexi.gt(8.0)))
+        # )
+        # et = et.updateMask(combined_et_mask).retile(128)
 
-        # Remove retile call if et masking above is not applied!
-        return (
-            et.rename(['et'])
-            .updateMask(combined_et_mask)
-            .retile(128)
-            .set(self.properties)
-        )
+        return et.rename(['et']).set(self.properties)
 
     @lazy_property
     def et_reference(self):
@@ -491,8 +466,7 @@ class Image(object):
     # @lazy_property
     # def et_fraction(self):
     #     """Compute ET fraction as actual ET divided by the reference ET"""
-    #     return self.et.divide(self.et_reference) \
-    #         .rename(['et_fraction']).set(self.properties)
+    #     return self.et.divide(self.et_reference).rename(['et_fraction']).set(self.properties)
 
     @lazy_property
     def et_alexi(self):
@@ -502,12 +476,11 @@ class Image(object):
 
         """
         alexi_keyword_sources = {
-            'CONUS_V004': 'projects/disalexi/alexi/CONUS_V004',
-            'CONUS_V005': 'projects/ee-tulipyangyun-2/assets/alexi/ALEXI_V005',
             'CONUS_V006': 'projects/ee-tulipyangyun-2/assets/alexi/ALEXI_V006',
         }
-        alexi_re = re.compile('(projects/earthengine-legacy/assets/)?'
-                              'projects/disalexi/alexi/CONUS_V\\w+')
+        alexi_re = re.compile(
+            '(projects/earthengine-legacy/assets/)?projects/disalexi/alexi/CONUS_V\\w+'
+        )
 
         if utils.is_number(self.alexi_source):
             # Interpret numbers as constant images
@@ -565,13 +538,6 @@ class Image(object):
             # Assume an NLCD image ID was passed in and use it directly
             lc_img = ee.Image(self.landcover_source.upper()).select(['landcover'])
             self.lc_type = 'NLCD'
-        elif re.match('USGS/NLCD_RELEASES/2016_REL/\\d{4}', self.landcover_source.upper()):
-            warnings.warn(
-                'The NLCD 2016 release is deprecated and support will be removed in a future version',
-                FutureWarning
-            )
-            lc_img = ee.Image(self.landcover_source.upper()).select(['landcover'])
-            self.lc_type = 'NLCD'
         elif self.landcover_source.upper() == 'USGS/NLCD_RELEASES/2021_REL/NLCD':
             # Automatically switch to the 2019 release for all years before 2020
             #   since the 2021 Release does not currently contain earlier images
@@ -621,27 +587,6 @@ class Image(object):
             lc_img = (
                 ee.ImageCollection(self.landcover_source)
                 .filter(ee.Filter.calendarRange(nlcd_year, nlcd_year, 'year'))
-                .first().select(['landcover'])
-            )
-            self.lc_type = 'NLCD'
-        elif self.landcover_source.upper() == 'USGS/NLCD_RELEASES/2016_REL':
-            warnings.warn(
-                'The NLCD 2016 release is deprecated and support will be removed in a future version',
-                FutureWarning
-            )
-            year_remap = ee.Dictionary({
-                '1999': '2001', '2000': '2001', '2001': '2001', '2002': '2001',
-                '2003': '2004', '2004': '2004', '2005': '2004',
-                '2006': '2006', '2007': '2006',
-                '2008': '2008', '2009': '2008',
-                '2010': '2011', '2011': '2011', '2012': '2011',
-                '2013': '2013', '2014': '2013',
-                '2015': '2016', '2016': '2016',
-            })
-            nlcd_year = year_remap.get(self.year.min(2016).max(1999).format('%d'))
-            lc_img = (
-                ee.ImageCollection(self.landcover_source)
-                .filter(ee.Filter.equals('system:index', nlcd_year))
                 .first().select(['landcover'])
             )
             self.lc_type = 'NLCD'
@@ -760,8 +705,7 @@ class Image(object):
     # @lazy_property
     # def quality(self):
     #     """Set quality to 1 for all active pixels (for now)"""
-    #     return self.mask\
-    #         .rename(['quality']).set(self.properties)
+    #     return self.mask.rename(['quality']).set(self.properties)
 
     @lazy_property
     def ta(self):
@@ -774,11 +718,7 @@ class Image(object):
 
         """
         ta_keyword_sources = {
-            'CONUS_V004': 'projects/openet/disalexi/tair/conus_v004_1k',
-            'CONUS_V005': 'projects/openet/disalexi/tair/conus_v005_1k',
-            'CONUS_V006': 'projects/openet/disalexi/tair/conus_v006_1k',
-            # 'CONUS_V006': 'projects/openet/disalexi/tair/conus_v006',
-            # 'CONUS_V007': 'projects/openet/disalexi/tair/conus_v007',
+            'CONUS_V006': 'projects/openet/assets/disalexi/tair/conus_v006',
         }
         ta_source_re = re.compile(
             '(projects/earthengine-legacy/assets/)?'
@@ -792,9 +732,7 @@ class Image(object):
             #     .set({'ta_iteration': 'constant'})
         elif isinstance(self.ta_source, ee.computedobject.ComputedObject):
             ta_img = ee.Image(self.ta_source)
-        elif ((self.ta_source.upper() in ta_keyword_sources.keys()) and
-              (('1k' in ta_keyword_sources[self.ta_source.upper()]) or
-               ('10k' in ta_keyword_sources[self.ta_source.upper()]))):
+        elif self.ta_source.upper() in ta_keyword_sources.keys():
             ta_coll_id = ta_keyword_sources[self.ta_source.upper()]
             ta_coll = (
                 ee.ImageCollection(ta_coll_id)
@@ -809,8 +747,7 @@ class Image(object):
                     .resample('bilinear')
                     .reproject(crs=self.crs, crsTransform=self.transform)
                 )
-        elif (ta_source_re.match(self.ta_source) and
-              (('1k' in self.ta_source) or ('10k' in self.ta_source))):
+        elif ta_source_re.match(self.ta_source):
             ta_coll = (
                 ee.ImageCollection(self.ta_source)
                 .filterMetadata('image_id', 'equals', self.id)
@@ -824,21 +761,21 @@ class Image(object):
                     .resample('bilinear')
                     .reproject(crs=self.crs, crsTransform=self.transform)
                 )
-        elif ta_source_re.match(self.ta_source):
-            # For now assuming Ta source has the correct band (ta_smooth or ta_interp)
-            #   and an image_id property
-            ta_img = ee.Image(
-                ee.ImageCollection(self.ta_source)
-                .filterMetadata('image_id', 'equals', self.id)
-                .first()
-                .select('ta_smooth' if self.ta_smooth_flag else 'ta_interp')
-                .resample('bilinear')
-                .reproject(crs=self.crs, crsTransform=self.transform)
-            )
+        # # DEADBEEF - This was used when the final Ta was being computed
+        # #   and can be removed if stick with using the mosaics
+        # elif ta_source_re.match(self.ta_source):
+        #     # For now assuming Ta source has the correct band (ta_smooth or ta_interp)
+        #     #   and an image_id property
+        #     ta_img = ee.Image(
+        #         ee.ImageCollection(self.ta_source)
+        #         .filterMetadata('image_id', 'equals', self.id)
+        #         .first()
+        #         .select('ta_smooth' if self.ta_smooth_flag else 'ta_interp')
+        #         .resample('bilinear')
+        #         .reproject(crs=self.crs, crsTransform=self.transform)
+        #     )
         else:
             raise ValueError(f'Unsupported ta_source: {self.ta_source}\n')
-        # if self.ta_source is None:
-        #     raise ValueError('ta_source must be set to compute et')
 
         return ta_img.rename(['ta']).set(self.properties)
 
@@ -939,9 +876,6 @@ class Image(object):
                 ee.Image(rs1_img)
                 .resample('bicubic')
                 .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)
-                # # Resample/reproject to the Landsat scale will happen in non-coarse function
-                #.resample('bilinear')
-                # .reproject(crs=self.crs, crsTransform=self.transform)
             )
         else:
             raise ValueError(f'Unsupported rs_hourly_source: {self.rs_hourly_source}\n')
@@ -975,9 +909,6 @@ class Image(object):
                 ee.Image(rs24_coll.sum())
                 .resample('bicubic')
                 .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)
-                # # Resample/reproject to the Landsat scale will happen in non-coarse function
-                #.resample('bilinear')
-                # .reproject(crs=self.crs, crsTransform=self.transform)
             )
         else:
             raise ValueError(f'Unsupported rs_daily_source: {self.rs_daily_source}\n')
@@ -1019,9 +950,6 @@ class Image(object):
                 ee.Image(ws_img)
                 .resample('bicubic')
                 .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)
-                # # Resample/reproject to the Landsat scale will happen in non-coarse function
-                # .resample('bilinear')
-                # .reproject(crs=self.crs, crsTransform=self.transform)
             )
         else:
             raise ValueError(f'Unsupported wind_speed_source: {self.wind_speed_source}\n')
@@ -1054,9 +982,6 @@ class Image(object):
                 ee.Image(vp_img)
                 .resample('bicubic')
                 .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)
-                # # Resample/reproject to the Landsat scale will happen in non-coarse function
-                # .resample('bilinear')
-                # .reproject(crs=self.crs, crsTransform=self.transform)
             )
         else:
             raise ValueError(f'Unsupported vapor_pres_source: {self.vapor_pres_source}\n')
@@ -1140,50 +1065,50 @@ class Image(object):
         self.leaf_width = lc_remap(lc_img, self.lc_type, 'xl')
         self.clump = lc_remap(lc_img, self.lc_type, 'omega')
 
-    def ta_coarse(
-            self,
-            offsets=[-12, -7, -4, -2, -1, 0, 1, 2, 4, 7, 12],
-            #offsets=[-5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5],
-    ):
-        """Compute coarse scale air temperature estimate
-
-        Parameters
-        ----------
-        offsets : list
-            Air temperature offset values to use when generating mosaic
-
-        Returns
-        -------
-        image : ee.Image
-            ALEXI scale air temperature image
-
-        """
-        # Compute the initial Ta from the meteorology
-        ta_initial_img = self.ta_coarse_initial().rename(['ta_initial'])
-
-        # Compute the Ta mosaic from the initial Ta image
-        ta_mosaic_img = self.ta_mosaic(ta_img=ta_initial_img, offsets=offsets)
-
-        # Interpolate the minimum bias Ta from the 1k steps
-        ta_interp_img = ta_mosaic_interpolate(ta_mosaic_img)
-
-        # TODO: Should the retile parameter be hardcoded?
-        #   If so, where should it go in this function?
-        # ta_interp_img = ta_interp_img.retile(4)
-
-        # Apply simple smoothing to the interpolated Ta band and save as "ta_smooth"
-        # This will fill small 1 pixel holes
-        if self.ta_smooth_flag:
-            ta_interp_img = ta_interp_img.addBands(
-                ta_interp_img.select('ta_interp')
-                .focal_mean(1, 'circle', 'pixels')
-                # CGM - Testing without reproject call, but it may be needed
-                # .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)
-                .multiply(10).round().divide(10)
-                .rename('ta_smooth')
-            )
-
-        return ta_initial_img.addBands(ta_interp_img).set(self.properties)
+    # # DEADBEEF
+    # # Calling this directly uses much more EECU than calling the steps separately
+    # # I split this function up into ta_coarse_initial and ta_coarse_final functions
+    # # This code can be removed if everything is working correctly
+    # def ta_coarse(
+    #         self,
+    #         offsets=[-12, -7, -4, -2, -1, 0, 1, 2, 4, 7, 12],
+    #         #offsets=[-5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5],
+    # ):
+    #     """Compute coarse scale air temperature estimate
+    #
+    #     Parameters
+    #     ----------
+    #     offsets : list
+    #         Air temperature offset values to use when generating mosaic
+    #
+    #     Returns
+    #     -------
+    #     image : ee.Image
+    #         ALEXI scale air temperature image
+    #
+    #     """
+    #     # Compute the initial Ta from the meteorology
+    #     ta_initial_img = self.ta_coarse_initial().rename(['ta_initial'])
+    #
+    #     # Compute the Ta mosaic from the initial Ta image
+    #     ta_mosaic_img = self.ta_mosaic(ta_img=ta_initial_img, offsets=offsets)
+    #
+    #     # Interpolate the minimum bias Ta from the 1k steps
+    #     ta_interp_img = ta_mosaic_interpolate(ta_mosaic_img)
+    #
+    #     # Apply simple smoothing to the interpolated Ta band and save as "ta_smooth"
+    #     # This will fill small 1 pixel holes and round to the nearest tenth
+    #     if self.ta_smooth_flag:
+    #         ta_interp_img = ta_interp_img.addBands(
+    #             ta_interp_img.select('ta_interp')
+    #             .focal_mean(1, 'circle', 'pixels')
+    #             # CGM - Testing without reproject call, but it may be needed
+    #             # .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)
+    #             .multiply(10).round().divide(10)
+    #             .rename('ta_smooth')
+    #         )
+    #
+    #     return ta_initial_img.addBands(ta_interp_img).set(self.properties)
 
     def ta_coarse_initial(self):
         """Compute initial coarse scale air temperature estimate from meteorology
@@ -1194,7 +1119,7 @@ class Image(object):
         Returns
         -------
         image : ee.Image
-            ALEXI scale air temperature image
+            Initial ALEXI scale air temperature image
 
         """
 
@@ -1239,24 +1164,14 @@ class Image(object):
             albedo_iter=self.albedo_iter,
         )
 
-        # CGM - Does the output also need the reduceResolution().reproject() call
-        #   if all the inputs are already at the coarse/ALEXI scale?
-        return (
-            ta_invert
-            .round()
-            # # Round to nearest tenth
-            # .multiply(10).round().divide(10)
-            .rename(['ta_initial'])
-            .set(self.properties)
-        )
+        return ta_invert.round().rename(['ta_initial']).set(self.properties)
 
-    # TODO: Maybe rename as ta_coarse_mosaic()
-    def ta_mosaic(
+    def ta_coarse_mosaic(
             self,
-            ta_img,
+            ta_initial_img,
             offsets=[-12, -7, -4, -2, -1, 0, 1, 2, 4, 7, 12],
             #offsets=[-5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5],
-            threshold=0.5
+            threshold=0.5,
     ):
         """Compute the air temperature for each ALEXI ET cell that minimizes
         the bias between Landsat scale ET and ALEXI ET for a fixed range of
@@ -1264,10 +1179,13 @@ class Image(object):
 
         Parameters
         ----------
-        ta_img : ee.Image
+        ta_initial_img : ee.Image
+            Initial air temperature values
         offsets : list
             Air temperature offset values to use when generating mosaic
         threshold : float, optional
+            Mask pixels if the ratio of valid/unmasked pixels to total pixels
+            is below this threshold
 
         Returns
         -------
@@ -1275,21 +1193,38 @@ class Image(object):
             ALEXI scale multi-band air temperature image
 
         """
-
         # Redefining ta_func() here allows threshold to be passed into function
         def ta_func(ta):
             """Compute TSEB ET for the target t_air value"""
             et_fine = tseb.tseb_pt(
-                t_air=ta, t_rad=self.lst, t_air0=self.air_temperature,
-                e_air=self.vapor_pressure, u=self.wind_speed, p=self.air_pressure,
-                z=self.elevation, rs_1=self.rs1, rs24=self.rs24, vza=0,
-                aleafv=self.aleafv, aleafn=self.aleafn, aleafl=self.aleafl,
-                adeadv=self.adeadv, adeadn=self.adeadn, adeadl=self.adeadl,
-                albedo=self.albedo, ndvi=self.ndvi, lai=self.lai,
-                clump=self.clump, leaf_width=self.leaf_width,
-                hc_min=self.hc_min, hc_max=self.hc_max,
-                datetime=self.datetime, lat=self.latitude, lon=self.longitude,
-                stabil_iter=self.stabil_iter, albedo_iter=self.albedo_iter,
+                t_air=ta,
+                t_rad=self.lst,
+                t_air0=self.air_temperature,
+                e_air=self.vapor_pressure,
+                u=self.wind_speed,
+                p=self.air_pressure,
+                z=self.elevation,
+                rs_1=self.rs1,
+                rs24=self.rs24,
+                vza=0,
+                aleafv=self.aleafv,
+                aleafn=self.aleafn,
+                aleafl=self.aleafl,
+                adeadv=self.adeadv,
+                adeadn=self.adeadn,
+                adeadl=self.adeadl,
+                albedo=self.albedo,
+                ndvi=self.ndvi,
+                lai=self.lai,
+                clump=self.clump,
+                leaf_width=self.leaf_width,
+                hc_min=self.hc_min,
+                hc_max=self.hc_max,
+                datetime=self.datetime,
+                lat=self.latitude,
+                lon=self.longitude,
+                stabil_iter=self.stabil_iter,
+                albedo_iter=self.albedo_iter,
                 et_min=self.et_min,
             )
 
@@ -1324,11 +1259,42 @@ class Image(object):
             )
 
         ta_coll = ee.ImageCollection([
-            ta_img.add(j).set({'system:index': 'step_{:02d}'.format(i)})
+            ta_initial_img.add(j).set({'system:index': 'step_{:02d}'.format(i)})
             for i, j in enumerate(offsets)
         ])
 
         return ee.ImageCollection(ta_coll.map(ta_func)).toBands()
+
+    def ta_coarse_final(self, ta_mosaic_img):
+        """Compute final coarse scale air temperature estimate from Ta mosaic
+
+        Parameters
+        ----------
+        ta_mosaic_img : ee.Image
+            Mosaic Ta computed using ta_coarse_mosaic
+
+        Returns
+        -------
+        image : ee.Image
+            ALEXI scale air temperature image
+
+        """
+        # Interpolate the minimum bias Ta from the 1k steps
+        ta_interp_img = ta_mosaic_interpolate(ta_mosaic_img)
+
+        # Apply simple smoothing to the interpolated Ta band and save as "ta_smooth"
+        # This will fill small 1 pixel holes and round to the nearest tenth
+        if self.ta_smooth_flag:
+            ta_interp_img = ta_interp_img.addBands(
+                ta_interp_img.select('ta_interp')
+                .focal_mean(1, 'circle', 'pixels')
+                # CGM - Testing without reproject call, but it may be needed
+                # .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)
+                .multiply(10).round().divide(10)
+                .rename('ta_smooth')
+            )
+
+        return ta_interp_img.set(self.properties)
 
 
 # TODO: Maybe rename also, ta_mosaic_zero_bias()?

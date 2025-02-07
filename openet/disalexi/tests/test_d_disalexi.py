@@ -127,12 +127,12 @@ def test_Image_ta_coarse_initial_values():
     assert output['ta_initial'] > 0
 
 
-def test_Image_ta_mosaic_step_count(step_size=5, step_count=4):
+def test_Image_ta_coarse_mosaic_step_count(step_size=5, step_count=4):
     # Check that the output step counts match the input (+1)
     # Use the ALEXI image as the air temperature mask
     d_obj = disalexi.Image(**default_image_args())
     ta_img = d_obj.et_alexi.multiply(0).add(290)
-    ta_mosaic_img = d_obj.ta_mosaic(ta_img, offsets=[-10, -5, 0, 5, 10])
+    ta_mosaic_img = d_obj.ta_coarse_mosaic(ta_img, offsets=[-10, -5, 0, 5, 10])
     #ta_mosaic_img = d_obj.ta_mosaic(ta_img, step_size=step_size, step_count=step_count)
     output = utils.getinfo(ta_mosaic_img)
     ta_bands = [b for b in output['bands'] if '_ta' in b['id']]
@@ -141,21 +141,21 @@ def test_Image_ta_mosaic_step_count(step_size=5, step_count=4):
     assert len(bias_bands) == (step_count + 1)
 
 
-def test_Image_ta_mosaic_step_size(ta_init=290, step_size=5, step_count=4):
+def test_Image_ta_coarse_mosaic_step_size(ta_init=290, step_size=5, step_count=4):
     # Check that the output step sizes match the input
     # Use the ALEXI image as the air temperature mask
     d_obj = disalexi.Image(**default_image_args())
     ta_img = d_obj.et_alexi.multiply(0).add(ta_init)
-    ta_mosaic_img = d_obj.ta_mosaic(ta_img, offsets=[-10, -5, 0, 5, 10])
+    ta_mosaic_img = d_obj.ta_coarse_mosaic(ta_img, offsets=[-10, -5, 0, 5, 10])
     #ta_mosaic_img = d_obj.ta_mosaic(ta_img, step_size=step_size, step_count=step_count)
     output = utils.point_image_value(ta_mosaic_img, TEST_POINT)
     assert (abs(output['step_01_ta'] - output['step_00_ta']) - 5) < 0.000001
 
 
-def test_Image_ta_mosaic_min_bias(ta_init=290):
+def test_Image_ta_coarse_mosaic_min_bias(ta_init=290):
     # Check that a reasonable air temperature value is returned
     d_obj = disalexi.Image(**default_image_args())
-    ta_mosaic_img = d_obj.ta_mosaic(
+    ta_mosaic_img = d_obj.ta_coarse_mosaic(
         d_obj.et_alexi.multiply(0).add(ta_init),
         offsets=[-10, -5, 0, 5, 10])
         # step_size=5, step_count=4)
@@ -167,7 +167,7 @@ def test_Image_ta_mosaic_min_bias(ta_init=290):
 def test_Image_ta_mosaic_interpolate(ta_init=290):
     # Check that a reasonable air temperature value is returned
     d_obj = disalexi.Image(**default_image_args())
-    ta_mosaic_img = d_obj.ta_mosaic(
+    ta_mosaic_img = d_obj.ta_coarse_mosaic(
         d_obj.et_alexi.multiply(0).add(ta_init),
         offsets=[-10, -5, 0, 5, 10])
         # step_size=5, step_count=4)
