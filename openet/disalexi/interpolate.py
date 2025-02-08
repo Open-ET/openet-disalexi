@@ -768,7 +768,7 @@ def from_scene_et_actual(
 
     # For scene count, compute the composite/mosaic image for the mask band only
     if ('scene_count' in variables) or ('count' in variables):
-        aggregate_coll = openet.core.interpolate. gaggregate_to_daily(
+        aggregate_coll = openet.core.interpolate.aggregate_to_daily(
             image_coll=scene_coll.select(['mask']),
             start_date=start_date,
             end_date=end_date,

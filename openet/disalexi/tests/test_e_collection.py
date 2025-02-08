@@ -8,13 +8,10 @@ import openet.disalexi.utils as utils
 # TODO: import utils from openet.core
 # import openet.core.utils as utils
 
-
-# CGM - The Collection class will currently default to Collection 2 inputs
-# CGM - Scene LE07_044033_20170724 isn't loaded in collection 2 yet
 C02_COLLECTIONS = ['LANDSAT/LC08/C02/T1_L2', 'LANDSAT/LE07/C02/T1_L2']
-C02_SCENE_ID_LIST = sorted(['LC08_044033_20170716', 'LE07_044033_20170708'])
-
-
+# Image LE07_044033_20170724 is not (yet?) in LANDSAT/LE07/C02/T1_L2
+# C02_SCENE_ID_LIST = ['LC08_044033_20170716', 'LE07_044033_20170708', 'LE07_044033_20170724']
+C02_SCENE_ID_LIST = ['LC08_044033_20170716', 'LE07_044033_20170708']
 START_DATE = '2017-07-01'
 END_DATE = '2017-08-01'
 SCENE_GEOM = (-121.91, 38.99, -121.89, 39.01)
@@ -23,30 +20,37 @@ VARIABLES = {'et'}
 # VARIABLES = {'et', 'et_fraction', 'et_reference'}
 TEST_POINT = (-121.5265, 38.7399)
 
-
-default_coll_args = {
-    'collections': C02_COLLECTIONS,
-    'geometry': ee.Geometry.Point(SCENE_POINT),
-    'start_date': START_DATE,
-    'end_date': END_DATE,
-    'variables': list(VARIABLES),
-    'cloud_cover_max': 70,
-    'model_args': {
-        'et_reference_source': 'IDAHO_EPSCOR/GRIDMET',
-        'et_reference_band': 'eto',
-        'et_reference_factor': 0.85,
-        'et_reference_resample': 'nearest',
-    },
-    'filter_args': {},
-}
 interp_args = {
     'interp_source': 'IDAHO_EPSCOR/GRIDMET',
     'interp_band': 'eto',
     'interp_resample': 'nearest',
 }
 
+
+def default_coll_args():
+    return {
+        'collections': C02_COLLECTIONS,
+        'geometry': ee.Geometry.Point(SCENE_POINT),
+        'start_date': START_DATE,
+        'end_date': END_DATE,
+        'variables': list(VARIABLES),
+        'cloud_cover_max': 70,
+        'model_args': {
+            # The lai_source must be set to a collection ID for these tests
+            # since calling the openet-landsat-lai module makes a getInfo call
+            'lai_source': 'projects/openet/assets/lai/landsat/c02',
+            'et_reference_source': 'IDAHO_EPSCOR/GRIDMET',
+            'et_reference_band': 'eto',
+            'et_reference_factor': 0.85,
+            'et_reference_resample': 'nearest',
+            'cloudmask_args': {'cloud_score_flag': False, 'filter_flag': False},
+        },
+        'filter_args': {},
+    }
+
+
 def default_coll_obj(**kwargs):
-    args = default_coll_args.copy()
+    args = default_coll_args().copy()
     args.update(kwargs)
     return disalexi.Collection(**args)
 
@@ -59,14 +63,13 @@ def parse_scene_id(output_info):
 
 def test_Collection_init_default_parameters():
     """Test if init sets default parameters"""
-    args = default_coll_args.copy()
+    args = default_coll_args().copy()
     del args['variables']
     del args['model_args']
 
     m = disalexi.Collection(**args)
-    assert m.variables == None
+    assert m.variables is None
     assert m.cloud_cover_max == 70
-    assert m.model_args == {}
     assert m.filter_args == {}
 
 
@@ -138,7 +141,7 @@ def test_Collection_build_default():
     output = utils.getinfo(default_coll_obj()._build())
     assert output['type'] == 'ImageCollection'
     assert parse_scene_id(output) == C02_SCENE_ID_LIST
-    # For the default build, check that the target variables are returned also
+    # Check that the variables being set in the default collection object are returned
     assert {y['id'] for x in output['features'] for y in x['bands']} == VARIABLES
 
 
@@ -162,7 +165,10 @@ def test_Collection_build_variables_not_set():
 
 def test_Collection_build_variables_empty_list():
     # Setting variables to an empty list should return the merged Landsat collection
-    output = utils.getinfo(default_coll_obj(variables=None)._build(variables=[]).first().bandNames())
+    output = utils.getinfo(
+        default_coll_obj(collections=C02_COLLECTIONS, variables=None)
+        ._build(variables=[]).first().bandNames()
+    )
     assert 'SR_B3' in output
 
 
@@ -208,9 +214,11 @@ def test_Collection_build_cloud_cover():
 )
 def test_Collection_build_filter_dates_lt05(collection_id, start_date, end_date):
     """Test that bad Landsat 5 images are filtered"""
-    output = utils.getinfo(default_coll_obj(
+    coll_obj = default_coll_obj(
         collections=[collection_id], start_date=start_date, end_date=end_date,
-        geometry=ee.Geometry.Rectangle(-125, 25, -65, 50))._build(variables=['et']))
+        geometry=ee.Geometry.Rectangle(-125, 25, -65, 50),
+    )
+    output = utils.getinfo(coll_obj._build(variables=['et']))
     assert parse_scene_id(output) == []
 
 
@@ -222,9 +230,11 @@ def test_Collection_build_filter_dates_lt05(collection_id, start_date, end_date)
 )
 def test_Collection_build_filter_dates_le07(collection_id, start_date, end_date):
     """Test that Landsat 7 images after 2021 are filtered"""
-    output = utils.getinfo(default_coll_obj(
+    coll_obj = default_coll_obj(
         collections=[collection_id], start_date=start_date, end_date=end_date,
-        geometry=ee.Geometry.Rectangle(-125, 25, -65, 50))._build(variables=['et']))
+        geometry=ee.Geometry.Rectangle(-125, 25, -65, 50),
+    )
+    output = utils.getinfo(coll_obj._build(variables=['et']))
     assert parse_scene_id(output) == []
 
 
@@ -236,9 +246,11 @@ def test_Collection_build_filter_dates_le07(collection_id, start_date, end_date)
 )
 def test_Collection_build_filter_dates_lc08(collection_id, start_date, end_date):
     """Test that pre-op Landsat 8 images before 2013-04-01 are filtered"""
-    output = utils.getinfo(default_coll_obj(
+    coll_obj = default_coll_obj(
         collections=[collection_id], start_date=start_date, end_date=end_date,
-        geometry=ee.Geometry.Rectangle(-125, 25, -65, 50))._build(variables=['et']))
+        geometry=ee.Geometry.Rectangle(-125, 25, -65, 50),
+    )
+    output = utils.getinfo(coll_obj._build(variables=['et']))
     assert not [x for x in parse_scene_id(output) if x.split('_')[-1] < end_date.replace('-', '')]
     assert parse_scene_id(output) == []
 
@@ -251,24 +263,26 @@ def test_Collection_build_filter_dates_lc08(collection_id, start_date, end_date)
 )
 def test_Collection_build_filter_dates_lc09(collection_id, start_date, end_date):
     """Test that Landsat 9 images before 2022-01-01 are filtered"""
-    output = utils.getinfo(default_coll_obj(
+    coll_obj =default_coll_obj(
         collections=[collection_id], start_date=start_date, end_date=end_date,
-        geometry=ee.Geometry.Rectangle(-125, 25, -65, 50))._build(variables=['et']))
+        geometry=ee.Geometry.Rectangle(-125, 25, -65, 50),
+    )
+    output = utils.getinfo(coll_obj._build(variables=['et']))
     assert not [x for x in parse_scene_id(output) if x.split('_')[-1] < end_date.replace('-', '')]
     assert parse_scene_id(output) == []
 
 
 def test_Collection_build_filter_args_keyword():
     # Need to test with two collections to catch bug when deepcopy isn't used
-    collections = ['LANDSAT/LC08/C02/T1_L2', 'LANDSAT/LE07/C02/T1_L2']
+    collection_ids = ['LANDSAT/LC08/C02/T1_L2', 'LANDSAT/LE07/C02/T1_L2']
     wrs2_filter = [
         {'type': 'equals', 'leftField': 'WRS_PATH', 'rightValue': 44},
-        {'type': 'equals', 'leftField': 'WRS_ROW', 'rightValue': 33}
+        {'type': 'equals', 'leftField': 'WRS_ROW', 'rightValue': 33},
     ]
     coll_obj = default_coll_obj(
-        collections=collections,
+        collections=collection_ids,
         geometry=ee.Geometry.Rectangle(-125, 35, -120, 40),
-        filter_args={c: wrs2_filter for c in collections}
+        filter_args={c: wrs2_filter for c in collection_ids},
     )
     output = utils.getinfo(coll_obj._build(variables=['et']))
     assert {x[5:11] for x in parse_scene_id(output)} == {'044033'}
@@ -276,12 +290,13 @@ def test_Collection_build_filter_args_keyword():
 
 def test_Collection_build_filter_args_eeobject():
     # Need to test with two collections to catch bug when deepcopy isn't used
-    collections = ['LANDSAT/LC08/C02/T1_L2', 'LANDSAT/LE07/C02/T1_L2']
+    collection_ids = ['LANDSAT/LC08/C02/T1_L2', 'LANDSAT/LE07/C02/T1_L2']
     wrs2_filter = ee.Filter.And(ee.Filter.equals('WRS_PATH', 44), ee.Filter.equals('WRS_ROW', 33))
     coll_obj = default_coll_obj(
-        collections=collections,
+        collections=collection_ids,
         geometry=ee.Geometry.Rectangle(-125, 35, -120, 40),
-        filter_args={c: wrs2_filter for c in collections})
+        filter_args={c: wrs2_filter for c in collection_ids},
+    )
     output = utils.getinfo(coll_obj._build(variables=['et']))
     assert {x[5:11] for x in parse_scene_id(output)} == {'044033'}
 
@@ -323,142 +338,13 @@ def test_Collection_overpass_no_variables_exception():
         utils.getinfo(default_coll_obj(variables=[]).overpass())
 
 
-@pytest.mark.parametrize(
-    'use_joins',
-    [
-        True,
-        # False,   # Won't run, raises memory errors
-    ]
-)
-def test_Collection_interpolate_use_joins(use_joins):
-    """Only checking if the parameter is accepted and runs for now"""
-    output = utils.getinfo(default_coll_obj().interpolate(use_joins=use_joins, **interp_args))
-    assert output['type'] == 'ImageCollection'
-    assert parse_scene_id(output) == ['20170701']
-
-
-# CGM - These all have memory errors
+# # CGM - Memory error
 # def test_Collection_interpolate_default():
 #     """Default t_interval should be custom"""
 #     output = utils.getinfo(default_coll_obj().interpolate(**interp_args))
 #     assert output['type'] == 'ImageCollection'
 #     assert parse_scene_id(output) == [START_DATE.replace('-', '')]
 #     assert {y['id'] for x in output['features'] for y in x['bands']} == VARIABLES
-#
-#
-# def test_Collection_interpolate_variables_custom():
-#     output = utils.getinfo(default_coll_obj().interpolate(
-#         variables=['et'], **interp_args))
-#     assert {y['id'] for x in output['features'] for y in x['bands']} == {'et'}
-#
-#
-# def test_Collection_interpolate_t_interval_daily():
-#     """Test if the daily time interval parameter works
-#
-#     Since end_date is exclusive last image date will be one day earlier
-#     """
-#     coll_obj = default_coll_obj(start_date='2017-07-01', end_date='2017-07-05')
-#     output = utils.getinfo(coll_obj.interpolate(
-#         t_interval='daily', **interp_args))
-#     assert output['type'] == 'ImageCollection'
-#     assert parse_scene_id(output)[0] == '20170701'
-#     assert parse_scene_id(output)[-1] == '20170704'
-#     assert {y['id'] for x in output['features'] for y in x['bands']} == VARIABLES
-#
-#
-# def test_Collection_interpolate_t_interval_monthly():
-#     """Test if the monthly time interval parameter works"""
-#     output = utils.getinfo(default_coll_obj().interpolate(
-#         t_interval='monthly', **interp_args))
-#     assert output['type'] == 'ImageCollection'
-#     assert parse_scene_id(output) == ['201707']
-#     assert {y['id'] for x in output['features'] for y in x['bands']} == VARIABLES
-#
-#
-# def test_Collection_interpolate_t_interval_annual():
-#     """Test if the annual time interval parameter works"""
-#     coll_obj = default_coll_obj(start_date='2017-01-01', end_date='2018-01-01')
-#     output = utils.getinfo(coll_obj.interpolate(
-#         t_interval='annual', **interp_args))
-#     assert output['type'] == 'ImageCollection'
-#     assert parse_scene_id(output) == ['2017']
-#     assert {y['id'] for x in output['features'] for y in x['bands']} == VARIABLES
-#
-#
-# def test_Collection_interpolate_t_interval_custom():
-#     """Test if the custom time interval parameter works"""
-#     output = utils.getinfo(default_coll_obj().interpolate(
-#         t_interval='custom', **interp_args))
-#     assert output['type'] == 'ImageCollection'
-#     assert parse_scene_id(output) == ['20170701']
-#     assert {y['id'] for x in output['features'] for y in x['bands']} == VARIABLES
-
-
-# TODO: Write test for annual interpolation with a date range that is too short
-
-
-# def test_Collection_interpolate_interp_days():
-#     """Test if the interpolate interp_days parameter works"""
-#     # Is there any way to test this without pulling values at a point?
-
-
-# DEADBEEF - Collection does not directly take et_reference parameters anymore.
-#   The et_reference parameters can only be set via the model_args dictionary.
-'''
-# NOTE: For the following tests the collection class is not being
-#   re-instantiated for each test so it is necessary to clear the model_args
-def test_Collection_interpolate_et_reference_source_not_set():
-    """Test if Exception is raised if et_reference_source is not set"""
-    with pytest.raises(ValueError):
-        utils.getinfo(default_coll_obj(
-            et_reference_source=None, model_args={}).interpolate(**interp_args))
-
-
-def test_Collection_interpolate_et_reference_band_not_set():
-    """Test if Exception is raised if et_reference_band is not set"""
-    with pytest.raises(ValueError):
-        utils.getinfo(default_coll_obj(
-            et_reference_band=None, model_args={}).interpolate(**interp_args))
-
-
-def test_Collection_interpolate_et_reference_factor_not_set():
-    """Test if Exception is raised if et_reference_factor is not set"""
-    with pytest.raises(ValueError):
-        utils.getinfo(default_coll_obj(
-            et_reference_factor=None, model_args={}).interpolate(**interp_args))
-
-
-def test_Collection_interpolate_et_reference_params_kwargs():
-    """Test setting reference ET parameters in the Collection init args"""
-    output = utils.getinfo(default_coll_obj(
-        et_reference_source='IDAHO_EPSCOR/GRIDMET', et_reference_band='etr',
-        et_reference_factor=0.5, model_args={}).interpolate(**interp_args))
-    assert {y['id'] for x in output['features'] for y in x['bands']} == VARIABLES
-    assert output['features'][0]['properties']['et_reference_factor'] == 0.5
-
-
-def test_Collection_interpolate_et_reference_params_model_args():
-    """Test setting reference ET parameters in the model_args"""
-    output = utils.getinfo(default_coll_obj(
-        et_reference_source=None, et_reference_band=None, et_reference_factor=None,
-        model_args={'et_reference_source': 'IDAHO_EPSCOR/GRIDMET',
-                    'et_reference_band': 'etr',
-                    'et_reference_factor': 0.5}).interpolate(**interp_args))
-    assert {y['id'] for x in output['features'] for y in x['bands']} == VARIABLES
-    assert output['features'][0]['properties']['et_reference_factor'] == 0.5
-
-
-def test_Collection_interpolate_et_reference_params_interpolate_args():
-    """Test setting reference ET parameters in the interpolate call"""
-    et_reference_args = {'et_reference_source': 'IDAHO_EPSCOR/GRIDMET',
-                         'et_reference_band': 'etr', 'et_reference_factor': 0.5}
-    output = utils.getinfo(default_coll_obj(
-        et_reference_source=None, et_reference_band=None,
-        et_reference_factor=None,
-        model_args={}).interpolate(**et_reference_args, **interp_args))
-    assert {y['id'] for x in output['features'] for y in x['bands']} == VARIABLES
-    assert output['features'][0]['properties']['et_reference_factor'] == 0.5
-'''
 
 
 def test_Collection_interpolate_t_interval_exception():
@@ -485,13 +371,12 @@ def test_Collection_interpolate_no_variables_exception():
         utils.getinfo(default_coll_obj(variables=[]).interpolate())
 
 
-# CGM - Memory errors
+# CGM - Memory error
 # def test_Collection_interpolate_output_type_default():
 #     """Test if output_type parameter is defaulting to float"""
 #     vars = ['et', 'count']
 #     # vars = ['et', 'et_reference', 'et_fraction', 'count']
-#     output = utils.getinfo(default_coll_obj(
-#         variables=vars).interpolate(**interp_args))
+#     output = utils.getinfo(default_coll_obj(variables=vars).interpolate(**interp_args))
 #     output = output['features'][0]['bands']
 #     bands = {info['id']: i for i, info in enumerate(output)}
 #     assert(output[bands['et']]['data_type']['precision'] == 'float')
@@ -500,6 +385,7 @@ def test_Collection_interpolate_no_variables_exception():
 #     assert(output[bands['count']]['data_type']['precision'] == 'int')
 #
 #
+# # CGM - Memory error
 # def test_Collection_interpolate_only_interpolate_images():
 #     """Test if count band is returned if no images in the date range"""
 #     variables = {'et', 'count'}

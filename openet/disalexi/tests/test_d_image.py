@@ -60,7 +60,6 @@ def default_image_args(
         cfmask=0, ndvi=0.875,
         ta_source='CONUS_V006',
         alexi_source='CONUS_V006',
-        ta_smooth_flag=False,
         lai_source=4.2,
         lst_source=306.5,
         et_reference_source=10,
@@ -124,7 +123,7 @@ def test_Image_init_default_parameters():
     #assert m.lai_source == 'projects/openet/assets/lai/landsat/c02'
     assert m.lst_source == 'projects/openet/assets/lst/landsat/c02'
     assert m.elevation_source == 'USGS/SRTMGL1_003'
-    assert m.landcover_source == 'USGS/NLCD_RELEASES/2019_REL/NLCD'
+    assert m.landcover_source == 'projects/sat-io/open-datasets/USGS/ANNUAL_NLCD/LANDCOVER'
     assert m.air_pres_source == 'CFSR'
     assert m.air_temp_source == 'CFSR'
     assert m.rs_daily_source == 'CFSR'

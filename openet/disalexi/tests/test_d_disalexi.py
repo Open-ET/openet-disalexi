@@ -46,7 +46,6 @@ def default_image_args(
         ndvi=0.875,
         ta_source='CONUS_V006',
         alexi_source='CONUS_V006',
-        # ta_smooth_flag=False,
         # lai_source='openet-landsat-lai',
         lai_source='projects/openet/assets/lai/landsat/c02',
         lst_source='projects/openet/assets/lst/landsat/c02',
