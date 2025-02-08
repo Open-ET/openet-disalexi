@@ -44,6 +44,7 @@ class Image(object):
             elevation_source='USGS/SRTMGL1_003',
             # elevation_source='NASA/NASADEM_HGT/001',
             landcover_source='USGS/NLCD_RELEASES/2021_REL/NLCD',
+            # landcover_source='projects/sat-io/open-datasets/USGS/ANNUAL_NLCD/LANDCOVER',
             air_pres_source='CFSR',
             air_temp_source='CFSR',
             rs_daily_source='CFSR',
@@ -78,9 +79,10 @@ class Image(object):
         elevation_source : str, ee.Image
             Elevation source keyword or asset (the default is USGS/SRTMGL1_003).
             Units must be in meters.
-        landcover_source : {'USGS/NLCD_RELEASES/2021_REL/NLCD',
+        landcover_source : {'projects/sat-io/open-datasets/USGS/ANNUAL_NLCD/LANDCOVER',
+                            'projects/sat-io/open-datasets/USGS/ANNUAL_NLCD/LANDCOVER/Annual_NLCD_LndCov_2023_CU_C1V0',
+                            'USGS/NLCD_RELEASES/2021_REL/NLCD',
                             'USGS/NLCD_RELEASES/2019_REL/NLCD',
-                            'USGS/NLCD_RELEASES/2019_REL/NLCD/2016',
                             'USGS/NLCD_RELEASES/2021_REL/NLCD/2021'}
             Land cover source collection or image ID
             (the default is 'USGS/NLCD_RELEASES/2021_REL/NLCD').
@@ -533,6 +535,23 @@ class Image(object):
             # If the source is an ee.Image assume it is an NLCD image
             lc_img = self.landcover_source.rename(['landcover'])
             self.lc_type = 'NLCD'
+        elif re.match('projects/sat-io/open-datasets/USGS/ANNUAL_NLCD/LANDCOVER/Annual_NLCD_LndCov_\\d{4}_CU_C1V0',
+                      self.landcover_source, re.I):
+            # Assume an annual NLCD image ID was passed in and use it directly
+            lc_img = ee.Image(self.landcover_source).rename(['landcover'])
+            self.lc_type = 'NLCD'
+        elif self.landcover_source == 'projects/sat-io/open-datasets/USGS/ANNUAL_NLCD/LANDCOVER':
+            # Select the closest year in time from the Annual NLCD image collection
+            # Hardcoding the year ranges for now but we might want to change this to
+            #   a more dynamic approach to allow for additional years to be added.
+            nlcd_year = self.year.min(2023).max(1985)
+            lc_img = (
+                ee.ImageCollection(self.landcover_source)
+                .filter(ee.Filter.calendarRange(nlcd_year, nlcd_year, 'year'))
+                .first()
+                .rename(['landcover'])
+            )
+            self.lc_type = 'NLCD'
         elif (re.match('USGS/NLCD_RELEASES/2021_REL/NLCD/\\d{4}', self.landcover_source, re.I) or
               re.match('USGS/NLCD_RELEASES/2019_REL/NLCD/\\d{4}', self.landcover_source, re.I)):
             # Assume an NLCD image ID was passed in and use it directly
@@ -718,7 +737,7 @@ class Image(object):
 
         """
         ta_keyword_sources = {
-            'CONUS_V006': 'projects/openet/assets/disalexi/tair/conus_v006',
+            'CONUS_V006': 'projects/openet/assets/disalexi/tair/conus_v006_1k',
         }
         ta_source_re = re.compile(
             '(projects/earthengine-legacy/assets/)?'
@@ -732,7 +751,9 @@ class Image(object):
             #     .set({'ta_iteration': 'constant'})
         elif isinstance(self.ta_source, ee.computedobject.ComputedObject):
             ta_img = ee.Image(self.ta_source)
-        elif self.ta_source.upper() in ta_keyword_sources.keys():
+        elif ((self.ta_source.upper() in ta_keyword_sources.keys()) and
+              (('1k' in ta_keyword_sources[self.ta_source.upper()]) or
+               ('10k' in ta_keyword_sources[self.ta_source.upper()]))):
             ta_coll_id = ta_keyword_sources[self.ta_source.upper()]
             ta_coll = (
                 ee.ImageCollection(ta_coll_id)
@@ -747,7 +768,8 @@ class Image(object):
                     .resample('bilinear')
                     .reproject(crs=self.crs, crsTransform=self.transform)
                 )
-        elif ta_source_re.match(self.ta_source):
+        elif (ta_source_re.match(self.ta_source) and
+              (('1k' in self.ta_source) or ('10k' in self.ta_source))):
             ta_coll = (
                 ee.ImageCollection(self.ta_source)
                 .filterMetadata('image_id', 'equals', self.id)
@@ -761,19 +783,16 @@ class Image(object):
                     .resample('bilinear')
                     .reproject(crs=self.crs, crsTransform=self.transform)
                 )
-        # # DEADBEEF - This was used when the final Ta was being computed
-        # #   and can be removed if stick with using the mosaics
-        # elif ta_source_re.match(self.ta_source):
-        #     # For now assuming Ta source has the correct band (ta_smooth or ta_interp)
-        #     #   and an image_id property
-        #     ta_img = ee.Image(
-        #         ee.ImageCollection(self.ta_source)
-        #         .filterMetadata('image_id', 'equals', self.id)
-        #         .first()
-        #         .select('ta_smooth' if self.ta_smooth_flag else 'ta_interp')
-        #         .resample('bilinear')
-        #         .reproject(crs=self.crs, crsTransform=self.transform)
-        #     )
+        elif ta_source_re.match(self.ta_source):
+            # For new dynamic Ta mosaic images (i.e. not 1k or 10k steps)
+            #   interpolate between the values to identify the final Ta
+            #   instead of selecting a single min bias Ta
+            ta_coll = (
+                ee.ImageCollection(self.ta_source)
+                .filterMetadata('image_id', 'equals', self.id)
+                .limit(1, 'step_size', False)
+            )
+            ta_img = self.ta_coarse_final(ta_mosaic_img=ee.Image(ta_coll.first()))
         else:
             raise ValueError(f'Unsupported ta_source: {self.ta_source}\n')
 
@@ -931,17 +950,6 @@ class Image(object):
             ws_img = ee.Image.constant(float(self.wind_speed_source))
         elif isinstance(self.wind_speed_source, ee.computedobject.ComputedObject):
             ws_img = self.wind_speed_source
-        # elif self.wind_speed_source.upper() == 'CFSV2':
-        #     # It would be more correct to compute the magnitude for each image,
-        #     #   then compute the average.
-        #     # Do we need daily, 6hr, or interpolated instantaneous data?
-        #     ws_coll = (
-        #         ee.ImageCollection('NOAA/CFSV2/FOR6H')
-        #         .select(['u-component_of_wind_height_above_ground',
-        #                  'v-component_of_wind_height_above_ground'])
-        #         .filterDate(self.start_date, self.end_date)
-        #     )
-        #     ws_img = ws_coll.mean().expression('sqrt(b(0) ** 2 + b(1) ** 2)')
         elif self.wind_speed_source.upper() == 'CFSR':
             ws_coll_id = 'projects/disalexi/meteo_data/windspeed/global_v001_3hour'
             ws_coll = ee.ImageCollection(ws_coll_id).select(['windspeed'])
@@ -1064,51 +1072,6 @@ class Image(object):
         self.hc_max = lc_remap(lc_img, self.lc_type, 'hmax')
         self.leaf_width = lc_remap(lc_img, self.lc_type, 'xl')
         self.clump = lc_remap(lc_img, self.lc_type, 'omega')
-
-    # # DEADBEEF
-    # # Calling this directly uses much more EECU than calling the steps separately
-    # # I split this function up into ta_coarse_initial and ta_coarse_final functions
-    # # This code can be removed if everything is working correctly
-    # def ta_coarse(
-    #         self,
-    #         offsets=[-12, -7, -4, -2, -1, 0, 1, 2, 4, 7, 12],
-    #         #offsets=[-5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5],
-    # ):
-    #     """Compute coarse scale air temperature estimate
-    #
-    #     Parameters
-    #     ----------
-    #     offsets : list
-    #         Air temperature offset values to use when generating mosaic
-    #
-    #     Returns
-    #     -------
-    #     image : ee.Image
-    #         ALEXI scale air temperature image
-    #
-    #     """
-    #     # Compute the initial Ta from the meteorology
-    #     ta_initial_img = self.ta_coarse_initial().rename(['ta_initial'])
-    #
-    #     # Compute the Ta mosaic from the initial Ta image
-    #     ta_mosaic_img = self.ta_mosaic(ta_img=ta_initial_img, offsets=offsets)
-    #
-    #     # Interpolate the minimum bias Ta from the 1k steps
-    #     ta_interp_img = ta_mosaic_interpolate(ta_mosaic_img)
-    #
-    #     # Apply simple smoothing to the interpolated Ta band and save as "ta_smooth"
-    #     # This will fill small 1 pixel holes and round to the nearest tenth
-    #     if self.ta_smooth_flag:
-    #         ta_interp_img = ta_interp_img.addBands(
-    #             ta_interp_img.select('ta_interp')
-    #             .focal_mean(1, 'circle', 'pixels')
-    #             # CGM - Testing without reproject call, but it may be needed
-    #             # .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)
-    #             .multiply(10).round().divide(10)
-    #             .rename('ta_smooth')
-    #         )
-    #
-    #     return ta_initial_img.addBands(ta_interp_img).set(self.properties)
 
     def ta_coarse_initial(self):
         """Compute initial coarse scale air temperature estimate from meteorology
@@ -1280,18 +1243,16 @@ class Image(object):
 
         """
         # Interpolate the minimum bias Ta from the 1k steps
-        ta_interp_img = ta_mosaic_interpolate(ta_mosaic_img)
+        ta_interp_img = ta_mosaic_interpolate(ta_mosaic_img).select(['ta_interp'])
 
         # Apply simple smoothing to the interpolated Ta band and save as "ta_smooth"
         # This will fill small 1 pixel holes and round to the nearest tenth
         if self.ta_smooth_flag:
-            ta_interp_img = ta_interp_img.addBands(
-                ta_interp_img.select('ta_interp')
-                .focal_mean(1, 'circle', 'pixels')
+            ta_interp_img = (
+                ta_interp_img.focal_mean(1, 'circle', 'pixels')
                 # CGM - Testing without reproject call, but it may be needed
                 # .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)
                 .multiply(10).round().divide(10)
-                .rename('ta_smooth')
             )
 
         return ta_interp_img.set(self.properties)

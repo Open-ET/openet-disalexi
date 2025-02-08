@@ -204,16 +204,21 @@ def test_Image_ta_mosaic_min_bias_values(ta_values, bias_values, expected):
         # Constant negative bias values
         [[280, 285, 290, 295, 300, 305, 310], [-2, -2, -2, 1, 3, 4, 5], 293.33],
         [[270, 275, 280, 285, 290, 295, 300, 305], [-2, -2, -2, -2, -2, 1, 3, 4], 293.33],
-        # All positive biases
-        [[280, 285, 290, 295, 300], [1, 2, 3, 4, 5], 280],
-        # Test that the Ta for the first "increasing" bias is used
-        [[270, 275, 280, 285, 290, 295, 300], [2, 2, 2, 2, 3, 4, 5], 290],
         # Test multiple negative to positive bias transitions
         [[270, 275, 280, 285, 290, 295, 300, 305], [-2, -0.1, 0.1, -2, -1, 1, 3, 4], 293.33],
-        # In the original 10k processing, pixels with all negative biases were masked
-        # This is commented out for now but may be added back in and should be tested for
-        [[280, 285, 290, 295, 300], [-5, -4, -3, -2, -1], 300],
-        # [[280, 285, 290, 295, 300], [-5, -4, -3, -2, -1], None],
+        # Test that pixels with all positive or negative biases are masked out
+        # This is different than the original implementation
+        #   and the not masked tests are commented out below
+        [[280, 285, 290, 295, 300], [1, 2, 3, 4, 5], None],
+        [[270, 275, 280, 285, 290, 295, 300], [2, 2, 2, 2, 3, 4, 5], None],
+        [[280, 285, 290, 295, 300], [-5, -4, -3, -2, -1], None],
+        # # All positive biases
+        # [[280, 285, 290, 295, 300], [1, 2, 3, 4, 5], 280],
+        # # Test that the Ta for the first "increasing" bias is used
+        # [[270, 275, 280, 285, 290, 295, 300], [2, 2, 2, 2, 3, 4, 5], 290],
+        # # In the original 10k processing, pixels with all negative biases were masked
+        # # This is commented out for now but may be added back in and should be tested for
+        # [[280, 285, 290, 295, 300], [-5, -4, -3, -2, -1], 300],
     ]
 )
 def test_Image_ta_mosaic_interpolate_values(ta_values, bias_values, expected):
