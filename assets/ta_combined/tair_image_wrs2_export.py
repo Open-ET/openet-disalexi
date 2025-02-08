@@ -3,11 +3,12 @@ from builtins import input
 from collections import defaultdict
 import configparser
 from datetime import datetime, timedelta, timezone
+from importlib import metadata
 import json
 # import logging
 import math
 import os
-# import pprint
+import pprint
 import re
 import time
 
@@ -18,7 +19,7 @@ import openet.core
 import openet.core.utils as utils
 
 TOOL_NAME = 'tair_image_wrs2_export'
-TOOL_VERSION = '0.2.3'
+TOOL_VERSION = '0.3.0'
 
 if 'FUNCTION_REGION' in os.environ:
     # Logging is not working correctly in cloud functions for Python 3.8+
@@ -28,13 +29,12 @@ if 'FUNCTION_REGION' in os.environ:
     log_client = google.cloud.logging.Client(project='openet')
     log_client.setup_logging(log_level=20)
     import logging
-    # CGM - Not sure if these lines are needed or not
     logging.basicConfig(level=logging.INFO)
     logger = logging.getLogger(__name__)
     logger.setLevel(logging.INFO)
 else:
     import logging
-    logging.basicConfig(level=logging.INFO, format='%(message)s')
+    # logging.basicConfig(level=logging.INFO, format='%(message)s')
     logging.getLogger('earthengine-api').setLevel(logging.INFO)
     logging.getLogger('googleapiclient').setLevel(logging.INFO)
     logging.getLogger('requests').setLevel(logging.INFO)
@@ -46,16 +46,16 @@ def main(
         overwrite_flag=False,
         delay_time=0,
         gee_key_file=None,
+        project_id=None,
         ready_task_max=-1,
         reverse_flag=False,
         tiles=None,
         update_flag=False,
+        log_tasks=False,
         recent_days=None,
         start_dt=None,
         end_dt=None,
-        log_tasks=False,
-        # project_id=None,
-        ):
+):
     """Compute WRS2 Ta images
 
     Parameters
@@ -69,6 +69,10 @@ def main(
         number of queued tasks, see "max_ready" parameter).  The default is 0.
     gee_key_file : str, None, optional
         Earth Engine service account JSON key file (the default is None).
+    project_id : str, optional
+        Google cloud project ID to use for GEE authentication.
+        This will be checked after the gee_key_file and before the user Initialize.
+        The default is None.
     ready_task_max: int, optional
         Maximum number of queued "READY" tasks.  The default is -1 which is
         implies no limit to the number of tasks that will be submitted.
@@ -78,6 +82,8 @@ def main(
         List of MGRS tiles to process (the default is None).
     update_flag : bool, optional
         If True, only overwrite scenes with an older model version.
+    log_tasks : bool, optional
+        If True, log task information to the datastore (the default is False).
     recent_days : int, str, optional
         Limit start/end date range to this many days before the current date.
         The default is None which will use the INI start/end date directly.
@@ -87,13 +93,10 @@ def main(
     end_dt : datetime, optional
         Override the (inclusive) end date in the INI file
         (the default is None which will use the INI end date).
-    log_tasks : bool, optional
-        If True, log task information to the datastore (the default is False).
-    project_id : str, optional
-        Google cloud project ID not currently supported for GEE initialization.
 
     """
-    logging.info('\nCompute WRS2 Ta images')
+    logging.info(f'\n{"#" * 80}')
+    logging.info('Compute WRS2 Ta images')
 
     ee.data.setWorkloadTag('disalexi-tair-scene-export')
 
@@ -103,6 +106,7 @@ def main(
     # List of path/rows to skip
     wrs2_skip_list = [
         'p049r026',  # Vancouver Island, Canada
+        'p048r028',  # OR/WA Coast
         # 'p047r031',  # North California coast
         'p042r037',  # San Nicholas Island, California
         # 'p041r037',  # South California coast
@@ -121,12 +125,13 @@ def main(
     wrs2_path_skip_list = [9, 49]
     wrs2_row_skip_list = [25, 24, 43]
     mgrs_skip_list = []
-    date_skip_list = ['2023-06-16']
+    date_skip_list = []
 
     export_id_fmt = '{model}_{index}'
 
     # TODO: Move to INI file
-    # clip_ocean_flag = True
+    # mask_ocean_flag = True
+    # clip_ocean_flag = False
 
     # Read config file
     logging.info(f'  {os.path.basename(ini_path)}')
@@ -241,24 +246,6 @@ def main(
     except Exception as e:
         raise e
 
-    # try:
-    #     output_type = str(ini['EXPORT']['output_type'])
-    # except KeyError:
-    #     output_type = 'float'
-    #     # output_type = 'int16'
-    #     logging.debug(f'  output_type: not set in INI, defaulting to {output_type}')
-    # except Exception as e:
-    #     raise e
-    #
-    # try:
-    #     scale_factor = int(ini['EXPORT']['scale_factor'])
-    # except KeyError:
-    #     scale_factor = 1
-    #     # scale_factor = 10000
-    #     logging.debug(f'  scale_factor: not set in INI, defaulting to {scale_factor}')
-    # except Exception as e:
-    #     raise e
-
     try:
         export_id_name = '_' + str(ini['EXPORT']['export_id_name'])
     except KeyError:
@@ -267,6 +254,28 @@ def main(
     except Exception as e:
         raise e
 
+    try:
+        retile = int(ini['TAIR']['retile'])
+    except KeyError:
+        retile = 4
+        logging.debug(f'  retile: not set in INI, defaulting to {retile}')
+    except Exception as e:
+        raise e
+
+    # Model metadata version
+    # Newer versions of the models will have the version set in the metadata
+    # but try reading from the model version attribute for older model versions
+    model_package_name = openet.disalexi.__name__.replace('.', '-')
+    model_metadata = metadata.metadata(model_package_name)
+    if 'Name' not in model_metadata.keys():
+        model_metadata['Name'] = model_name
+    if 'Version' not in model_metadata.keys():
+        try:
+            model_metadata['Version'] = openet.disalexi.__version__
+        except AttributeError:
+            raise Exception(f'Could not determine the model version')
+    logging.info(f'\nModel name: {model_metadata["Name"]}')
+    logging.info(f'Model ver.: {model_metadata["Version"]}')
 
     # If the user set the tiles argument, use these instead of the INI values
     if tiles:
@@ -334,18 +343,8 @@ def main(
             tair_args[k.lower()] = v
     # tair_args = {
     #     k.lower(): int(v) if utils.is_number(v) else v
-    #     for k, v in dict(ini['TAIR']).items()}
-
-    if 'cell_size' not in tair_args.keys():
-        tair_args['cell_size'] = 30
-    if 'retile' not in tair_args.keys():
-        tair_args['retile'] = 0
-    if ('source_coll' not in tair_args.keys() or
-            tair_args['source_coll'].lower() == 'none'):
-        tair_args['source_coll'] = None
-    # Clear Ta start value if is source is set
-    if tair_args['source_coll'] is not None:
-        tair_args['ta_start'] = None
+    #     for k, v in dict(ini['TAIR']).items()
+    # }
 
     logging.info('\nDISALEXI Parameters')
     if 'stability_iterations' in model_args.keys():
@@ -353,12 +352,7 @@ def main(
     logging.info(f'  Albedo iter: {int(model_args["albedo_iterations"])}')
 
     logging.info('\nTAIR Parameters')
-    logging.info(f'  Source:     {tair_args["source_coll"]}')
-    logging.info(f'  Ta Start:   {tair_args["ta_start"]}')
-    logging.debug(f'  Cell size:  {tair_args["cell_size"]}')
-    logging.debug(f'  Retile:     {tair_args["retile"]}')
-    logging.info(f'  Step Size:  {tair_args["step_size"]}')
-    logging.debug(f'  Step Count: {tair_args["step_count"]}')
+    logging.info(f'  Offsets: {tair_args["offsets"]}')
 
 
     # Initialize Earth Engine
@@ -377,17 +371,17 @@ def main(
             default_scopes=['https://www.googleapis.com/auth/earthengine']
         )
         ee.Initialize(credentials)
+    elif project_id is not None:
+        logging.info(f'\nInitializing Earth Engine using project credentials'
+                     f'\n  Project ID: {project_id}')
+        try:
+            ee.Initialize(project=project_id)
+        except Exception as e:
+            logging.warning(f'\nUnable to initialize GEE using project ID\n  {e}')
+            return False
     else:
         logging.info('\nInitializing Earth Engine using user credentials')
         ee.Initialize()
-    # elif project_id is not None:
-    #     logging.info(f'\nInitializing Earth Engine using project credentials'
-    #                  f'\n  Project ID: {project_id}')
-    #     try:
-    #         ee.Initialize(project=project_id)
-    #     except Exception as e:
-    #         logging.warning(f'\nUnable to initialize GEE using project ID\n  {e}')
-    #         return False
     # elif 'GOOGLE_APPLICATION_CREDENTIALS' in os.environ:
     #     logging.info(f'\nInitializing GEE using GOOGLE_APPLICATION_CREDENTIALS key')
     #     try:
@@ -453,8 +447,8 @@ def main(
     # Get an ET image to set the Ta values to
     logging.debug('\nALEXI ET properties')
     alexi_coll_id = model_args['alexi_source']
-
-    if (alexi_coll_id.upper() == 'CONUS_V006' or
+    alexi_crs = 'EPSG:4326'
+    if ((alexi_coll_id.upper() == 'CONUS_V006') or
             alexi_coll_id.endswith('projects/ee-tulipyangyun-2/assets/alexi/ALEXI_V006')):
         alexi_coll_id = 'projects/ee-tulipyangyun-2/assets/alexi/ALEXI_V006'
         alexi_mask_id = 'projects/earthengine-legacy/assets/projects/disalexi/alexi/conus_v004_mask'
@@ -462,7 +456,7 @@ def main(
         # alexi_geo = [0.04, 0.0, -125.02, 0.0, -0.04, 49.78]
         alexi_cs = 0.04
         alexi_x, alexi_y = -125.02, 49.78
-    elif (alexi_coll_id.upper() == 'CONUS_V005' or
+    elif ((alexi_coll_id.upper() == 'CONUS_V005') or
             alexi_coll_id.endswith('projects/ee-tulipyangyun-2/assets/alexi/ALEXI_V005')):
         alexi_coll_id = 'projects/ee-tulipyangyun-2/assets/alexi/ALEXI_V005'
         alexi_mask_id = 'projects/earthengine-legacy/assets/projects/disalexi/alexi/conus_v004_mask'
@@ -470,7 +464,7 @@ def main(
         # alexi_geo = [0.04, 0.0, -125.02, 0.0, -0.04, 49.78]
         alexi_cs = 0.04
         alexi_x, alexi_y = -125.02, 49.78
-    elif (alexi_coll_id.upper() == 'CONUS_V004' or
+    elif ((alexi_coll_id.upper() == 'CONUS_V004') or
             alexi_coll_id.endswith('projects/disalexi/alexi/CONUS_V004')):
         alexi_coll_id = 'projects/earthengine-legacy/assets/projects/disalexi/alexi/CONUS_V004'
         alexi_mask_id = 'projects/earthengine-legacy/assets/projects/disalexi/alexi/conus_v004_mask'
@@ -478,27 +472,18 @@ def main(
         # alexi_geo = [0.04, 0.0, -125.02, 0.0, -0.04, 49.78]
         alexi_cs = 0.04
         alexi_x, alexi_y = -125.02, 49.78
-    elif alexi_coll_id.upper() == 'CONUS_V003':
-        alexi_coll_id = 'projects/earthengine-legacy/assets/projects/disalexi/alexi/CONUS_V003'
-        alexi_mask_id = 'projects/earthengine-legacy/assets/projects/disalexi/alexi/conus_v002_mask'
-        alexi_mask = ee.Image(alexi_mask_id).double().multiply(0)
-        # alexi_geo = [0.04, 0.0, -125.04, 0.0, -0.04, 49.8]
-        alexi_cs = 0.04
-        alexi_x, alexi_y = -125.04, 49.8
     else:
         raise ValueError(f'unsupported ALEXI source: {alexi_coll_id}')
-    # alexi_coll = ee.ImageCollection(alexi_coll_id)
-    # alexi_proj = alexi_mask.projection().getInfo()
-    # alexi_geo = alexi_proj['transform']
-    # alexi_crs = alexi_proj['crs']
-    alexi_crs = 'EPSG:4326'
+
     logging.debug(f'  Collection: {alexi_coll_id}')
 
 
     # Get list of ALEXI dates (not using the system:index since it is YYYYJJJ)
     logging.info('\nChecking available ALEXI data')
-    alexi_coll = ee.ImageCollection(alexi_coll_id) \
+    alexi_coll = (
+        ee.ImageCollection(alexi_coll_id)
         .filterDate(iter_start_dt.strftime('%Y-%m-%d'), iter_end_dt.strftime('%Y-%m-%d'))
+    )
     def set_date(x):
         return x.set('date', ee.Date(x.get('system:time_start')).format('yyyy-MM-dd'))
     alexi_dates = set(utils.get_info(alexi_coll.map(set_date).aggregate_array('date')))
@@ -506,12 +491,13 @@ def main(
 
     # Get list of dates when there is no windspeed to help pre-screen dates to skip
     # Using windspeed as a proxy for all of the meteorology variables
-    if (('windspeed_source' in model_args.keys()) and
-            (model_args['windspeed_source'] == 'CFSR')):
+    if ('windspeed_source' in model_args.keys()) and (model_args['windspeed_source'] == 'CFSR'):
         logging.info('\nChecking available meteorology data')
         meteo_coll_id = 'projects/disalexi/meteo_data/windspeed/global_v001_3hour'
-        meteo_coll = ee.ImageCollection(meteo_coll_id) \
+        meteo_coll = (
+            ee.ImageCollection(meteo_coll_id)
             .filterDate(iter_start_dt.strftime('%Y-%m-%d'), iter_end_dt.strftime('%Y-%m-%d'))
+        )
         def set_date(x):
             return x.set('date', ee.Date(x.get('system:time_start')).format('yyyy-MM-dd'))
         meteo_dates = set(utils.get_info(meteo_coll.map(set_date).aggregate_histogram('date').keys()))
@@ -542,17 +528,12 @@ def main(
     logging.info('\nImage Exports')
     wrs2_tiles = []
     processed_image_ids = set()
-    # processed_wrs2_tiles = set()
-    for export_info in sorted(export_list, key=lambda i: i['index'],
-                              reverse=reverse_flag):
+    for export_info in sorted(export_list, key=lambda i: i['index'], reverse=reverse_flag):
         logging.info(f'{export_info["index"]}')
-        # logging.debug('  {} - {}'.format(
-        #     export_info['index'], ', '.join(export_info['wrs2_tiles'])))
+
         tile_count = len(export_info['wrs2_tiles'])
         tile_list = sorted(export_info['wrs2_tiles'], reverse=not(reverse_flag))
-        tile_geom = ee.Geometry.Rectangle(
-            export_info['extent'], export_info['crs'], False
-        )
+        tile_geom = ee.Geometry.Rectangle(export_info['extent'], export_info['crs'], False)
 
         # Get the available image ID list for the zone
         # Get list of existing image assets and their properties for the zone
@@ -561,7 +542,8 @@ def main(
         export_image_id_list = []
         asset_props = {}
         for year_start_dt, year_end_dt in date_range_by_year(
-                start_dt, end_dt, exclusive_end_dates=True):
+                start_dt, end_dt, exclusive_end_dates=True
+        ):
             year_start_date = year_start_dt.strftime("%Y-%m-%d")
             year_end_date = year_end_dt.strftime("%Y-%m-%d")
             logging.debug(f'  {year_start_date} {year_end_date}')
@@ -577,24 +559,9 @@ def main(
                 # model_args={},
                 # filter_args=filter_args,
             )
-            year_image_id_list = utils.get_info(ee.List(model_obj.overpass(
-                variables=['ndvi']).aggregate_array('image_id')))
-            # try:
-            #     year_image_id_list = model_obj.get_image_ids()
-            # except Exception as e:
-            #     # Get the image ID list from an NDVI collection if get_image_ids()
-            #     #   doesn't work
-            #     logging.info('  Could not get image IDs from collection method')
-            #     year_image_id_list = utils.get_info(
-            #         ee.List(model_obj._build(variables=None)
-            #                 .aggregate_array('image_id')),
-            #         max_retries=10
-            #     )
-            #     # year_image_id_list = utils.get_info(
-            #     #     ee.List(model_obj.overpass(variables=['ndvi'])
-            #     #             .aggregate_array('image_id')),
-            #     #     max_retries=10
-            #     # )
+            year_image_id_list = utils.get_info(ee.List(
+                model_obj.overpass(variables=['ndvi']).aggregate_array('image_id')
+            ))
 
             # Filter to the wrs2_tile list
             # The WRS2 tile filtering should be done in the Collection call above,
@@ -616,10 +583,12 @@ def main(
 
             # Get list of existing image assets and their properties
             logging.debug('  Getting GEE asset list')
-            asset_coll = ee.ImageCollection(export_coll_id) \
-                .filterDate(year_start_date, year_end_date) \
-                .filter(ee.Filter.inList('wrs2_tile', tile_list)) \
+            asset_coll = (
+                ee.ImageCollection(export_coll_id)
+                .filterDate(year_start_date, year_end_date)
+                .filter(ee.Filter.inList('wrs2_tile', tile_list))
                 .filterBounds(tile_geom)
+            )
             year_asset_props = {
                 f'{export_coll_id}/{x["properties"]["system:index"]}': x['properties']
                 for x in utils.get_info(asset_coll)['features']
@@ -648,25 +617,18 @@ def main(
 
         for export_n, wrs2_tile in enumerate(tile_list):
             path, row = map(int, wrs2_tile_re.findall(wrs2_tile)[0])
-            # DEADBEEF Tracking processed image_ids instead of processed wrs2_tiles
-            # The L7 and L8 footprints are slightly different so processing the
-            #   wrs2 tile does not mean that all of the images were processed
-            # if wrs2_tile in processed_wrs2_tiles:
-            #     logging.debug('{} {} ({}/{}) - already processed'.format(
-            #         export_info['index'], wrs2_tile, export_n + 1, tile_count))
-            #     continue
-            # processed_wrs2_tiles.update(wrs2_tile)
-            if wrs2_skip_list and wrs2_tile in wrs2_skip_list:
+
+            if wrs2_skip_list and (wrs2_tile in wrs2_skip_list):
                 logging.debug('{} {} ({}/{}) - in wrs2 skip list'.format(
                     export_info['index'], wrs2_tile, export_n + 1, tile_count
                 ))
                 continue
-            elif wrs2_row_skip_list and row in wrs2_row_skip_list:
+            elif wrs2_row_skip_list and (row in wrs2_row_skip_list):
                 logging.debug('{} {} ({}/{}) - in wrs2 row skip list'.format(
                     export_info['index'], wrs2_tile, export_n + 1, tile_count
                 ))
                 continue
-            elif wrs2_path_skip_list and path in wrs2_path_skip_list:
+            elif wrs2_path_skip_list and (path in wrs2_path_skip_list):
                 logging.debug('{} {} ({}/{}) - in wrs2 path skip list'.format(
                     export_info['index'], wrs2_tile, export_n + 1, tile_count
                 ))
@@ -675,15 +637,6 @@ def main(
                 logging.debug('{} {} ({}/{})'.format(
                     export_info['index'], wrs2_tile, export_n + 1, tile_count
                 ))
-
-            # path, row = map(int, wrs2_tile_re.findall(export_info['index'])[0])
-            # logging.info('WRS2 tile: {}  ({}/{})'.format(
-            #     export_info['index'], export_n + 1, len(export_list)))
-            #
-            # logging.debug(f'  Shape:     {export_info["shape"]}')
-            # logging.debug(f'  Transform: {export_info["geo_str"]}')
-            # logging.debug(f'  Extent:    {export_info["extent"]}')
-            # logging.debug(f'  MaxPixels: {export_info["maxpixels"]}')
 
             # Subset the image ID list to the WRS2 tile
             try:
@@ -700,53 +653,6 @@ def main(
             #         {'type': 'equals', 'leftField': 'WRS_PATH', 'rightValue': path},
             #         {'type': 'equals', 'leftField': 'WRS_ROW', 'rightValue': row}]
             # logging.debug(f'  Filter Args: {filter_args}')
-            #
-            # # Get the full Landsat collection
-            # # Collection end date is exclusive
-            # model_obj = openet.disalexi.Collection(
-            #     collections=collections,
-            #     cloud_cover_max=float(ini['INPUTS']['cloud_cover']),
-            #     start_date=iter_start_dt.strftime('%Y-%m-%d'),
-            #     end_date=iter_end_dt.strftime('%Y-%m-%d'),
-            #     geometry=ee.Geometry.Point(openet.core.wrs2.centroids[wrs2_tile]),
-            #     model_args=model_args,
-            #     filter_args=filter_args,
-            # )
-            # image_id_list = utils.get_info(ee.List(model_obj.overpass(
-            #     variables=['ndvi']).aggregate_array('image_id')), max_retries=10)
-            #
-            # if not image_id_list:
-            #     logging.info('  Empty image ID list, skipping tile')
-            #     # logging.debug('  Empty image ID list, exiting')
-            #     # return False
-            #
-            # # Get list of existing images for the target tile
-            # logging.debug('  Getting GEE asset list')
-            # asset_coll = ee.ImageCollection(export_coll_id) \
-            #     .filterDate(iter_start_dt.strftime('%Y-%m-%d'),
-            #                 iter_end_dt.strftime('%Y-%m-%d')) \
-            #     .filterMetadata('wrs2_tile', 'equals',
-            #                     wrs2_tile_fmt.format(path, row))
-            # asset_props = {f'{export_coll_id}/{x["properties"]["system:index"]}':
-            #                    x['properties']
-            #                for x in utils.get_info(asset_coll)['features']}
-            # # asset_props = {x['id']: x['properties'] for x in assets_info['features']}
-            #
-            # # # Get list of band types for checking to see if any bands are floats
-            # # asset_types = {
-            # #     f['id']: {b['id']: b['data_type']['precision'] for b in
-            # #               f['bands']}
-            # #     for f in assets_info['features']
-            # # }
-            #
-            # # Sort image ID list by date
-            # image_id_list = sorted(
-            #     image_id_list, key=lambda k: k.split('/')[-1].split('_')[-1],
-            #     reverse=reverse_flag
-            # )
-            # # pprint.pprint(image_id_list)
-            # # input('ENTER')
-
 
             # Process each image in the collection by date
             # image_id is the full Earth Engine ID to the asset
@@ -759,6 +665,9 @@ def main(
                 image_date = image_dt.strftime('%Y-%m-%d')
                 next_date = (image_dt + timedelta(days=1)).strftime('%Y-%m-%d')
 
+                landsat_img = ee.Image(image_id)
+                landsat_dt = ee.Date(landsat_img.get('system:time_start'))
+
                 export_id = export_id_fmt.format(
                     model=ini['INPUTS']['et_model'].lower(),
                     index=image_id.lower().replace('/', '_'),
@@ -767,14 +676,14 @@ def main(
                 export_id += export_id_name
                 asset_id = f'{export_coll_id}/{scene_id.lower()}'
 
-                if date_skip_list and image_date in date_skip_list:
+                if date_skip_list and (image_date in date_skip_list):
                     logging.info(f'  {scene_id} - Date in skip list, skipping')
                     continue
                 if image_date not in alexi_dates:
                     logging.info(f'  {scene_id} - No ALEXI image in source, skipping')
                     # time.sleep(0.1)
                     continue
-                if meteo_dates and image_date not in meteo_dates:
+                if meteo_dates and (image_date not in meteo_dates):
                     logging.info(f'  {scene_id} - No windspeed images for date, skipping')
                     # time.sleep(0.1)
                     continue
@@ -783,7 +692,7 @@ def main(
                 #     # Check if the ALEXI image is present
                 #     # This is the most likely asset to be missing on updates so
                 #     #   check for it early
-                #     if image_date not in alexi_date_list:
+                #     if image_date not in alexi_dates:
                 #         logging.info(f'  {scene_id} - No ALEXI image in source, skipping')
                 #         time.sleep(0.1)
                 #         continue
@@ -794,26 +703,20 @@ def main(
                 #     #     time.sleep(1)
                 #     #     # input('ENTER')
                 #     #     continue
-                # if ('ta_source' in model_args.keys() and
-                #         model_args['ta_source'].startswith('projects/')):
-                #     ta_source_coll = ee.ImageCollection(model_args['ta_source'])\
-                #         .filterMetadata('image_id', 'equals', image_id)
-                #     if utils.get_info(ta_source_coll.size()) == 0:
-                #         logging.info(f'  {scene_id} - No Tair image in source collection, skipping')
-                #         # time.sleep(1)
-                #         continue
 
                 if update_flag:
                     if export_id in tasks.keys():
                         logging.info(f'  {scene_id} - Task already submitted, skipping')
                         continue
-                    elif asset_props and asset_id in asset_props.keys():
+                    elif asset_props and (asset_id in asset_props.keys()):
                         # In update mode only overwrite if the version is old
-                        model_ver = version_number(openet.disalexi.__version__)
+                        model_ver = version_number(model_metadata["Version"])
+                        # model_ver = version_number(openet.disalexi.__version__)
                         asset_ver = version_number(asset_props[asset_id]['model_version'])
                         # asset_flt = [
                         #     t == 'float' for b, t in asset_types.items()
-                        #     if b in ['et', 'et_reference']]
+                        #     if b in ['et', 'et_reference']
+                        # ]
 
                         if asset_ver < model_ver:
                             logging.info(f'  {scene_id} - Existing asset model version is old, '
@@ -833,8 +736,8 @@ def main(
                         #     except:
                         #         logging.info('  Error removing asset, skipping')
                         #         continue
-                        # elif (asset_props[asset_id]['date_ingested'] <= '2020-04-27'):
-                        #     logging.info('  date_ingested is old, removing')
+                        # elif (asset_props[asset_id]['build_date'] <= '2020-04-27'):
+                        #     logging.info('  build_date is old, removing')
                         #     # input('ENTER')
                         #     try:
                         #         ee.data.deleteAsset(asset_id)
@@ -882,7 +785,7 @@ def main(
                         # ee.data.cancelOperation(tasks[export_id]['id'])
                     # This is intentionally not an "elif" so that a task can be
                     # cancelled and an existing image/file/asset can be removed
-                    if asset_props and asset_id in asset_props.keys():
+                    if asset_props and (asset_id in asset_props.keys()):
                         logging.info(f'  {scene_id} - Asset already exists, removing')
                         try:
                             ee.data.deleteAsset(asset_id)
@@ -893,7 +796,7 @@ def main(
                     if export_id in tasks.keys():
                         logging.debug(f'  {scene_id} - Task already submitted, skipping')
                         continue
-                    elif asset_props and asset_id in asset_props.keys():
+                    elif asset_props and (asset_id in asset_props.keys()):
                         logging.debug(f'  {scene_id} - Asset already exists, skipping')
                         continue
 
@@ -904,73 +807,79 @@ def main(
                 logging.debug(f'  Collection: {os.path.dirname(asset_id)}')
                 logging.debug(f'  Image ID:   {os.path.basename(asset_id)}')
 
-                if tair_args['source_coll'] is None:
-                    logging.debug(f'  Tair source: {tair_args["ta_start"]}')
-                    ta_source_img = alexi_mask.add(float(tair_args['ta_start']))\
-                        .rename(['ta'])
-                elif tair_args['source_coll'] == 'NLDAS':
-                    logging.debug('  Tair source: NLDAS')
-                    ta_source_coll = ee.ImageCollection('NASA/NLDAS/FORA0125_H002')\
-                        .filterDate(image_date, next_date)\
-                        .select(['temperature'])
-                    # Pulling maximum air temperature instead of 0 UTC
-                    # input_image = ee.Image(ta_source_coll.first())\
-                    input_image = ee.Image(ta_source_coll.reduce(ee.Reducer.max()))\
-                        .add(273.15).floor()
-                    ta_source_img = alexi_mask.add(input_image).rename(['ta'])
-                else:
-                    logging.debug(f'  Tair source: {tair_args["source_coll"]}')
-                    ta_source_coll = ee.ImageCollection(tair_args['source_coll'])\
-                        .filterMetadata('image_id', 'equals', image_id)
-                    if utils.get_info(ta_source_coll.size()) == 0:
-                        logging.info(f'  {scene_id} - No Tair image in source coll, skipping')
-                        # input('ENTER')
-                        continue
-                    ta_source_img = ta_min_bias(ee.Image(ta_source_coll.first()))
 
-                # Manually check if the source LAI and TIR images are present
+                # DEADBEEF - But keep in case it is useful code for reading Ta climo
+                # if tair_args['source_coll'] == 'NLDAS':
+                #     logging.debug('  Tair source: NLDAS')
+                #     ta_source_coll = (
+                #         ee.ImageCollection('NASA/NLDAS/FORA0125_H002')
+                #         .filterDate(image_date, next_date)
+                #         .select(['temperature'])
+                #     )
+                #     # Pulling maximum air temperature instead of 0 UTC
+                #     # input_image = ee.Image(ta_source_coll.first())\
+                #     input_image = ee.Image(ta_source_coll.reduce(ee.Reducer.max()))\
+                #         .add(273.15).floor()
+                #     ta_source_img = alexi_mask.add(input_image).rename(['ta'])
+                # elif tair_args['source_coll'] is None:
+                #     logging.debug(f'  Tair source: {tair_args["ta_start"]}')
+                #     ta_source_img = alexi_mask.add(float(tair_args['ta_start'])).rename(['ta'])
+                # else:
+                #     logging.debug(f'  Tair source: {tair_args["source_coll"]}')
+                #     ta_source_coll = ee.ImageCollection(tair_args['source_coll'])\
+                #         .filterMetadata('image_id', 'equals', image_id)
+                #     if utils.get_info(ta_source_coll.size()) == 0:
+                #         logging.info(f'  {scene_id} - No Tair image in source coll, skipping')
+                #         # input('ENTER')
+                #         continue
+                #     ta_source_img = ta_min_bias(ee.Image(ta_source_coll.first()))
+
+
+                # Manually check if the source LAI and LST images are present
                 # Eventually this should/could be done inside the model instead
-                if ('tir_source' in model_args.keys() and
-                        type(model_args['tir_source']) is str):
-                    # Assumptions: string tir_source is an image collection ID
-                    tir_coll = ee.ImageCollection(model_args['tir_source']) \
-                        .filterMetadata('scene_id', 'equals', scene_id)
-                    tir_img = ee.Image(tir_coll.first())
-                    tir_info = utils.get_info(tir_img)
-                    try:
-                        sharpen_version = tir_info['properties']['sharpen_version']
-                    except:
-                        logging.info(f'  {scene_id} - No TIR image in source, skipping')
-                        continue
-                if ('lai_source' in model_args.keys() and
-                        type(model_args['lai_source']) is str):
-                    # Assumptions: string lai_source is an image collection ID
-                    lai_coll = ee.ImageCollection(model_args['lai_source']) \
-                        .filterMetadata('scene_id', 'equals', scene_id)
-                    lai_img = ee.Image(lai_coll.first())
-                    lai_info = utils.get_info(lai_img)
-                    landsat_lai_version = None
-                    try:
-                        landsat_lai_version = lai_info['properties']['landsat_lai_version']
-                    except:
-                        logging.info(f'  {scene_id} - No LAI image in source, skipping')
-                        continue
+                if ('lai_source' in model_args.keys()) and (type(model_args['lai_source']) is str):
+                    if model_args['lai_source'].lower() in ['openet-landsat-lai', 'openet-lai']:
+                        landsat_lai_version = metadata.metadata('openet-landsat-lai')['Version']
+                    else:
+                        # Assumptions: string lai_source is an image collection ID
+                        lai_coll = ee.ImageCollection(model_args['lai_source'])\
+                            .filterMetadata('scene_id', 'equals', scene_id)
+                        if utils.get_info(lai_coll.size()) == 0:
+                            logging.info(f'  {scene_id} - No LAI image in source, skipping')
+                            continue
+                        # TODO: If not exporting to COG, LAI version value could stay server size
+                        lai_info = utils.get_info(ee.Image(lai_coll.first()))
+                        landsat_lai_version = None
+                        try:
+                            landsat_lai_version = lai_info['properties']['landsat_lai_version']
+                        except:
+                            logging.info(f'  {scene_id} - Could not get LAI properties, skipping')
+                            continue
 
-                # CGM: We could pre-compute (or compute once and then save)
-                #   the crs, transform, and shape since they should (will?) be
-                #   the same for each wrs2 tile
-                landsat_img = ee.Image(image_id)
-                landsat_info = utils.get_info(landsat_img.select([1]))
-                # landsat_info = utils.get_info(landsat_img.select(['SR_B2']))
-                landsat_dt = ee.Date(landsat_info['properties']['system:time_start'])
+                if ('lst_source' in model_args.keys()) and (type(model_args['lst_source']) is str):
+                    # Assumptions: string lst_source is an image collection ID
+                    lst_coll = ee.ImageCollection(model_args['lst_source'])\
+                        .filterMetadata('scene_id', 'equals', scene_id)
+                    if utils.get_info(lst_coll.size()) == 0:
+                        logging.info(f'  {scene_id} - No LST image in source, skipping')
+                        continue
+                    # TODO: If not exporting to COG, LST version value could stay server size
+                    lst_info = utils.get_info(ee.Image(lst_coll.first()))
+                    landsat_lst_version = None
+                    try:
+                        landsat_lst_version = lst_info['properties']['landsat_lst_version']
+                    except:
+                        logging.info(f'  {scene_id} - Could not get LST properties, skipping')
+                        continue
 
                 if (('windspeed_source' in model_args.keys()) and
-                        (model_args['windspeed_source'] == 'CFSR')):
+                       (model_args['windspeed_source'] == 'CFSR')):
                     windspeed_coll_id = 'projects/disalexi/meteo_data/windspeed/global_v001_3hour'
-                    windspeed_coll = ee.ImageCollection(windspeed_coll_id) \
-                        .filterDate(landsat_dt.advance(-3, 'hour'),
-                                    landsat_dt.advance(3, 'hour')) \
+                    windspeed_coll = (
+                        ee.ImageCollection(windspeed_coll_id)
+                        .filterDate(landsat_dt.advance(-3, 'hour'), landsat_dt.advance(3, 'hour'))
                         .select(['windspeed'])
+                    )
                     try:
                         windspeed_count = utils.get_info(windspeed_coll.size())
                     except:
@@ -980,38 +889,41 @@ def main(
                         continue
 
                 d_obj = openet.disalexi.Image.from_image_id(image_id, **model_args)
-                export_img = d_obj.ta_mosaic(
-                    ta_img=ta_source_img,
-                    step_size=tair_args['step_size'],
-                    step_count=tair_args['step_count'],
-                )
-                # pprint.pprint(export_img.getInfo())
-                # input('ENTER')
 
-                if tair_args['retile'] and tair_args['retile'] > 1:
-                    export_img = export_img.retile(tair_args['retile'])
+                # Use the built-in ta_coarse function which will return the following bands:
+                #   ta_interp, ta_initial, ta_a, ta_b, bias_a, bias_b
+                export_img = d_obj.ta_coarse(
+                    offsets=[int(t.strip()) for t in tair_args["offsets"].split(',')],
+                )
 
                 properties = {
                     # Custom properties
+                    'build_date': datetime.today().strftime('%Y-%m-%d'),
                     'coll_id': coll_id,
                     'core_version': openet.core.__version__,
-                    'date_ingested': datetime.today().strftime('%Y-%m-%d'),
                     'image_id': image_id,
                     'landsat_lai_version': landsat_lai_version,
-                    'model_name': model_name,
-                    'model_version': openet.disalexi.__version__,
+                    'landsat_lst_version': landsat_lst_version,
+                    'model_name': model_metadata['Name'],
+                    'model_version': model_metadata["Version"],
+                    # 'model_name': model_name,
+                    # 'model_version': openet.disalexi.__version__,
                     'scene_id': scene_id,
-                    'sharpen_version': sharpen_version,
                     'tool_name': TOOL_NAME,
                     'tool_version': TOOL_VERSION,
                     'wrs2_tile': wrs2_tile_fmt.format(p, r),
                     # Source properties
-                    'CLOUD_COVER': landsat_info['properties']['CLOUD_COVER'],
-                    'CLOUD_COVER_LAND': landsat_info['properties']['CLOUD_COVER_LAND'],
+                    # CGM - Note, setting the properties as server side objects
+                    #   won't work for COG exports
+                    'CLOUD_COVER': landsat_img.get('CLOUD_COVER'),
+                    'CLOUD_COVER_LAND': landsat_img.get('CLOUD_COVER_LAND'),
+                    # 'CLOUD_COVER': landsat_info['properties']['CLOUD_COVER'],
+                    # 'CLOUD_COVER_LAND': landsat_info['properties']['CLOUD_COVER_LAND'],
                     # CGM - Should we use the Landsat time or the ALEXI time?
-                    'system:time_start': landsat_info['properties']['system:time_start'],
+                    'system:time_start': landsat_img.get('system:time_start'),
+                    # 'system:time_start': landsat_info['properties']['system:time_start'],
                     # 'system:time_start': utils.millis(image_dt),
-                    # Other poperties
+                    # Other properties
                     # 'spacecraft_id': landsat_img.get('SATELLITE'),
                     # 'landsat': landsat,
                     # 'date': image_dt.strftime('%Y-%m-%d'),
@@ -1024,6 +936,9 @@ def main(
                 properties.update(tair_args)
                 export_img = export_img.set(properties)
 
+                if retile and retile in [2, 4, 8, 16, 32, 64, 128]:
+                    export_img = export_img.retile(retile)
+
                 # CGM: We could pre-compute (or compute once and then save)
                 #   the crs, transform, and shape since they should (will?) be
                 #   the same for each wrs2 tile
@@ -1034,22 +949,21 @@ def main(
                 if image_xy is None:
                     logging.info('  Could not get image extent, skipping')
                     continue
-                export_extent = [min([xy[0] for xy in image_xy]),
-                                 min([xy[1] for xy in image_xy]),
-                                 max([xy[0] for xy in image_xy]),
-                                 max([xy[1] for xy in image_xy])]
+                extent = [
+                    min([xy[0] for xy in image_xy]),
+                    min([xy[1] for xy in image_xy]),
+                    max([xy[0] for xy in image_xy]),
+                    max([xy[1] for xy in image_xy])
+                ]
 
                 # Adjust extent to the cell size
-                export_extent[0] = round(math.floor((
-                    export_extent[0] - alexi_x) / alexi_cs) * alexi_cs + alexi_x, 8)
-                export_extent[1] = round(math.floor((
-                    export_extent[1] - alexi_y) / alexi_cs) * alexi_cs + alexi_y, 8)
-                export_extent[2] = round(math.ceil((
-                    export_extent[2] - alexi_x) / alexi_cs) * alexi_cs + alexi_x, 8)
-                export_extent[3] = round(math.ceil((
-                    export_extent[3] - alexi_y) / alexi_cs) * alexi_cs + alexi_y, 8)
-                export_geo = [alexi_cs, 0, export_extent[0], 0,
-                              -alexi_cs, export_extent[3]]
+                export_extent = [
+                    round(math.floor((extent[0] - alexi_x) / alexi_cs) * alexi_cs + alexi_x, 8),
+                    round(math.floor((extent[1] - alexi_y) / alexi_cs) * alexi_cs + alexi_y, 8),
+                    round(math.ceil((extent[2] - alexi_x) / alexi_cs) * alexi_cs + alexi_x, 8),
+                    round(math.ceil((extent[3] - alexi_y) / alexi_cs) * alexi_cs + alexi_y, 8)
+                ]
+                export_geo = [alexi_cs, 0, export_extent[0], 0, -alexi_cs, export_extent[3]]
                 export_shape = [
                     int(abs(export_extent[2] - export_extent[0]) / alexi_cs),
                     int(abs(export_extent[3] - export_extent[1]) / alexi_cs)
@@ -1060,55 +974,70 @@ def main(
                 logging.debug(f'  Shape:  {export_shape}')
 
                 # Build export tasks
-                max_retries = 4
+                # max_retries = 4
                 logging.debug('  Building export task')
-                task = None
-                for i in range(1, max_retries):
-                    try:
-                        task = ee.batch.Export.image.toAsset(
-                            image=export_img,
-                            description=export_id,
-                            assetId=asset_id,
-                            crs=alexi_crs,
-                            crsTransform='[' + ','.join(list(map(str, export_geo))) + ']',
-                            dimensions='{0}x{1}'.format(*export_shape),
-                        )
-                        break
-                    # except ee.ee_exception.EEException as e:
-                    except Exception as e:
-                        if ('Earth Engine memory capacity exceeded' in str(e) or
-                                'Earth Engine capacity exceeded' in str(e)):
-                            logging.info(f'  Rebuilding task ({i}/{max_retries})')
-                            logging.debug(f'  {e}')
-                            time.sleep(i ** 3)
-                        else:
-                            logging.warning(f'Unhandled exception\n{e}')
-                            break
-                            raise e
+                # TODO: Move into try/except if getting EEException
+                # for i in range(1, max_retries):
+                #     try:
+                task = ee.batch.Export.image.toAsset(
+                    image=export_img,
+                    description=export_id,
+                    assetId=asset_id,
+                    crs=alexi_crs,
+                    crsTransform='[' + ','.join(list(map(str, export_geo))) + ']',
+                    dimensions='{0}x{1}'.format(*export_shape),
+                    #shardSize=64,
+                )
+                #     # except ee.ee_exception.EEException as e:
+                #     except Exception as e:
+                #         if ('Earth Engine memory capacity exceeded' in str(e) or
+                #                 'Earth Engine capacity exceeded' in str(e)):
+                #             logging.info(f'  Rebuilding task ({i}/{max_retries})')
+                #             logging.debug(f'  {e}')
+                #             time.sleep(i ** 2)
+                #         else:
+                #             logging.warning(f'Unhandled exception\n{e}')
+                #             break
+                #             raise e
 
                 if not task:
                     logging.warning(f'  {scene_id} - Export task was not built, skipping')
                     continue
 
                 logging.info(f'  {scene_id} - Starting export task')
-                for i in range(1, max_retries):
-                    try:
-                        task.start()
-                        break
-                    except Exception as e:
-                        logging.info(f'  Resending query ({i}/{max_retries})')
-                        logging.debug(f'  {e}')
-                        time.sleep(i ** 3)
+                # TODO: We should not blindly keeping starting the task
+                #   Need to only retry on specific errors, otherwise exit
+                try:
+                    task.start()
+                except Exception as e:
+                    logging.warning(f'  {scene_id} - Export task was not started, skipping')
+                    logging.warning(f'  {scene_id} - {e}')
+                    continue
+                # for i in range(1, max_retries):
+                #     try:
+                #         task.start()
+                #         break
+                #     except Exception as e:
+                #         logging.info(f'  Resending query ({i}/{max_retries})')
+                #         logging.debug(f'  {e}')
+                #         time.sleep(i ** 2)
+
                 # # Not using ee_task_start since it doesn't return the task object
                 # utils.ee_task_start(task)
-                # input('ENTER')
+
+                try:
+                    task_id = task.status()['id']
+                    logging.info(f'  {scene_id} - {task_id}')
+                except:
+                    logging.warning(f'  {scene_id} - No task ID')
+                    continue
 
                 # Write the export task info the openet-dri project datastore
-                if log_tasks:
+                if log_tasks and task_id:
                     logging.debug('  Writing datastore entity')
                     try:
                         task_obj = datastore.Entity(
-                            key=datastore_client.key('Task', task.status()['id']),
+                            key=datastore_client.key('Task', task_id),
                             exclude_from_indexes=['properties'],
                         )
                         for k, v in task.status().items():
@@ -1125,9 +1054,7 @@ def main(
                         task_obj['start_timestamp_ms'] = 0
                         task_obj['tool_name'] = properties.pop('tool_name')
                         task_obj['properties'] = json.dumps(properties)
-                        # pprint.pprint(task_obj)
                         datastore_client.put(task_obj)
-                        # input('ENTER')
                     except Exception as e:
                         # CGM - The message/handling will probably need to be updated
                         #   We may want separate try/excepts on the create and the put
@@ -1136,81 +1063,78 @@ def main(
                 # Pause before starting the next export task
                 ready_task_count += 1
                 ready_task_count = delay_task(
-                    delay_time=delay_time, task_max=ready_task_max, task_count=ready_task_count
+                    delay_time=delay_time,
+                    task_max=ready_task_max,
+                    task_count=ready_task_count,
                 )
 
                 logging.debug('')
 
 
-# TODO: Move this function into the model code so it can be tested
-def ta_min_bias(input_img):
-    """
-
-    Parameters
-    ----------
-    input_img
-
-    Returns
-    -------
-
-    """
-    input_img = ee.Image(input_img)
-
-    # Reverse the band order so that we can find the last transition
-    #   from decreasing to increasing with a positive bias
-    ta_bands = input_img.select('step_\\d+_ta').bandNames().reverse()
-    bias_bands = input_img.select('step_\\d+_bias').bandNames().reverse()
-    ta_array = input_img.select(ta_bands).toArray()
-    bias_array = input_img.select(bias_bands).toArray()
-    #Assign the bias that are very similar a very large value that they will not be selected
-    diff = bias_array.arraySlice(0, 1).subtract(bias_array.arraySlice(0, 0, -1))
-    bias_array_mask = diff.abs().lt(0.001)
-    #repeat the last value to make the array the same length. array is reversed order.
-    bias_array_mask = bias_array_mask.arrayCat(bias_array_mask.arraySlice(0, -1), 0)
-    bias_array = bias_array.add(bias_array_mask.multiply(99))
-
-    # Identify the "last" transition from a negative to positive bias
-    # CGM - Having problems with .ceil() limiting result to the image data range
-    #   Multiplying by a big number seemed to fix the issue but this could still
-    #     be a problem with the bias ranges get really small
-    sign_array = bias_array.multiply(1000).ceil().max(0).min(1).int()
-    transition_array = sign_array.arraySlice(0, 0, -1)\
-        .subtract(sign_array.arraySlice(0, 1))
-    # Insert an extra value at the beginning (of reverse, so actually at end)
-    #   of the transition array so the indexing lines up for all steps
-    transition_array = bias_array.arraySlice(0, 0, 1).multiply(0)\
-        .arrayCat(transition_array, 0)
-    transition_index = transition_array.arrayArgmax().arrayFlatten([['index']])
-    # Get the max transition value in order to know if there was a transition
-    transition_max = transition_array\
-        .arrayReduce(ee.Reducer.max(), [0]).arrayFlatten([['max']])
-
-    # Identify the position of minimum absolute bias
-    min_bias_index = bias_array.abs().multiply(-1).arrayArgmax()\
-        .arrayFlatten([['index']])
-
-    # Identify the "bracketing" Ta and bias values
-    # If there is a transition, use the "last" transition
-    # If there is not a transition, use the minimum absolute bias for both
-    # Note, the index is for the reversed arrays
-    index_b = transition_index.subtract(1).max(0)\
-        .where(transition_max.eq(0), min_bias_index)
-    index_a = transition_index.min(ta_bands.size().subtract(1))\
-        .where(transition_max.eq(0), min_bias_index)
-    ta_b = ta_array.arrayGet(index_b)
-    ta_a = ta_array.arrayGet(index_a)
-    bias_b = bias_array.arrayGet(index_b)
-    bias_a = bias_array.arrayGet(index_a)
-
-    # For now, compute the target Ta as the average of the bracketing Ta values
-    # Eventually Ta could be linearly interpolated or computed
-    #   as some sort of weighted average (based on the biases)
-    ta_source_img = ta_a.add(ta_b).multiply(0.5).rename(['ta'])
-
-    # Mask out Ta cells with all negative biases
-    ta_source_img = ta_source_img.updateMask(bias_b.lt(0).And(bias_a.lt(0)).Not())
-
-    return ta_source_img
+# # TODO: Move this function into the model code so it can be tested
+# def ta_min_bias(input_img):
+#     """
+#
+#     Parameters
+#     ----------
+#     input_img
+#
+#     Returns
+#     -------
+#
+#     """
+#     input_img = ee.Image(input_img)
+#
+#     # Reverse the band order so that we can find the last transition
+#     #   from decreasing to increasing with a positive bias
+#     ta_bands = input_img.select('step_\\d+_ta').bandNames().reverse()
+#     bias_bands = input_img.select('step_\\d+_bias').bandNames().reverse()
+#     ta_array = input_img.select(ta_bands).toArray()
+#     bias_array = input_img.select(bias_bands).toArray()
+#     #Assign the bias that are very similar a very large value that they will not be selected
+#     diff = bias_array.arraySlice(0, 1).subtract(bias_array.arraySlice(0, 0, -1))
+#     bias_array_mask = diff.abs().lt(0.001)
+#     #repeat the last value to make the array the same length. array is reversed order.
+#     bias_array_mask = bias_array_mask.arrayCat(bias_array_mask.arraySlice(0, -1), 0)
+#     bias_array = bias_array.add(bias_array_mask.multiply(99))
+#
+#     # Identify the "last" transition from a negative to positive bias
+#     # CGM - Having problems with .ceil() limiting result to the image data range
+#     #   Multiplying by a big number seemed to fix the issue but this could still
+#     #     be a problem with the bias ranges get really small
+#     sign_array = bias_array.multiply(1000).ceil().max(0).min(1).int()
+#     transition_array = sign_array.arraySlice(0, 0, -1).subtract(sign_array.arraySlice(0, 1))
+#     # Insert an extra value at the beginning (of reverse, so actually at end)
+#     #   of the transition array so the indexing lines up for all steps
+#     transition_array = bias_array.arraySlice(0, 0, 1).multiply(0).arrayCat(transition_array, 0)
+#     transition_index = transition_array.arrayArgmax().arrayFlatten([['index']])
+#     # Get the max transition value in order to know if there was a transition
+#     transition_max = transition_array.arrayReduce(ee.Reducer.max(), [0]).arrayFlatten([['max']])
+#
+#     # Identify the position of minimum absolute bias
+#     min_bias_index = bias_array.abs().multiply(-1).arrayArgmax().arrayFlatten([['index']])
+#
+#     # Identify the "bracketing" Ta and bias values
+#     # If there is a transition, use the "last" transition
+#     # If there is not a transition, use the minimum absolute bias for both
+#     # Note, the index is for the reversed arrays
+#     index_b = transition_index.subtract(1).max(0).where(transition_max.eq(0), min_bias_index)
+#     index_a = transition_index.min(ta_bands.size().subtract(1))\
+#         .where(transition_max.eq(0), min_bias_index)
+#     ta_b = ta_array.arrayGet(index_b)
+#     ta_a = ta_array.arrayGet(index_a)
+#     bias_b = bias_array.arrayGet(index_b)
+#     bias_a = bias_array.arrayGet(index_a)
+#
+#     # For now, compute the target Ta as the average of the bracketing Ta values
+#     # Eventually Ta could be linearly interpolated or computed
+#     #   as some sort of weighted average (based on the biases)
+#     ta_source_img = ta_a.add(ta_b).multiply(0.5).rename(['ta'])
+#
+#     # Mask out Ta cells with all negative biases
+#     ta_source_img = ta_source_img.updateMask(bias_b.lt(0).And(bias_a.lt(0)).Not())
+#
+#     return ta_source_img
 
 
 # import pytest
@@ -1337,8 +1261,8 @@ def mgrs_export_tiles(
     logging.debug('Building study area collection')
     logging.debug(f'  {study_area_coll_id}')
     study_area_coll = ee.FeatureCollection(study_area_coll_id)
-    if (study_area_property == 'STUSPS' and
-            'CONUS' in [x.upper() for x in study_area_features]):
+    if ((study_area_property == 'STUSPS') and
+            ('CONUS' in [x.upper() for x in study_area_features])):
         # Exclude AK, HI, AS, GU, PR, MP, VI, (but keep DC)
         study_area_features = [
             'AL', 'AR', 'AZ', 'CA', 'CO', 'CT', 'DC', 'DE', 'FL', 'GA',
@@ -1347,10 +1271,6 @@ def mgrs_export_tiles(
             'NM', 'NV', 'NY', 'OH', 'OK', 'OR', 'PA', 'RI', 'SC', 'SD',
             'TN', 'TX', 'UT', 'VA', 'VT', 'WA', 'WI', 'WV', 'WY',
         ]
-    # elif (study_area_property == 'STUSPS' and
-    #         'WESTERN11' in [x.upper() for x in study_area_features]):
-    #     study_area_features = [
-    #         'AZ', 'CA', 'CO', 'ID', 'MT', 'NM', 'NV', 'OR', 'UT', 'WA', 'WY']
     study_area_features = sorted(list(set(study_area_features)))
 
     if study_area_property and study_area_features:
@@ -1399,8 +1319,7 @@ def mgrs_export_tiles(
                        int(tile_ftr['properties']['xmax']),
                        int(tile_ftr['properties']['ymax'])],
             'index': tile_ftr['properties']['mgrs'].upper(),
-            'wrs2_tiles': sorted(utils.wrs2_str_2_set(
-                tile_ftr['properties'][wrs2_property])),
+            'wrs2_tiles': sorted(utils.wrs2_str_2_set(tile_ftr['properties'][wrs2_property])),
         })
 
     # Apply the user defined WRS2 tile list
@@ -1526,7 +1445,7 @@ def delay_task(delay_time=0, task_max=-1, task_count=0):
     if delay_time < 0:
         delay_time = abs(delay_time)
 
-    if (task_max is None or task_max <= 0) and (delay_time >= 0):
+    if ((task_max is None) or (task_max <= 0)) and (delay_time >= 0):
         # Assume task_max was not set and just wait the delay time
         logging.debug(f'  Pausing {delay_time} seconds, not checking task list')
         time.sleep(delay_time)
@@ -1592,6 +1511,9 @@ def arg_parse():
         '--overwrite', default=False, action='store_true',
         help='Force overwrite of existing files')
     parser.add_argument(
+        '--project', default=None,
+        help='Google cloud project ID to use for GEE authentication')
+    parser.add_argument(
         '--ready', default=-1, type=int,
         help='Maximum number of queued READY tasks')
     parser.add_argument(
@@ -1624,9 +1546,17 @@ if __name__ == "__main__":
     logging.basicConfig(level=args.loglevel, format='%(message)s')
 
     main(
-        ini_path=args.ini, overwrite_flag=args.overwrite,
-        delay_time=args.delay, gee_key_file=args.key, ready_task_max=args.ready,
-        reverse_flag=args.reverse, tiles=args.tiles, update_flag=args.update,
+        ini_path=args.ini,
+        overwrite_flag=args.overwrite,
+        gee_key_file=args.key,
+        project_id=args.project,
+        delay_time=args.delay,
+        ready_task_max=args.ready,
+        reverse_flag=args.reverse,
+        tiles=args.tiles,
+        update_flag=args.update,
         log_tasks=args.log_tasks,
-        recent_days=args.recent, start_dt=args.start, end_dt=args.end,
+        recent_days=args.recent,
+        start_dt=args.start,
+        end_dt=args.end,
     )

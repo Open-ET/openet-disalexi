@@ -11,11 +11,12 @@ DisALEXI is the disaggregation component of a multi-scale system for modeling ac
 Input Collections
 =================
 
-DisALEXI ET can currently only be computed for Landsat Collection 1 Surface Reflection (SR) images from the following Earth Engine image collections:
+DisALEXI ET can currently be computed for Landsat Collection 2 Level 2 (surface reflectance) images from the following Earth Engine image collections:
 
- * LANDSAT/LC08/C01/T1_SR
- * LANDSAT/LE07/C01/T1_SR
- * LANDSAT/LT05/C01/T1_SR
+ * LANDSAT/LC09/C02/T1_L2
+ * LANDSAT/LC08/C02/T1_L2
+ * LANDSAT/LE07/C02/T1_L2
+ * LANDSAT/LT05/C02/T1_L2
 
 **Note that this version of DisALEXI can only be run over the conterminous United States (CONUS)**
 
@@ -24,30 +25,31 @@ Model Design
 
 The primary component of the DisALEXI model is the Image() class. The Image class should generally be instantiated from an Earth Engine Landsat image using the collection specific methods listed below. ET image collections can be built by computing ET in a function that is mapped over a collection of input images. Please see the `Example Notebooks` for more details.
 
-Landsat Collection 1 SR Input Image
+Landsat Collection 2 SR Input Image
 -----------------------------------
 
-To instantiate the class for a Landsat Collection 1 SR image, use the Image.from_landsat_c1_sr() method.
+To instantiate the class for a Landsat Collection 2 level 2 image, use the Image.from_landsat_c2_sr() method.
 
 The input Landsat image must have the following bands and properties:
 
 =================  ===========================================
 SPACECRAFT_ID      Band Names
 =================  ===========================================
-LANDSAT_5          B1, B2, B3, B4, B5, B7, B6, pixel_qa
-LANDSAT_7          B1, B2, B3, B4, B5, B7, B6_VCID_1, pixel_qa
-LANDSAT_8          B2, B3, B4, B5, B6, B7, B10, pixel_qa
+LANDSAT_5          SR_B1, SR_B2, SR_B3, SR_B4, SR_B5, SR_B7, ST_B6, QA_PIXEL
+LANDSAT_7          SR_B1, SR_B2, SR_B3, SR_B4, SR_B5, SR_B7, ST_B6, QA_PIXEL
+LANDSAT_8          SR_B1, SR_B2, SR_B3, SR_B4, SR_B5, SR_B6, SR_B7, ST_B10, QA_PIXEL
+LANDSAT_9          SR_B1, SR_B2, SR_B3, SR_B4, SR_B5, SR_B6, SR_B7, ST_B10, QA_PIXEL
 =================  ===========================================
 
 =================  =============================================
 Property           Description
 =================  =============================================
-system:id          Earth Engine Asset ID (e.g. LANDSAT/LC08/C01/T1_SR/LC08_044033_20170716)
+system:id          Earth Engine Asset ID (e.g. LANDSAT/LC08/C02/T1_L2/LC08_044033_20170716)
 system:index       - Landsat Scene ID
                    - Must be in the Earth Engine format (e.g. LC08_044033_20170716)
 system:time_start  Image datetime in milliseconds since 1970
-SATELLITE          - Used to determine which Landsat type
-                   - Must be: LANDSAT_5, LANDSAT_7, or LANDSAT_8
+SPACECRAFT_ID      - Used to determine which Landsat type
+                   - Must be: LANDSAT_5, LANDSAT_7, LANDSAT_8, LANDSAT_9
 =================  =============================================
 
 Model Output
@@ -116,7 +118,7 @@ References
 .. [Yang2020] Yang, Y., M. Anderson, F. Gao, C. Hain, A. Noormets, G. Sun, R. Wynne and V. Thomas (2020), Investigating impacts of drought and disturbance on evapotranspiration over a forested landscape in North Carolina, USA using high spatiotemporal resolution remotely sensed data, Remote Sensing of Environment, 238, p. 111018
 
 
-.. |build| image:: https://travis-ci.org/Open-ET/openet-disalexi-beta.svg?branch=master
+.. |build| image:: https://github.com/Open-ET/openet-disalexi/actions/workflows/build.yml/badge.svg
    :alt: Build status
    :target: https://travis-ci.org/Open-ET/openet-disalexi-beta
 .. |version| image:: https://badge.fury.io/py/openet-disalexi.svg
