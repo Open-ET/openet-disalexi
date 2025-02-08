@@ -1,5 +1,5 @@
 import calendar
-import datetime
+from datetime import datetime, UTC
 import logging
 import time
 
@@ -20,8 +20,8 @@ def getinfo(ee_obj, n=4):
             output = ee_obj.getInfo()
         except ee.ee_exception.EEException as e:
             if 'Earth Engine memory capacity exceeded' in str(e):
-                logging.info('    Resending query ({}/10)'.format(i))
-                logging.debug('    {}'.format(e))
+                logging.info(f'    Resending query ({i}/{n})')
+                logging.debug(f'    {e}')
                 time.sleep(i ** 2)
             else:
                 raise e
@@ -29,7 +29,6 @@ def getinfo(ee_obj, n=4):
         if output:
             break
 
-    # output = ee_obj.getInfo()
     return output
 
 
@@ -40,14 +39,15 @@ def constant_image_value(image, crs='EPSG:32613', scale=1):
     """Extract the output value from a calculation done with constant images"""
     return getinfo(ee.Image(image).reduceRegion(
         reducer=ee.Reducer.first(), scale=scale,
-        geometry=ee.Geometry.Rectangle([0, 0, 10, 10], crs, False)))
+        geometry=ee.Geometry.Rectangle([0, 0, 10, 10], crs, False))
+    )
 
 
 def point_image_value(image, xy, scale=1):
     """Extract the output value from a calculation at a point"""
     return getinfo(ee.Image(image).reduceRegion(
-        reducer=ee.Reducer.first(), geometry=ee.Geometry.Point(xy),
-        scale=scale))
+        reducer=ee.Reducer.first(), geometry=ee.Geometry.Point(xy), scale=scale)
+    )
 
 
 def point_coll_value(coll, xy, scale=1):
@@ -62,13 +62,11 @@ def point_coll_value(coll, xy, scale=1):
         col_dict[k] = i + 4
         info_dict[k] = {}
     for row in output[1:]:
-        date = datetime.datetime.utcfromtimestamp(row[3] / 1000.0)\
-            .strftime('%Y-%m-%d')
-        #     .strftime('%Y-%m-%dT%H:00')
+        date = datetime.fromtimestamp(row[3] / 1000.0, UTC).strftime('%Y-%m-%d')
         for k, v in col_dict.items():
             info_dict[k][date] = row[col_dict[k]]
+
     return info_dict
-    # return pd.DataFrame.from_dict(info_dict)
 
 
 def boolean(x):
@@ -98,11 +96,7 @@ def date_to_time_0utc(date):
     ee.Number
 
     """
-    return ee.Date.fromYMD(date.get('year'), date.get('month'),
-                           date.get('day')).millis()
-    # Extra operations are needed since update() does not set milliseconds to 0.
-    # return date.update(hour=0, minute=0, second=0).millis()\
-    #     .divide(1000).floor().multiply(1000)
+    return ee.Date.fromYMD(date.get('year'), date.get('month'), date.get('day')).millis()
 
 
 def interpolate(coll, interp_dt, timestep=3, offset=0):
@@ -169,9 +163,7 @@ def millis(input_dt):
 def valid_date(date_str, date_fmt='%Y-%m-%d'):
     """Check if a datetime can be built from a date string and if it is valid"""
     try:
-        datetime.datetime.strptime(date_str, date_fmt)
+        datetime.strptime(date_str, date_fmt)
         return True
     except Exception as e:
         return False
-
-

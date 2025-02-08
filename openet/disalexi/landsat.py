@@ -68,11 +68,11 @@ class Landsat(object):
         # # Using a sum reducer was returning an unbounded image
         # # CGM - This could probably be fixed with a setDefaultProjection() call
         # return (
-        #     ee.Image(self.input_image)\
-        #     .select(['blue', 'red', 'nir', 'swir1', 'swir2'])\
-        #     .multiply([0.356, 0.130, 0.373, 0.085, 0.072])\
-        #     .reduce(ee.Reducer.sum())\
-        #     .subtract(0.0018)\
+        #     ee.Image(self.input_image)
+        #     .select(['blue', 'red', 'nir', 'swir1', 'swir2'])
+        #     .multiply([0.356, 0.130, 0.373, 0.085, 0.072])
+        #     .reduce(ee.Reducer.sum())
+        #     .subtract(0.0018)
         #     .rename(['albedo'])
         # )
 
@@ -128,14 +128,12 @@ class Landsat_C02_L2(Landsat):
 
         Parameters
         ----------
-        raw_image : ee.Image
-            Landsat 5/7/8/9 Collection 2 SR image
+        raw_image : ee.Image, str
+            Landsat 5/7/8/9 Collection 2 SR image or image ID
             (i.e. from the "LANDSAT/X/C02/T1_L2" collection)
 
         """
-        scalars_multi = [
-            0.0000275, 0.0000275, 0.0000275, 0.0000275, 0.0000275, 0.0000275, 0.00341802, 1,
-        ]
+        scalars_multi = [0.0000275, 0.0000275, 0.0000275, 0.0000275, 0.0000275, 0.0000275, 0.00341802, 1]
         scalars_add = [-0.2, -0.2, -0.2, -0.2, -0.2, -0.2, 149.0, 0]
 
         self.raw_image = ee.Image(raw_image)
@@ -147,16 +145,11 @@ class Landsat_C02_L2(Landsat):
         self._spacecraft_id = ee.String(self.raw_image.get('SPACECRAFT_ID'))
 
         input_bands = ee.Dictionary({
-            'LANDSAT_4': ['SR_B1', 'SR_B2', 'SR_B3', 'SR_B4', 'SR_B5', 'SR_B7',
-                          'ST_B6', 'QA_PIXEL'],
-            'LANDSAT_5': ['SR_B1', 'SR_B2', 'SR_B3', 'SR_B4', 'SR_B5', 'SR_B7',
-                          'ST_B6', 'QA_PIXEL'],
-            'LANDSAT_7': ['SR_B1', 'SR_B2', 'SR_B3', 'SR_B4', 'SR_B5', 'SR_B7',
-                          'ST_B6', 'QA_PIXEL'],
-            'LANDSAT_8': ['SR_B2', 'SR_B3', 'SR_B4', 'SR_B5', 'SR_B6', 'SR_B7',
-                          'ST_B10', 'QA_PIXEL'],
-            'LANDSAT_9': ['SR_B2', 'SR_B3', 'SR_B4', 'SR_B5', 'SR_B6', 'SR_B7',
-                          'ST_B10', 'QA_PIXEL'],
+            'LANDSAT_4': ['SR_B1', 'SR_B2', 'SR_B3', 'SR_B4', 'SR_B5', 'SR_B7', 'ST_B6', 'QA_PIXEL'],
+            'LANDSAT_5': ['SR_B1', 'SR_B2', 'SR_B3', 'SR_B4', 'SR_B5', 'SR_B7', 'ST_B6', 'QA_PIXEL'],
+            'LANDSAT_7': ['SR_B1', 'SR_B2', 'SR_B3', 'SR_B4', 'SR_B5', 'SR_B7', 'ST_B6', 'QA_PIXEL'],
+            'LANDSAT_8': ['SR_B2', 'SR_B3', 'SR_B4', 'SR_B5', 'SR_B6', 'SR_B7', 'ST_B10', 'QA_PIXEL'],
+            'LANDSAT_9': ['SR_B2', 'SR_B3', 'SR_B4', 'SR_B5', 'SR_B6', 'SR_B7', 'ST_B10', 'QA_PIXEL'],
         })
         # Rename bands to generic names
         output_bands = ['blue', 'green', 'red', 'nir', 'swir1', 'swir2', 'lst', 'QA_PIXEL']
@@ -188,13 +181,13 @@ class Landsat_C02_L2(Landsat):
 
         """
 
-        # CGM - TIR/LST is being read from a source image collection
+        # TIR/LST is being read from a source image collection and does not need to be passed in
         self.prep_image = ee.Image([
             self._albedo,
             self._cfmask,
+            self._ndvi,
             # self._lai,
             # self._lst,
-            self._ndvi,
         ])
         self.prep_image = self.prep_image.set({
             'system:time_start': self._time_start,
@@ -212,7 +205,7 @@ class Landsat_C02_L2(Landsat):
             dilate_flag=False,
             shadow_flag=True,
             snow_flag=True,
-            ):
+    ):
         """Extract cloud mask from the Landsat Collection 2 SR QA_PIXEL band
 
         Parameters

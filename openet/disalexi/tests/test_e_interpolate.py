@@ -54,72 +54,6 @@ def scene_coll(variables, et_fraction=0.4, et=5, ndvi=0.6):
     return scene_coll.select(variables)
 
 
-# def test_from_scene_et_fraction_daily_values(tol=0.0001):
-#     output_coll = interpolate.from_scene_et_fraction(
-#         scene_coll(['et_fraction', 'ndvi', 'time', 'mask']),
-#         start_date='2017-07-01', end_date='2017-08-01',
-#         variables=['et', 'et_reference', 'et_fraction', 'ndvi'],
-#         interp_args={'interp_method': 'linear', 'interp_days': 32},
-#         model_args={'et_reference_source': 'IDAHO_EPSCOR/GRIDMET',
-#                     'et_reference_band': 'eto',
-#                     'et_reference_factor': 1.0,
-#                     'et_reference_resample': 'nearest'},
-#         t_interval='daily')
-#
-#     TEST_POINT = (-121.5265, 38.7399)
-#     output = utils.point_coll_value(output_coll, TEST_POINT, scale=10)
-#     assert abs(output['ndvi']['2017-07-10'] - 0.6) <= tol
-#     assert abs(output['et_fraction']['2017-07-10'] - 0.4) <= tol
-#     assert abs(output['et_reference']['2017-07-10'] - 7.974245550) <= tol
-#     assert abs(output['et']['2017-07-10'] - (7.974245550 * 0.4)) <= tol
-#     assert abs(output['et_fraction']['2017-07-01'] - 0.4) <= tol
-#     assert abs(output['et_fraction']['2017-07-31'] - 0.4) <= tol
-#     assert '2017-08-01' not in output['et_fraction'].keys()
-#     # assert output['count']['2017-07-01'] == 3
-#
-#
-# def test_from_scene_et_fraction_monthly_values(tol=0.0001):
-#     output_coll = interpolate.from_scene_et_fraction(
-#         scene_coll(['et_fraction', 'ndvi', 'time', 'mask']),
-#         start_date='2017-07-01', end_date='2017-08-01',
-#         variables=['et', 'et_reference', 'et_fraction', 'ndvi', 'count'],
-#         interp_args={'interp_method': 'linear', 'interp_days': 32},
-#         model_args={'et_reference_source': 'IDAHO_EPSCOR/GRIDMET',
-#                     'et_reference_band': 'eto',
-#                     'et_reference_factor': 1.0,
-#                     'et_reference_resample': 'nearest'},
-#         t_interval='monthly')
-#
-#     TEST_POINT = (-121.5265, 38.7399)
-#     output = utils.point_coll_value(output_coll, TEST_POINT, scale=10)
-#     assert abs(output['ndvi']['2017-07-01'] - 0.6) <= tol
-#     assert abs(output['et_fraction']['2017-07-01'] - 0.4) <= tol
-#     assert abs(output['et_reference']['2017-07-01'] - 232.2234650) <= tol
-#     assert abs(output['et']['2017-07-01'] - (232.2234650 * 0.4)) <= tol
-#     assert output['count']['2017-07-01'] == 3
-#
-#
-# def test_from_scene_et_fraction_custom_values(tol=0.0001):
-#     output_coll = interpolate.from_scene_et_fraction(
-#         scene_coll(['et_fraction', 'ndvi', 'time', 'mask']),
-#         start_date='2017-07-01', end_date='2017-08-01',
-#         variables=['et', 'et_reference', 'et_fraction', 'ndvi', 'count'],
-#         interp_args={'interp_method': 'linear', 'interp_days': 32},
-#         model_args={'et_reference_source': 'IDAHO_EPSCOR/GRIDMET',
-#                     'et_reference_band': 'eto',
-#                     'et_reference_factor': 1.0,
-#                     'et_reference_resample': 'nearest'},
-#         t_interval='custom')
-#
-#     TEST_POINT = (-121.5265, 38.7399)
-#     output = utils.point_coll_value(output_coll, TEST_POINT, scale=10)
-#     assert abs(output['ndvi']['2017-07-01'] - 0.6) <= tol
-#     assert abs(output['et_fraction']['2017-07-01'] - 0.4) <= tol
-#     assert abs(output['et_reference']['2017-07-01'] - 232.2234650) <= tol
-#     assert abs(output['et']['2017-07-01'] - (232.2234650 * 0.4)) <= tol
-#     assert output['count']['2017-07-01'] == 3
-
-
 def test_from_scene_et_actual_daily_values(tol=0.0001):
     output_coll = interpolate.from_scene_et_actual(
         scene_coll(['et', 'time', 'mask']),
@@ -134,7 +68,8 @@ def test_from_scene_et_actual_daily_values(tol=0.0001):
                     'et_reference_band': 'eto',
                     'et_reference_factor': 1.0,
                     'et_reference_resample': 'nearest'},
-        t_interval='daily')
+        t_interval='daily',
+    )
 
     TEST_POINT = (-121.5265, 38.7399)
     output = utils.point_coll_value(output_coll, TEST_POINT, scale=10)
@@ -174,7 +109,8 @@ def test_from_scene_et_actual_monthly_values(tol=0.0001):
                     'et_reference_band': 'eto',
                     'et_reference_factor': 1.0,
                     'et_reference_resample': 'nearest'},
-        t_interval='monthly')
+        t_interval='monthly',
+    )
 
     TEST_POINT = (-121.5265, 38.7399)
     output = utils.point_coll_value(output_coll, TEST_POINT, scale=10)
@@ -198,7 +134,8 @@ def test_from_scene_et_actual_custom_values(tol=0.0001):
                     'et_reference_band': 'eto',
                     'et_reference_factor': 1.0,
                     'et_reference_resample': 'nearest'},
-        t_interval='custom')
+        t_interval='custom',
+    )
 
     TEST_POINT = (-121.5265, 38.7399)
     output = utils.point_coll_value(output_coll, TEST_POINT, scale=10)
@@ -247,7 +184,8 @@ def test_from_scene_et_actual_monthly_et_reference_resample(tol=0.0001):
                     'et_reference_band': 'eto',
                     'et_reference_factor': 1.0,
                     'et_reference_resample': 'bilinear'},
-        t_interval='monthly')
+        t_interval='monthly',
+    )
 
     TEST_POINT = (-121.5265, 38.7399)
     output = utils.point_coll_value(output_coll, TEST_POINT, scale=10)
@@ -275,7 +213,8 @@ def test_from_scene_et_actual_daily_et_fraction_max(tol=0.0001):
                     'et_reference_resample': 'nearest',
                     'et_reference_factor': 1.0,
                     },
-        t_interval='daily')
+        t_interval='daily',
+    )
 
     TEST_POINT = (-121.5265, 38.7399)
     output = utils.point_coll_value(output_coll, TEST_POINT, scale=10)
@@ -293,7 +232,8 @@ def test_from_scene_et_fraction_t_interval_bad_value():
                         'et_reference_band': 'etr',
                         'et_reference_factor': 0.5,
                         'et_reference_resample': 'nearest'},
-            t_interval='deadbeef')
+            t_interval='deadbeef',
+        )
 
 
 def test_from_scene_et_fraction_t_interval_no_value():
@@ -307,7 +247,8 @@ def test_from_scene_et_fraction_t_interval_no_value():
             model_args={'et_reference_source': 'IDAHO_EPSCOR/GRIDMET',
                         'et_reference_band': 'etr',
                         'et_reference_factor': 0.5,
-                        'et_reference_resample': 'nearest'})
+                        'et_reference_resample': 'nearest'},
+        )
 
 
 def test_from_scene_et_actual_t_interval_bad_value():
@@ -323,7 +264,8 @@ def test_from_scene_et_actual_t_interval_bad_value():
                         'et_reference_band': 'etr',
                         'et_reference_factor': 1.0,
                         'et_reference_resample': 'nearest'},
-            t_interval='deadbeef')
+            t_interval='deadbeef',
+        )
 
 
 def test_from_scene_et_actual_t_interval_no_value():
@@ -339,4 +281,5 @@ def test_from_scene_et_actual_t_interval_no_value():
             model_args={'et_reference_source': 'IDAHO_EPSCOR/GRIDMET',
                         'et_reference_band': 'etr',
                         'et_reference_factor': 1.0,
-                        'et_reference_resample': 'nearest'})
+                        'et_reference_resample': 'nearest'},
+        )

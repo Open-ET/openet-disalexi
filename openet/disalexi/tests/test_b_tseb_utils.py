@@ -57,9 +57,8 @@ def test_to_jd(timestamp, expected, tol=0.001):
     """"""
     date = ee.Date(timestamp)
     output = tseb_utils._to_jd(date).getInfo()
-
-    logging.debug('\n  Target values: {}'.format(expected))
-    logging.debug('  Output values: {}'.format(output))
+    logging.debug(f'\n  Target values: {expected}')
+    logging.debug(f'  Output values: {output}')
     assert abs(output - expected) <= tol
 
 
@@ -75,10 +74,9 @@ def test_solar_noon_image(timestamp, xy, expected, tol=1E-6):
     """Check that the sunset_sunrise function works for real images"""
     output_images = tseb_utils.solar_noon(
         datetime=ee.Date(timestamp),
-        # date=ee.Date(datetime.datetime.utcfromtimestamp(timestamp / 1000)),
-        lon=ee.Image.pixelLonLat().select(['longitude']).multiply(math.pi / 180))
-    output = utils.point_image_value(
-        ee.Image(output_images).rename(['t_noon']), xy=xy)['t_noon']
+        lon=ee.Image.pixelLonLat().select(['longitude']).multiply(math.pi / 180)
+    )
+    output = utils.point_image_value(ee.Image(output_images).rename(['t_noon']), xy=xy)['t_noon']
 
     logging.debug('  Target values: {:.12f}'.format(expected))
     logging.debug('  Output values: {:.12f}'.format(output))
@@ -96,8 +94,8 @@ def test_solar_noon_image(timestamp, xy, expected, tol=1E-6):
 def test_solar_noon_constant(timestamp, xy, expected, tol=1E-6):
     """Check that the sunset_sunrise function works for constant images"""
     output_images = tseb_utils.solar_noon(
-        datetime=ee.Date(timestamp),
-        lon=ee.Image.constant(xy[0]).multiply(math.pi / 180))
+        datetime=ee.Date(timestamp), lon=ee.Image.constant(xy[0]).multiply(math.pi / 180)
+    )
     output = utils.constant_image_value(ee.Image(output_images))['t_noon']
 
     logging.debug('  Target values: {:.12f}'.format(expected))
@@ -118,9 +116,9 @@ def test_solar_zenith_image(timestamp, xy, expected, tol=1E-6):
     output_images = tseb_utils.solar_zenith(
         datetime=ee.Date(timestamp),
         lon=ee.Image.pixelLonLat().select(['longitude']).multiply(math.pi / 180),
-        lat=ee.Image.pixelLonLat().select(['latitude']).multiply(math.pi / 180))
-    output = utils.point_image_value(
-        ee.Image(output_images).rename(['vs']), xy=xy)['vs']
+        lat=ee.Image.pixelLonLat().select(['latitude']).multiply(math.pi / 180)
+    )
+    output = utils.point_image_value(ee.Image(output_images).rename(['vs']), xy=xy)['vs']
 
     logging.debug('\n  Target values: {}'.format(expected))
     logging.debug('  Output values: {}'.format(output))
@@ -140,9 +138,9 @@ def test_solar_zenith_constant(timestamp, xy, expected, tol=1E-10):
     output_images = tseb_utils.solar_zenith(
         datetime=ee.Date(timestamp),
         lon=ee.Image.constant(xy[0]).multiply(math.pi / 180),
-        lat=ee.Image.constant(xy[1]).multiply(math.pi / 180))
-    output = utils.constant_image_value(
-        ee.Image(output_images).rename(['vs']))['vs']
+        lat=ee.Image.constant(xy[1]).multiply(math.pi / 180)
+    )
+    output = utils.constant_image_value(ee.Image(output_images).rename(['vs']))['vs']
 
     logging.debug('\n  Target values: {}'.format(expected))
     logging.debug('  Output values: {}'.format(output))
@@ -161,35 +159,45 @@ def test_solar_zenith_constant(timestamp, xy, expected, tol=1E-10):
 )
 def test_emissivity(t_air, expected, tol=1E-8):
     output_image = tseb_utils.emissivity(ee.Image.constant(t_air))
-
     output = list(utils.constant_image_value(output_image).values())[0]
-    logging.debug('\n  Target values: {}'.format(expected))
-    logging.debug('  Output values: {}'.format(output))
+    logging.debug(f'\n  Target values: {expected}')
+    logging.debug(f'  Output values: {output}')
     assert abs(output - expected) <= tol
 
 
 @pytest.mark.parametrize(
-    'albedo, rs_1, f, fc, aleafv, aleafn, aleafl, adeadv, adeadn, adeadl, '
-    'zs, albedo_iter, expected',
+    'albedo, rs_1, f, fc, aleafv, aleafn, aleafl, adeadv, adeadn, adeadl, zs, albedo_iter, expected',
     [
         # US-NE1
-        [0.19908118247986, 917.87845865885413, 2.34641011714935,
-         0.69062621055586, 0.83, 0.35, 0.95, 0.49, 0.13, 0.95,
-         ne1['zs'], 10,
-         {'rs_c': 563.86830655658594, 'rs_s': 354.01015210226819,
-          'albedo_c': 0.14601381346619, 'albedo_s': 0.30626749091907}],
+        [
+            0.19908118247986, 917.87845865885413, 2.34641011714935,
+            0.69062621055586, 0.83, 0.35, 0.95, 0.49, 0.13, 0.95,
+            ne1['zs'], 10,
+            {
+                 'rs_c': 563.86830655658594, 'rs_s': 354.01015210226819,
+                'albedo_c': 0.14601381346619, 'albedo_s': 0.30626749091907
+            }
+        ],
         # US-NE2
-        [0.21406339108944, 917.87921142578125, 0.85905007123947,
-         0.34918186324148, 0.83, 0.35, 0.95, 0.49, 0.13, 0.95,
-         ne2['zs'], 10,
-         {'rs_c': 278.58009845129851, 'rs_s': 639.29911297448280,
-          'albedo_c': 0.17126935827424, 'albedo_s': 0.22970060954277}],
+        [
+            0.21406339108944, 917.87921142578125, 0.85905007123947,
+            0.34918186324148, 0.83, 0.35, 0.95, 0.49, 0.13, 0.95,
+            ne2['zs'], 10,
+            {
+                'rs_c': 278.58009845129851, 'rs_s': 639.29911297448280,
+                'albedo_c': 0.17126935827424, 'albedo_s': 0.22970060954277
+            }
+        ],
         # US-NE3
-        [0.21599538624287, 917.72406005859375, 0.92213005065918,
-         0.36938832966689, 0.83, 0.35, 0.95, 0.49, 0.13, 0.95,
-         ne3['zs'], 10,
-         {'rs_c': 294.95646120840320, 'rs_s': 622.76759885019055,
-          'albedo_c': 0.16847370243644, 'albedo_s': 0.22970059209214}],
+        [
+            0.21599538624287, 917.72406005859375, 0.92213005065918,
+            0.36938832966689, 0.83, 0.35, 0.95, 0.49, 0.13, 0.95,
+            ne3['zs'], 10,
+            {
+                'rs_c': 294.95646120840320, 'rs_s': 622.76759885019055,
+                'albedo_c': 0.16847370243644, 'albedo_s': 0.22970059209214
+            }
+        ],
     ]
 )
 def test_albedo_separation(albedo, rs_1, f, fc, aleafv, aleafn, aleafl, adeadv,
@@ -199,9 +207,11 @@ def test_albedo_separation(albedo, rs_1, f, fc, aleafv, aleafn, aleafl, adeadv,
         ee.Image.constant(f), ee.Image.constant(fc), ee.Image.constant(aleafv),
         ee.Image.constant(aleafn), ee.Image.constant(aleafl),
         ee.Image.constant(adeadv), ee.Image.constant(adeadn),
-        ee.Image.constant(adeadl), ee.Image.constant(zs), albedo_iter)
-    output = utils.constant_image_value(ee.Image(output_images).rename(
-        ['rs_c', 'rs_s', 'albedo_c', 'albedo_s', 'taudl', 'tausolar']))
+        ee.Image.constant(adeadl), ee.Image.constant(zs), albedo_iter
+    )
+    output = utils.constant_image_value(
+        ee.Image(output_images).rename(['rs_c', 'rs_s', 'albedo_c', 'albedo_s', 'taudl', 'tausolar'])
+    )
 
     for k in expected.keys():
         logging.debug('\n  {}'.format(k))
@@ -215,24 +225,22 @@ def test_albedo_separation(albedo, rs_1, f, fc, aleafv, aleafn, aleafl, adeadv,
     [
         # Test neutral conditions first
         # US-NE1
-        [7.02662301063538, 0.29687540351862, 0.05477351194919, 50.0,
-         0, 0.42300362871195],
+        [7.02662301063538, 0.29687540351862, 0.05477351194919, 50.0, 0, 0.42300362871195],
         # US-NE2
-        [7.02415990829468, 0.18306062108049, 0.03377468458935, 50.0,
-         0, 0.39470232345209],
+        [7.02415990829468, 0.18306062108049, 0.03377468458935, 50.0, 0, 0.39470232345209],
         # US-NE3
-        [7.01548242568970, 0.18979610988896, 0.03501738227451, 50.0,
-         0, 0.39618403124601],
+        [7.01548242568970, 0.18979610988896, 0.03501738227451, 50.0, 0, 0.39618403124601],
     ]
 )
 def test_compute_u_attr(u, d0, z0m, z_u, fm, expected, tol=1E-10):
     output_image = tseb_utils.compute_u_attr(
         ee.Image.constant(u), ee.Image.constant(d0), ee.Image.constant(z0m),
-        ee.Image.constant(z_u), ee.Image.constant(fm))
+        ee.Image.constant(z_u), ee.Image.constant(fm)
+    )
 
     output = list(utils.constant_image_value(output_image).values())[0]
-    logging.debug('\n  Target values: {}'.format(expected))
-    logging.debug('  Output values: {}'.format(output))
+    logging.debug(f'\n  Target values: {expected}')
+    logging.debug(f'  Output values: {output}')
     assert abs(output - expected) <= tol
 
 
@@ -241,14 +249,11 @@ def test_compute_u_attr(u, d0, z0m, z_u, fm, expected, tol=1E-10):
     [
         # Test neutral conditions first
         # US-NE1
-        [0.42300362871195, 0.29687540351862, 0.05477351194919, 50.0,
-         0, 39.26977994736171],
+        [0.42300362871195, 0.29687540351862, 0.05477351194919, 50.0, 0, 39.26977994736171],
         # US-NE2
-        [0.39470232345209, 0.18306062108049, 0.03377468458935, 50.0,
-         0, 45.08738255788060],
+        [0.39470232345209, 0.18306062108049, 0.03377468458935, 50.0, 0, 45.08738255788060],
         # US-NE3
-        [0.39618403124601, 0.18979610988896, 0.03501738227451, 50.0,
-         0, 44.69548019943959],
+        [0.39618403124601, 0.18979610988896, 0.03501738227451, 50.0, 0, 44.69548019943959],
         # Test conditionals
         [1, 0, 1, 1, 0, 500],
         [1, 0, 1, 1.5, 0, 1],
@@ -259,11 +264,12 @@ def test_compute_u_attr(u, d0, z0m, z_u, fm, expected, tol=1E-10):
 def test_compute_r_ah(u_attr, d0, z0h, z_t, fh, expected, tol=1E-10):
     output_image = tseb_utils.compute_r_ah(
         ee.Image.constant(u_attr), ee.Image.constant(d0),
-        ee.Image.constant(z0h), ee.Image.constant(z_t), ee.Image.constant(fh))
+        ee.Image.constant(z0h), ee.Image.constant(z_t), ee.Image.constant(fh)
+    )
 
     output = list(utils.constant_image_value(output_image).values())[0]
-    logging.debug('\n  Target values: {}'.format(expected))
-    logging.debug('  Output values: {}'.format(output))
+    logging.debug(f'\n  Target values: {expected}')
+    logging.debug(f'  Output values: {output}')
     assert abs(output - expected) <= tol
 
 
@@ -291,11 +297,11 @@ def test_compute_r_s(u_attr, t_s, t_c, hc, f, d0, z0m, leaf, leaf_s, fm_h, expec
         ee.Image.constant(u_attr), ee.Image.constant(t_s),
         ee.Image.constant(t_c), ee.Image.constant(hc), ee.Image.constant(f),
         ee.Image.constant(d0), ee.Image.constant(z0m), ee.Image.constant(leaf),
-        ee.Image.constant(leaf_s), ee.Image.constant(fm_h))
-
+        ee.Image.constant(leaf_s), ee.Image.constant(fm_h)
+    )
     output = list(utils.constant_image_value(output_image).values())[0]
-    logging.debug('\n  Target values: {}'.format(expected))
-    logging.debug('  Output values: {}'.format(output))
+    logging.debug(f'\n  Target values: {expected}')
+    logging.debug(f'  Output values: {output}')
     assert abs(output - expected) <= tol
 
 
@@ -322,11 +328,11 @@ def test_compute_r_x(u_attr, hc, f, d0, z0m, xl, leaf_c, fm_h, expected, tol=1E-
     output_image = tseb_utils.compute_r_x(
         ee.Image.constant(u_attr), ee.Image.constant(hc), ee.Image.constant(f),
         ee.Image.constant(d0), ee.Image.constant(z0m), ee.Image.constant(xl),
-        ee.Image.constant(leaf_c), ee.Image.constant(fm_h))
-
+        ee.Image.constant(leaf_c), ee.Image.constant(fm_h)
+    )
     output = list(utils.constant_image_value(output_image).values())[0]
-    logging.debug('\n  Target values: {}'.format(expected))
-    logging.debug('  Output values: {}'.format(output))
+    logging.debug(f'\n  Target values: {expected}')
+    logging.debug(f'  Output values: {output}')
     assert abs(output - expected) <= tol
 
 
@@ -352,11 +358,11 @@ def test_compute_Rn_c(albedo_c, t_air, t_c, t_s, e_atm, rs_c, f, expected, tol=1
         ee.Image.constant(albedo_c), ee.Image.constant(t_air),
         ee.Image.constant(t_c), ee.Image.constant(t_s),
         ee.Image.constant(e_atm), ee.Image.constant(rs_c),
-        ee.Image.constant(f))
-
+        ee.Image.constant(f)
+    )
     output = list(utils.constant_image_value(output_image).values())[0]
-    logging.debug('\n  Target values: {}'.format(expected))
-    logging.debug('  Output values: {}'.format(output))
+    logging.debug(f'\n  Target values: {expected}')
+    logging.debug(f'  Output values: {output}')
     assert abs(output - expected) <= tol
 
 
@@ -382,11 +388,11 @@ def test_compute_Rn_s(albedo_s, t_air, t_c, t_s, e_atm, rs_s, f, expected, tol=1
         ee.Image.constant(albedo_s), ee.Image.constant(t_air),
         ee.Image.constant(t_c), ee.Image.constant(t_s),
         ee.Image.constant(e_atm), ee.Image.constant(rs_s),
-        ee.Image.constant(f))
-
+        ee.Image.constant(f)
+    )
     output = list(utils.constant_image_value(output_image).values())[0]
-    logging.debug('\n  Target values: {}'.format(expected))
-    logging.debug('  Output values: {}'.format(output))
+    logging.debug(f'\n  Target values: {expected}')
+    logging.debug(f'  Output values: {output}')
     assert abs(output - expected) <= tol
 
 
@@ -410,10 +416,9 @@ def test_compute_G0(rn, rn_s, ef_s, water_mask, lon, timestamp, expected, tol=1E
         ee.Image.constant(ef_s), ee.Image.constant(water_mask),
         ee.Image.constant(lon), ee.Date(timestamp)
     )
-
     output = list(utils.constant_image_value(output_image).values())[0]
-    logging.debug('\n  Target values: {}'.format(expected))
-    logging.debug('  Output values: {}'.format(output))
+    logging.debug(f'\n  Target values: {expected}')
+    logging.debug(f'  Output values: {output}')
     assert abs(output - expected) <= tol
 
 
@@ -445,11 +450,11 @@ def test_temp_separation_tc(h_c, fc_q, t_air, t0, r_ah, r_s, r_x, r_air, expecte
     output_image = tseb_utils.temp_separation_tc(
         ee.Image.constant(h_c), ee.Image.constant(fc_q), ee.Image.constant(t_air),
         ee.Image.constant(t0), ee.Image.constant(r_ah), ee.Image.constant(r_s),
-        ee.Image.constant(r_x), ee.Image.constant(r_air))
-
+        ee.Image.constant(r_x), ee.Image.constant(r_air)
+    )
     output = list(utils.constant_image_value(output_image).values())[0]
-    logging.debug('\n  Target values: {}'.format(expected))
-    logging.debug('  Output values: {}'.format(output))
+    logging.debug(f'\n  Target values: {expected}')
+    logging.debug(f'  Output values: {output}')
     assert abs(output - expected) <= tol
 
 
@@ -476,11 +481,11 @@ def test_temp_separation_tc(h_c, fc_q, t_air, t0, r_ah, r_s, r_x, r_air, expecte
 def test_temp_separation_ts(t_c, fc_q, t_air, t0, expected, tol=1E-10):
     output_image = tseb_utils.temp_separation_ts(
         ee.Image.constant(t_c), ee.Image.constant(fc_q),
-        ee.Image.constant(t_air), ee.Image.constant(t0))
-
+        ee.Image.constant(t_air), ee.Image.constant(t0)
+    )
     output = list(utils.constant_image_value(output_image).values())[0]
-    logging.debug('\n  Target values: {}'.format(expected))
-    logging.debug('  Output values: {}'.format(output))
+    logging.debug(f'\n  Target values: {expected}')
+    logging.debug(f'  Output values: {output}')
     assert abs(output - expected) <= tol
 
 
@@ -505,11 +510,11 @@ def test_temp_separation_tac(t_c, t_s, fc_q, t_air, r_ah, r_s, r_x, expected, to
     output_image = tseb_utils.temp_separation_tac(
         ee.Image.constant(t_c), ee.Image.constant(t_s), ee.Image.constant(fc_q),
         ee.Image.constant(t_air), ee.Image.constant(r_ah),
-        ee.Image.constant(r_s), ee.Image.constant(r_x))
-
+        ee.Image.constant(r_s), ee.Image.constant(r_x)
+    )
     output = list(utils.constant_image_value(output_image).values())[0]
-    logging.debug('\n  Target values: {}'.format(expected))
-    logging.debug('  Output values: {}'.format(output))
+    logging.debug(f'\n  Target values: {expected}')
+    logging.debug(f'  Output values: {output}')
     assert abs(output - expected) <= tol
 
 
@@ -537,11 +542,11 @@ def test_temp_separation_tac(t_c, t_s, fc_q, t_air, r_ah, r_s, r_x, expected, to
 def test_compute_stability_fh(H, t0, u_attr, r_air, z_t, d0, expected, tol=1E-10):
     output_image = tseb_utils.compute_stability_fh(
         ee.Image.constant(H), ee.Image.constant(t0), ee.Image.constant(u_attr),
-        ee.Image.constant(r_air), ee.Image.constant(z_t), ee.Image.constant(d0))
-
+        ee.Image.constant(r_air), ee.Image.constant(z_t), ee.Image.constant(d0)
+    )
     output = list(utils.constant_image_value(output_image).values())[0]
-    logging.debug('\n  Target values: {}'.format(expected))
-    logging.debug('  Output values: {}'.format(output))
+    logging.debug(f'\n  Target values: {expected}')
+    logging.debug(f'  Output values: {output}')
     assert abs(output - expected) <= tol
 
 
@@ -576,11 +581,11 @@ def test_compute_stability_fm(H, t0, u_attr, r_air, z_u, d0, z0m, expected, tol=
     output_image = tseb_utils.compute_stability_fm(
         ee.Image.constant(H), ee.Image.constant(t0), ee.Image.constant(u_attr),
         ee.Image.constant(r_air), ee.Image.constant(z_u),
-        ee.Image.constant(d0), ee.Image.constant(z0m))
-
+        ee.Image.constant(d0), ee.Image.constant(z0m)
+    )
     output = list(utils.constant_image_value(output_image).values())[0]
-    logging.debug('\n  Target values: {}'.format(expected))
-    logging.debug('  Output values: {}'.format(output))
+    logging.debug(f'\n  Target values: {expected}')
+    logging.debug(f'  Output values: {output}')
     assert abs(output - expected) <= tol
 
 
@@ -616,9 +621,9 @@ def test_compute_stability_fm_h(H, t0, u_attr, r_air, hc, d0, z0m, expected, tol
     output_image = tseb_utils.compute_stability_fm_h(
         ee.Image.constant(H), ee.Image.constant(t0), ee.Image.constant(u_attr),
         ee.Image.constant(r_air), ee.Image.constant(hc), ee.Image.constant(d0),
-        ee.Image.constant(z0m))
-
+        ee.Image.constant(z0m)
+    )
     output = list(utils.constant_image_value(output_image).values())[0]
-    logging.debug('\n  Target values: {}'.format(expected))
-    logging.debug('  Output values: {}'.format(output))
+    logging.debug(f'\n  Target values: {expected}')
+    logging.debug(f'  Output values: {output}')
     assert abs(output - expected) <= tol

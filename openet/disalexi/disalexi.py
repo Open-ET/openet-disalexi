@@ -43,7 +43,7 @@ class Image(object):
             lst_source='projects/openet/assets/lst/landsat/c02',
             elevation_source='USGS/SRTMGL1_003',
             # elevation_source='NASA/NASADEM_HGT/001',
-            landcover_source='USGS/NLCD_RELEASES/2021_REL/NLCD',
+            landcover_source='USGS/NLCD_RELEASES/2019_REL/NLCD',
             # landcover_source='projects/sat-io/open-datasets/USGS/ANNUAL_NLCD/LANDCOVER',
             air_pres_source='CFSR',
             air_temp_source='CFSR',
@@ -85,7 +85,7 @@ class Image(object):
                             'USGS/NLCD_RELEASES/2019_REL/NLCD',
                             'USGS/NLCD_RELEASES/2021_REL/NLCD/2021'}
             Land cover source collection or image ID
-            (the default is 'USGS/NLCD_RELEASES/2021_REL/NLCD').
+            (the default is 'projects/sat-io/open-datasets/USGS/ANNUAL_NLCD/LANDCOVER').
         air_pres_source: {'CFSR'}
             Air pressure source keyword (the default is 'CFSR').
         air_temp_source : {'CFSR'}
@@ -157,15 +157,10 @@ class Image(object):
         self.start_date = ee.Date(utils.date_to_time_0utc(self.datetime))
         self.end_date = self.start_date.advance(1, 'day')
         self.doy = ee.Number(self.datetime.getRelative('day', 'year')).add(1).int()
-        # self.cycle_day = self.start_date.difference(
-        #     ee.Date.fromYMD(1970, 1, 3), 'day').mod(8).add(1).int()
 
-        # # Set server side date/time properties using the 'system:time_start'
+        # Set server side date/time properties using the 'system:time_start'
         self.hour = ee.Number(self.datetime.getFraction('day')).multiply(24)
         self.hour_int = self.hour.floor()
-        # Time used in IDL is hours and fractional minutes (no seconds)
-        # self.time = ee.Date(self.datetime).get('hour').add(
-        #     ee.Date(self.datetime).get('minute').divide(60))
 
         # CGM - Applying cloud mask directly to input image
         #   In the IDL code the mask was applied to a_pt in main TSEB function
@@ -186,7 +181,7 @@ class Image(object):
         # Get input bands from the image
         self.albedo = input_image.select('albedo')
         self.ndvi = input_image.select('ndvi')
-        # LAT and LST are being read from source image collections
+        # LAT and LST are being read from source image collections and are not in the input image
         # self.lai = input_image.select('lai')
         # self.lai = self.lai.where(lai.mask(), 0.01)
         # self.lst = input_image.select('lst')
@@ -237,8 +232,7 @@ class Image(object):
         if self.et_reference_factor and self.et_reference_factor < 0:
             raise ValueError('et_reference_factor must be greater than zero')
         resample_methods = ['nearest', 'bilinear', 'bicubic']
-        if (self.et_reference_resample and
-                self.et_reference_resample.lower() not in resample_methods):
+        if self.et_reference_resample and (self.et_reference_resample.lower() not in resample_methods):
             raise ValueError('Unsupported et_reference_resample method\n')
 
         if latitude is None:
@@ -266,8 +260,7 @@ class Image(object):
 
         # Image projection and geotransform
         self.crs = image.projection().crs()
-        self.transform = ee.List(ee.Dictionary(
-            ee.Algorithms.Describe(image.projection())).get('transform'))
+        self.transform = ee.List(ee.Dictionary(ee.Algorithms.Describe(image.projection())).get('transform'))
         # self.crs = image.select([0]).projection().getInfo()['crs']
         # self.transform = image.select([0]).projection().getInfo()['transform']
 
@@ -367,8 +360,6 @@ class Image(object):
         for v in variables:
             if v.lower() == 'et':
                 output_images.append(self.et.float())
-            # elif v.lower() == 'et_fraction':
-            #     output_images.append(self.et_fraction.float())
             elif v.lower() == 'et_reference':
                 output_images.append(self.et_reference.float())
             elif v.lower() == 'lst':
@@ -399,16 +390,34 @@ class Image(object):
 
         """
         et = tseb.tseb_pt(
-            t_air=self.ta, t_rad=self.lst, t_air0=self.air_temperature,
-            e_air=self.vapor_pressure, u=self.wind_speed, p=self.air_pressure,
-            z=self.elevation, rs_1=self.rs1, rs24=self.rs24, vza=0,
-            aleafv=self.aleafv, aleafn=self.aleafn, aleafl=self.aleafl,
-            adeadv=self.adeadv, adeadn=self.adeadn, adeadl=self.adeadl,
-            albedo=self.albedo, ndvi=self.ndvi, lai=self.lai,
-            clump=self.clump, leaf_width=self.leaf_width,
-            hc_min=self.hc_min, hc_max=self.hc_max,
-            datetime=self.datetime, lat=self.latitude, lon=self.longitude,
-            stabil_iter=self.stabil_iter, albedo_iter=self.albedo_iter,
+            t_air=self.ta,
+            t_rad=self.lst,
+            t_air0=self.air_temperature,
+            e_air=self.vapor_pressure,
+            u=self.wind_speed,
+            p=self.air_pressure,
+            z=self.elevation,
+            rs_1=self.rs1,
+            rs24=self.rs24,
+            vza=0,
+            aleafv=self.aleafv,
+            aleafn=self.aleafn,
+            aleafl=self.aleafl,
+            adeadv=self.adeadv,
+            adeadn=self.adeadn,
+            adeadl=self.adeadl,
+            albedo=self.albedo,
+            ndvi=self.ndvi,
+            lai=self.lai,
+            clump=self.clump,
+            leaf_width=self.leaf_width,
+            hc_min=self.hc_min,
+            hc_max=self.hc_max,
+            datetime=self.datetime,
+            lat=self.latitude,
+            lon=self.longitude,
+            stabil_iter=self.stabil_iter,
+            albedo_iter=self.albedo_iter,
             et_min=self.et_min,
         )
 
@@ -465,11 +474,6 @@ class Image(object):
             .rename(['et_reference']).set(self.properties)
         )
 
-    # @lazy_property
-    # def et_fraction(self):
-    #     """Compute ET fraction as actual ET divided by the reference ET"""
-    #     return self.et.divide(self.et_reference).rename(['et_fraction']).set(self.properties)
-
     @lazy_property
     def et_alexi(self):
         """Extract ALEXI ET image for the target image time
@@ -491,20 +495,17 @@ class Image(object):
             alexi_img = self.alexi_source
         elif self.alexi_source.upper() in alexi_keyword_sources.keys():
             alexi_coll_id = alexi_keyword_sources[self.alexi_source.upper()]
-            alexi_coll = ee.ImageCollection(alexi_coll_id)\
-                .filterDate(self.start_date, self.end_date)
+            alexi_coll = ee.ImageCollection(alexi_coll_id).filterDate(self.start_date, self.end_date)
             # TODO: Check if collection size is 0
             alexi_img = ee.Image(alexi_coll.first()).multiply(0.408)
         elif alexi_re.match(self.alexi_source):
-            alexi_coll = ee.ImageCollection(self.alexi_source)\
-                .filterDate(self.start_date, self.end_date)
+            alexi_coll = ee.ImageCollection(self.alexi_source).filterDate(self.start_date, self.end_date)
             alexi_img = ee.Image(alexi_coll.first()).multiply(0.408)
         elif self.alexi_source in alexi_keyword_sources.values():
             # CGM - Quick fix for catching if the alexi_source was to as the
             #   collection ID, specifically for V005 since it is currently in a
             #   different project and won't get matched by the regex.
-            alexi_coll = ee.ImageCollection(self.alexi_source)\
-                .filterDate(self.start_date, self.end_date)
+            alexi_coll = ee.ImageCollection(self.alexi_source).filterDate(self.start_date, self.end_date)
             alexi_img = ee.Image(alexi_coll.first()).multiply(0.408)
         else:
             raise ValueError(f'Unsupported alexi_source: {self.alexi_source}\n')
@@ -644,7 +645,6 @@ class Image(object):
             #   and in the long run the LAI module should be modified to support either
             #   ee.Strings or ee.Images
             lai_img = openet.lai.Landsat(utils.getinfo(self.id)).lai(nonveg=True)
-            # lai_img = openet.lai.Landsat(utils.getinfo(self.index)).lai(nonveg=True)
 
             # This approach for getting the version will only work with the new LAI v0.2.0
             #   that was built with a pyproject.toml and pins DisALEXI to Python 3.8+
@@ -655,16 +655,15 @@ class Image(object):
             #   Images are single band and don't need a select()
             #   LAI images always need to be scaled
             # CGM - This will raise a .get() error if the image doesn't exist
-            lai_coll = ee.ImageCollection(self.lai_source)\
-               .filterMetadata('scene_id', 'equals', self.index)
+            lai_coll = ee.ImageCollection(self.lai_source).filterMetadata('scene_id', 'equals', self.index)
             lai_img = ee.Image(lai_coll.first()).select(['LAI'])
-            lai_img = lai_img.multiply(ee.Number(lai_img.get('scale_factor')))\
+            lai_img = (
+                lai_img.multiply(ee.Number(lai_img.get('scale_factor')))
                 .set({'landsat_lai_version': lai_img.get('landsat_lai_version')})
+            )
             self.landsat_lai_version = lai_img.get('landsat_lai_version')
         else:
             raise ValueError(f'Unsupported lai_source: {self.lai_source}\n')
-        # elif isinstance(self.lai_source, ee.computedobject.ComputedObject):
-        #     lai_img = self.lai_source
 
         # Apply the cloud mask since LAI was not read from the masked input image
         return lai_img.select([0], ['lai']).updateMask(self.cloud_mask)
@@ -680,16 +679,15 @@ class Image(object):
             #   Images are single band and don't need a select()
             #   LST images always need to be scaled
             # CGM - This will raise a .get() error if the image doesn't exist
-            lst_coll = ee.ImageCollection(self.lst_source)\
-                .filterMetadata('scene_id', 'equals', self.index)
+            lst_coll = ee.ImageCollection(self.lst_source).filterMetadata('scene_id', 'equals', self.index)
             lst_img = ee.Image(lst_coll.first())
-            lst_img = lst_img.multiply(ee.Number(lst_img.get('scale_factor')))\
+            lst_img = (
+                lst_img.multiply(ee.Number(lst_img.get('scale_factor')))
                 .set({'landsat_lst_version': lst_img.get('landsat_lst_version')})
+            )
             self.landsat_lst_version = lst_img.get('landsat_lst_version')
         else:
             raise ValueError(f'Unsupported lst_source: {self.lst_source}\n')
-        # elif isinstance(self.lst_source, ee.computedobject.ComputedObject):
-        #     lst_img = self.lst_source
 
         # Apply the cloud mask since LST was not read from the masked input image
         return lst_img.select([0], ['lst']).updateMask(self.cloud_mask)
@@ -712,16 +710,6 @@ class Image(object):
         )
 
     # @lazy_property
-    # def albedo(self):
-    #     """Return albedo image"""
-    #     return self.image.select(['albedo']).set(self.properties)
-
-    # @lazy_property
-    # def ndvi(self):
-    #     """Return NDVI image"""
-    #     return self.image.select(['ndvi']).set(self.properties)
-
-    # @lazy_property
     # def quality(self):
     #     """Set quality to 1 for all active pixels (for now)"""
     #     return self.mask.rename(['quality']).set(self.properties)
@@ -740,8 +728,7 @@ class Image(object):
             'CONUS_V006': 'projects/openet/assets/disalexi/tair/conus_v006_1k',
         }
         ta_source_re = re.compile(
-            '(projects/earthengine-legacy/assets/)?'
-            'projects/(\\w+/)?(assets/)?'
+            '(projects/earthengine-legacy/assets/)?projects/(\\w+/)?(assets/)?'
             'disalexi/ta(ir)?/(conus|global)_v\\d{3}\\w?(_\\w+)?',
             re.IGNORECASE
         )
@@ -817,9 +804,6 @@ class Image(object):
                 .resample('bicubic')
                 .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)
                 .multiply(self.alexi_elev.multiply(-0.0065).add(293).divide(293.0).pow(5.26))
-                # # Resample/reproject to the Landsat scale will happen in non-coarse function
-                # .resample('bilinear')
-                # .reproject(crs=self.crs, crsTransform=self.transform)
             )
         else:
             raise ValueError(f'Invalid air_pres_source: {self.air_pres_source}\n')
@@ -850,9 +834,6 @@ class Image(object):
                 ee.Image(at_img)
                 .resample('bicubic')
                 .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)
-                # # Resample/reproject to the Landsat scale will happen in non-coarse function
-                #.resample('bilinear')
-                # .reproject(crs=self.crs, crsTransform=self.transform)
             )
         else:
             raise ValueError(f'Unsupported air_temp_source: {self.air_temp_source}\n')
@@ -887,8 +868,7 @@ class Image(object):
                 # Could change the offsets to -0.5 hours to select the closest image
                 rs1_img = (
                     rs1_coll
-                    .filterDate(self.datetime.advance(-1, 'hour'),
-                                self.datetime.advance(0, 'hour'))
+                    .filterDate(self.datetime.advance(-1, 'hour'), self.datetime.advance(0, 'hour'))
                     .first()
                 )
             rs1_img = (
@@ -921,8 +901,7 @@ class Image(object):
             rs24_coll_id = 'projects/disalexi/insol_data/global_v001_hourly'
             rs24_coll = (
                 ee.ImageCollection(rs24_coll_id)
-                .filterDate(self.datetime.advance(-8, 'hours'),
-                            self.datetime.advance(12, 'hours'))
+                .filterDate(self.datetime.advance(-8, 'hours'), self.datetime.advance(12, 'hours'))
             )
             rs24_img = (
                 ee.Image(rs24_coll.sum())
@@ -1222,7 +1201,7 @@ class Image(object):
             )
 
         ta_coll = ee.ImageCollection([
-            ta_initial_img.add(j).set({'system:index': 'step_{:02d}'.format(i)})
+            ta_initial_img.add(j).set({'system:index': f'step_{i:02d}'})
             for i, j in enumerate(offsets)
         ])
 
@@ -1324,12 +1303,8 @@ def ta_mosaic_interpolate(ta_mosaic_img):
         .multiply(bias_a.multiply(-1)).add(ta_a)
         .max(ta_a).min(ta_b)
     )
-    # # Compute the target Ta as the average of the bracketing Ta values
-    # #   instead of interpolating
-    # ta_img = ta_a.add(ta_b).multiply(0.5)
 
     # Mask out Ta cells outside the interpolation range
-    # if extrapolate_mask:
     ta_img = ta_img.updateMask(ta_a.lt(ta_b))
 
     # # CGM - This is mostly needed at the 10k step size

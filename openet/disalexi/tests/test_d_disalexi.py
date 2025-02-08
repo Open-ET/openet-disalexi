@@ -27,7 +27,7 @@ def default_image(
         ndvi=0.875,
         # lai=4.2,
         # lst=306.5,
-        ):
+):
     return (
         ee.Image(f'{COLL_ID}/{SCENE_ID}')
         .select(['SR_B2', 'SR_B3', 'SR_B4'])
@@ -36,7 +36,6 @@ def default_image(
         .set({
             'system:index': SCENE_ID,
             'system:time_start': SCENE_TIME,
-            # 'system:time_start': ee.Date(SCENE_DATE).millis(),
             'system:id': f'{COLL_ID}/{SCENE_ID}',
         })
 )
@@ -47,7 +46,7 @@ def default_image_args(
         ndvi=0.875,
         ta_source='CONUS_V006',
         alexi_source='CONUS_V006',
-        ta_smooth_flag=False,
+        # ta_smooth_flag=False,
         # lai_source='openet-landsat-lai',
         lai_source='projects/openet/assets/lai/landsat/c02',
         lst_source='projects/openet/assets/lst/landsat/c02',
@@ -57,10 +56,9 @@ def default_image_args(
         et_reference_band=None,
         et_reference_factor=1.0,
         et_reference_resample='nearest',
-        # Dropped from default value of 25 for tests
         stability_iterations=10,
         albedo_iterations=10,
-        ):
+):
     return {
         'image': default_image(albedo=albedo, cfmask=cfmask, ndvi=ndvi),
         'ta_source': ta_source,
@@ -90,10 +88,9 @@ def default_image_obj(
         et_reference_band=None,
         et_reference_factor=1.0,
         et_reference_resample='nearest',
-        # Dropped from default value of 25 for tests
         stability_iterations=10,
         albedo_iterations=10,
-        ):
+):
     return disalexi.Image(**default_image_args(
         albedo=albedo,
         cfmask=cfmask,
@@ -133,7 +130,6 @@ def test_Image_ta_coarse_mosaic_step_count(step_size=5, step_count=4):
     d_obj = disalexi.Image(**default_image_args())
     ta_img = d_obj.et_alexi.multiply(0).add(290)
     ta_mosaic_img = d_obj.ta_coarse_mosaic(ta_img, offsets=[-10, -5, 0, 5, 10])
-    #ta_mosaic_img = d_obj.ta_mosaic(ta_img, step_size=step_size, step_count=step_count)
     output = utils.getinfo(ta_mosaic_img)
     ta_bands = [b for b in output['bands'] if '_ta' in b['id']]
     bias_bands = [b for b in output['bands'] if '_bias' in b['id']]
@@ -147,7 +143,6 @@ def test_Image_ta_coarse_mosaic_step_size(ta_init=290, step_size=5, step_count=4
     d_obj = disalexi.Image(**default_image_args())
     ta_img = d_obj.et_alexi.multiply(0).add(ta_init)
     ta_mosaic_img = d_obj.ta_coarse_mosaic(ta_img, offsets=[-10, -5, 0, 5, 10])
-    #ta_mosaic_img = d_obj.ta_mosaic(ta_img, step_size=step_size, step_count=step_count)
     output = utils.point_image_value(ta_mosaic_img, TEST_POINT)
     assert (abs(output['step_01_ta'] - output['step_00_ta']) - 5) < 0.000001
 
@@ -156,9 +151,8 @@ def test_Image_ta_coarse_mosaic_min_bias(ta_init=290):
     # Check that a reasonable air temperature value is returned
     d_obj = disalexi.Image(**default_image_args())
     ta_mosaic_img = d_obj.ta_coarse_mosaic(
-        d_obj.et_alexi.multiply(0).add(ta_init),
-        offsets=[-10, -5, 0, 5, 10])
-        # step_size=5, step_count=4)
+        d_obj.et_alexi.multiply(0).add(ta_init), offsets=[-10, -5, 0, 5, 10]
+    )
     ta_min_bias = disalexi.ta_mosaic_min_bias(ta_mosaic_img)
     output = utils.point_image_value(ta_min_bias, TEST_POINT)
     assert abs(output['ta'] - 290) < 10
@@ -168,9 +162,8 @@ def test_Image_ta_mosaic_interpolate(ta_init=290):
     # Check that a reasonable air temperature value is returned
     d_obj = disalexi.Image(**default_image_args())
     ta_mosaic_img = d_obj.ta_coarse_mosaic(
-        d_obj.et_alexi.multiply(0).add(ta_init),
-        offsets=[-10, -5, 0, 5, 10])
-        # step_size=5, step_count=4)
+        d_obj.et_alexi.multiply(0).add(ta_init), offsets=[-10, -5, 0, 5, 10]
+    )
     ta_interp = disalexi.ta_mosaic_interpolate(ta_mosaic_img)
     output = utils.point_image_value(ta_interp, TEST_POINT)
     assert abs(output['ta_interp'] - 290) < 10
@@ -201,14 +194,14 @@ def test_Image_ta_mosaic_min_bias_values(ta_values, bias_values, expected):
     [
         [[280, 285, 290, 295, 300], [-4, -3, -2, 1, 3], 293.33],
         [[280, 285, 290, 295, 300], [-2, -2, -1, 1, 3], 292.5],
-        # Constant negative bias values
+        # Constant negative bias values should pick the last one before going positive
         [[280, 285, 290, 295, 300, 305, 310], [-2, -2, -2, 1, 3, 4, 5], 293.33],
         [[270, 275, 280, 285, 290, 295, 300, 305], [-2, -2, -2, -2, -2, 1, 3, 4], 293.33],
         # Test multiple negative to positive bias transitions
         [[270, 275, 280, 285, 290, 295, 300, 305], [-2, -0.1, 0.1, -2, -1, 1, 3, 4], 293.33],
         # Test that pixels with all positive or negative biases are masked out
         # This is different than the original implementation
-        #   and the not masked tests are commented out below
+        # The original unmasked test values are commented out below
         [[280, 285, 290, 295, 300], [1, 2, 3, 4, 5], None],
         [[270, 275, 280, 285, 290, 295, 300], [2, 2, 2, 2, 3, 4, 5], None],
         [[280, 285, 290, 295, 300], [-5, -4, -3, -2, -1], None],
@@ -256,19 +249,10 @@ def test_Image_set_landcover_vars_default(tol=1E-6):
 
 def test_Image_set_landcover_vars_init_asset(tol=1E-6):
     """Test setting the land cover image and type as the object is initialized"""
-    d_obj = disalexi.Image(
-        landcover_source='USGS/NLCD_RELEASES/2019_REL/NLCD/2011',
-        **default_image_args())
+    d_obj = disalexi.Image(landcover_source='USGS/NLCD_RELEASES/2019_REL/NLCD/2011', **default_image_args())
     d_obj.set_landcover_vars()
+    # Only need to check the first test value
     assert utils.point_image_value(d_obj.aleafv, ne1_xy)['aleafv'] == 0.83
-    # assert utils.point_image_value(d_obj.aleafn, ne1_xy)['aleafn'] == 0.35
-    # assert utils.point_image_value(d_obj.aleafl, ne1_xy)['aleafl'] == 0.95
-    # assert utils.point_image_value(d_obj.adeadv, ne1_xy)['adeadv'] == 0.49
-    # assert utils.point_image_value(d_obj.adeadn, ne1_xy)['adeadn'] == 0.13
-    # assert utils.point_image_value(d_obj.adeadl, ne1_xy)['adeadl'] == 0.95
-    # assert utils.point_image_value(d_obj.leaf_width, ne1_xy)['xl'] == 0.05
-    # assert utils.point_image_value(d_obj.clump, ne1_xy)['omega'] == 0.83
-    # assert abs(utils.point_image_value(d_obj.hc, ne1_xy)['hc'] - 0.410955099827) <= tol
 
 
 def test_Image_set_landcover_vars_set_asset(tol=1E-6):
@@ -276,12 +260,5 @@ def test_Image_set_landcover_vars_set_asset(tol=1E-6):
     d_obj = disalexi.Image(**default_image_args())
     d_obj.landcover_source = 'USGS/NLCD_RELEASES/2019_REL/NLCD/2011'
     d_obj.set_landcover_vars()
+    # Only need to check the first test value
     assert utils.point_image_value(d_obj.aleafv, ne1_xy)['aleafv'] == 0.83
-    # assert utils.point_image_value(d_obj.aleafn, ne1_xy)['aleafn'] == 0.35
-    # assert utils.point_image_value(d_obj.aleafl, ne1_xy)['aleafl'] == 0.95
-    # assert utils.point_image_value(d_obj.adeadv, ne1_xy)['adeadv'] == 0.49
-    # assert utils.point_image_value(d_obj.adeadn, ne1_xy)['adeadn'] == 0.13
-    # assert utils.point_image_value(d_obj.adeadl, ne1_xy)['adeadl'] == 0.95
-    # assert utils.point_image_value(d_obj.leaf_width, ne1_xy)['xl'] == 0.05
-    # assert utils.point_image_value(d_obj.clump, ne1_xy)['omega'] == 0.83
-    # assert abs(utils.point_image_value(d_obj.hc, ne1_xy)['hc'] - 0.410955099827) <= tol

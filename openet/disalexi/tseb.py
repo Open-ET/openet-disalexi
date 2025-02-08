@@ -6,11 +6,36 @@ from . import tseb_utils
 from . import utils
 
 def tseb_pt(
-        t_air, t_rad, t_air0, e_air, u, p, z, rs_1, rs24, vza,
-        aleafv, aleafn, aleafl, adeadv, adeadn, adeadl,
-        albedo, ndvi, lai, clump, leaf_width, hc_min, hc_max,
-        datetime, lon=None, lat=None, a_pt_in=1.32,
-        stabil_iter=None, albedo_iter=10, et_min=0.01
+        t_air,
+        t_rad,
+        t_air0,
+        e_air,
+        u,
+        p,
+        z,
+        rs_1,
+        rs24,
+        vza,
+        aleafv,
+        aleafn,
+        aleafl,
+        adeadv,
+        adeadn,
+        adeadl,
+        albedo,
+        ndvi,
+        lai,
+        clump,
+        leaf_width,
+        hc_min,
+        hc_max,
+        datetime,
+        lon=None,
+        lat=None,
+        a_pt_in=1.32,
+        stabil_iter=None,
+        albedo_iter=10,
+        et_min=0.01,
 ):
     """Priestley-Taylor TSEB
 
@@ -133,21 +158,16 @@ def tseb_pt(
     f = lai.multiply(clump)
 
     # fraction cover at nadir (view=0)
-    # fc = 1.0 - exp(-0.5 * f)
     fc = f.multiply(-0.5).exp().multiply(-1).add(1.0).clamp(0.01, 0.9)
 
     # Compute canopy height and roughness parameters
-    # hc = hc_min + ((hc_max - hc_min) * fc)
     hc = hc_max.subtract(hc_min).multiply(fc).add(hc_min)
 
     # LAI relative to canopy projection only
     lai_c = lai.divide(fc)
 
     # Houborg modification (according to Anderson et al. 2005)
-    fc_q = (
-        lai.expression('1 - (exp(-0.5 * f / cos(vza)))', {'f': f, 'vza': vza})
-        .clamp(0.05, 0.90)
-    )
+    fc_q = lai.expression('1 - (exp(-0.5 * f / cos(vza)))', {'f': f, 'vza': vza}).clamp(0.05, 0.90)
 
     # Brutsaert (1982)
     z0m = hc.multiply(0.123)
@@ -188,27 +208,19 @@ def tseb_pt(
     # Saturation vapour pressure [kPa] (FAO56 3-8)
     # Yun modified to use METEO air temperature
     e_s0 = t_air0.expression(
-        '0.6108 * exp((17.27 * (t_air - 273.16)) / ((t_air - 273.16) + 237.3))',
-        {'t_air': t_air0}
+        '0.6108 * exp((17.27 * (t_air - 273.16)) / ((t_air - 273.16) + 237.3))', {'t_air': t_air0}
     )
     vpd = e_s0.subtract(e_air)
 
     # Saturation vapor pressure [kpa] using iterated air temperature
     e_s = t_air.expression(
-        '0.6108 * exp((17.27 * (t_air - 273.16)) / ((t_air - 273.16) + 237.3))',
-        {'t_air': t_air}
+        '0.6108 * exp((17.27 * (t_air - 273.16)) / ((t_air - 273.16) + 237.3))', {'t_air': t_air}
     )
 
     # Slope of the saturation vapor pressure [kPa] (FAO56 3-9)
-    # Ss = 4098 * e_s / (((t_air - 273.16) + 237.3) ** 2)
     Ss = t_air.subtract(273.16).add(237.3).pow(-2).multiply(e_s).multiply(4098)
-    #Ss = t_air.expression(
-    #    '4098. * e_s / (((t_air - 273.16) + 237.3) ** 2)',
-    #    {'e_s': e_s, 't_air': t_air}
-    #)
 
     # Latent heat of vaporization (~2.45 at 20 C) [MJ kg-1] (FAO56 3-1)
-    # lambda1 = (2.501 - (2.361e-3 * (t_air - 273.16)))
     lambda1 = t_air.subtract(273.16).multiply(2.361e-3).multiply(-1).add(2.501)
 
     # Psychrometric constant [kPa C-1] (FAO56 3-10)
@@ -221,8 +233,7 @@ def tseb_pt(
     if stabil_iter is None:
         # Compute the number of stability iterations dynamically
         a_pt_max = ee.Number(
-            a_pt.reduceRegion(reducer=ee.Reducer.max(), scale=4000, maxPixels=1E10)
-            .get('a_pt')
+            a_pt.reduceRegion(reducer=ee.Reducer.max(), scale=4000, maxPixels=1E10).get('a_pt')
         )
         stabil_iter = a_pt_max.divide(0.05).ceil().max(25).min(40)
 
@@ -235,9 +246,7 @@ def tseb_pt(
 
     # Density of air? (kg m-3)
     # CGM - Intentionally making this a function of t_air instead of z
-    # r_air = 101.3 * (((t_air - (0.0065 * z)) / t_air) ** 5.26) / 1.01 / t_air / 0.287
     r_air = (
-        #z.multiply(-0.0065).add(t_air).divide(t_air).pow(5.26).divide(t_air)
         t_air.subtract(z.multiply(0.0065)).divide(t_air).pow(5.26).divide(t_air)
         .multiply(101.3 / 1.01 / 0.287)
     )
@@ -248,8 +257,7 @@ def tseb_pt(
     r_ah = tseb_utils.compute_r_ah(u_attr=u_attr, d0=d0, z0h=z0h, z_t=z_t, fh=0)
     # CGM - Why is this function passing "lai" to "f"?
     r_s = tseb_utils.compute_r_s(
-        u_attr=u_attr, t_s=t_air, t_c=t_air, hc=hc, f=lai, d0=d0, z0m=z0m,
-        leaf=leaf, leaf_s=leaf_s, fm_h=0
+        u_attr=u_attr, t_s=t_air, t_c=t_air, hc=hc, f=lai, d0=d0, z0m=z0m, leaf=leaf, leaf_s=leaf_s, fm_h=0
     )
     r_x = tseb_utils.compute_r_x(
         u_attr=u_attr, hc=hc, f=lai, d0=d0, z0m=z0m, xl=leaf_width, leaf_c=leaf_c, fm_h=0
@@ -260,9 +268,6 @@ def tseb_pt(
         '(((t_rad - 273.16) - (fc_q * (t_c - 273.16))) / (1 - fc_q)) + 273.16',
         {'t_rad': t_rad, 't_c': t_c, 'fc_q': fc_q}
     )
-
-    # CGM - This doesn't seem to do anything, commenting out for now
-    # h_iter = t_air.multiply(0).add(200.16)
 
     # CGM - Initialize to match t_air shape
     ef_s = t_air.multiply(0)
@@ -286,11 +291,9 @@ def tseb_pt(
 
         g = tseb_utils.compute_G0(rn, rn_s, ef_s_iter, water_mask, lon, datetime)
 
-        # le_c_init = f_green * (a_pt_iter * Ss / (Ss + gamma)) * rn_c
-        # le_c_init[le_c_init < 0] = 0
         le_c_init = (
-            Ss.add(gamma).pow(-1).multiply(Ss).multiply(a_pt_iter).multiply(f_green)
-            .multiply(rn_c).max(0)
+            Ss.add(gamma).pow(-1).multiply(Ss).multiply(a_pt_iter).multiply(f_green).multiply(rn_c)
+            .max(0)
         )
 
         h_c_init = rn_c.subtract(le_c_init)
@@ -307,29 +310,9 @@ def tseb_pt(
         h_c = t_c_iter.subtract(t_ac).multiply(cp).multiply(r_air).divide(r_x_iter)
         h = h_s.add(h_c)
         h = h.where(h.eq(0), 10.0)
-        #h_s = albedo.expression(
-        #    'r_air * cp * (t_s - t_ac) / r_s',
-        #    {'r_air': r_air, 'cp': cp, 't_s': t_s_iter, 't_ac': t_ac, 'r_s': r_s_iter}
-        #)
-        #h_c = albedo.expression(
-        #    'r_air * cp * (t_c - t_ac) / r_x',
-        #    {'r_air': r_air, 'cp': cp, 't_c': t_c_iter, 't_ac': t_ac, 'r_x': r_x_iter}
-        #)
-        #h = albedo.expression('h_s + h_c', {'h_s': h_s, 'h_c': h_c})
-        #h = h.where(h.eq(0), 10.0)
 
         le_s = rn_s.subtract(g).subtract(h_s)
         le_c = rn_c.subtract(h_c)
-        # le_s = albedo.expression('rn_s - g - h_s', {'rn_s': rn_s, 'g': g, 'h_s': h_s})
-        # le_c = albedo.expression('rn_c - h_c', {'rn_c': rn_c, 'h_c': h_c})
-
-        # CGM - This won't do anything at this position in the code.
-        #   Commenting out for now.
-        # r_ah_iter = r_ah_iter.where(r_ah_iter.eq(0), 10.0)
-
-        # CGM - This doesn't seem to do anything, commenting out for now
-        # mask_iter = h_iter.divide(h).lte(1.05).And(h_iter.divide(h).gte(0.95))
-        # chk_iter = np.sum(mask_iter) / np.size(mask_iter)
 
         fh = tseb_utils.compute_stability_fh(h, t_rad, u_attr_iter, r_air, z_t, d0, cp)
         fm = tseb_utils.compute_stability_fm(h, t_rad, u_attr_iter, r_air, z_u, d0, z0m, cp)
@@ -343,40 +326,52 @@ def tseb_pt(
         )
         # CGM - Why is this function is passing "lai" to "f"?
         r_x_iter = tseb_utils.compute_r_x(
-            u_attr=u_attr_iter, hc=hc, f=lai, d0=d0, z0m=z0m,
-            xl=leaf_width, leaf_c=leaf_c, fm_h=fm_h
+            u_attr=u_attr_iter, hc=hc, f=lai, d0=d0, z0m=z0m, xl=leaf_width, leaf_c=leaf_c, fm_h=fm_h
         )
 
-        a_pt_iter = (
-            a_pt_iter
-            .where(le_s.lte(0), a_pt_iter.subtract(0.05))
-            .where(a_pt_iter.lte(0), 0.01)
-        )
+        a_pt_iter = a_pt_iter.where(le_s.lte(0), a_pt_iter.subtract(0.05)).where(a_pt_iter.lte(0), 0.01)
 
         den_s = rn_s.subtract(g)
         den_s = den_s.updateMask(den_s.neq(0))
-        # den_s[den_s == 0.] = np.nan
 
         ef_s_iter = le_s.divide(den_s)
 
         return ee.Dictionary({
-            'a_pt': a_pt_iter, 'ef_s': ef_s_iter, 'g': g,
-            'h_c': h_c, 'h_s': h_s, 'le_c': le_c, 'le_s': le_s,
-            'rn_c': rn_c, 'rn_s': rn_s,
-            'r_ah': r_ah_iter, 'r_s': r_s_iter, 'r_x': r_x_iter,
-            't_ac': t_ac, 't_c': t_c_iter, 't_s': t_s_iter,
+            'a_pt': a_pt_iter,
+            'ef_s': ef_s_iter,
+            'g': g,
+            'h_c': h_c,
+            'h_s': h_s,
+            'le_c': le_c,
+            'le_s': le_s,
+            'rn_c': rn_c,
+            'rn_s': rn_s,
+            'r_ah': r_ah_iter,
+            'r_s': r_s_iter,
+            'r_x': r_x_iter,
+            't_ac': t_ac,
+            't_c': t_c_iter,
+            't_s': t_s_iter,
             'u_attr': u_attr_iter,
         })
 
     # Iterate the function n times
     # CGM - Iteration count is an input to the function
     input_images = ee.Dictionary({
-        'a_pt': a_pt, 'ef_s': ef_s, 'g': ee.Image(0),
-        'h_c': ee.Image(0), 'h_s': ee.Image(0),
-        'le_c': ee.Image(0), 'le_s': ee.Image(0),
-        'rn_c': ee.Image(0), 'rn_s': ee.Image(0),
-        'r_ah': r_ah, 'r_s': r_s, 'r_x': r_x,
-        't_ac': ee.Image(0), 't_c': t_c, 't_s': t_s,
+        'a_pt': a_pt,
+        'ef_s': ef_s, 'g': ee.Image(0),
+        'h_c': ee.Image(0),
+        'h_s': ee.Image(0),
+        'le_c': ee.Image(0),
+        'le_s': ee.Image(0),
+        'rn_c': ee.Image(0),
+        'rn_s': ee.Image(0),
+        'r_ah': r_ah,
+        'r_s': r_s,
+        'r_x': r_x,
+        't_ac': ee.Image(0),
+        't_c': t_c,
+        't_s': t_s,
         'u_attr': u_attr,
     })
     iter_output = ee.Dictionary(
@@ -388,7 +383,6 @@ def tseb_pt(
     rn_c = ee.Image(iter_output.get('rn_c'))
     rn_s = ee.Image(iter_output.get('rn_s'))
     g = ee.Image(iter_output.get('g'))
-    #h_c = ee.Image(iter_output.get('h_c'))
     h_s = ee.Image(iter_output.get('h_s'))
     le_c = ee.Image(iter_output.get('le_c'))
     le_s = ee.Image(iter_output.get('le_s'))
@@ -402,29 +396,19 @@ def tseb_pt(
 
     ind = le_s.gt(rn_s)
     le_s = le_s.where(ind,  rn_s)
-    # h_s = h_s.where(ind,  rn_s.subtract(g).subtract(le_s))
     h_s = rn_s.subtract(g).subtract(le_s)
-    # CGM - Check order of operations
+    # TODO: Check order of operations
     ind = le_c.gt(rn_c.add(100))
-    # CGM - Not used below since le_c is recomputed
     le_c = le_c.where(ind, rn_c.add(100))
-    # h_c = h_c.where(ind, -100)
-    h_c = rn_c.subtract(le_c)
-
-    #le_s = rn_s.subtract(g).subtract(h_s)
-    #le_c = rn_c.subtract(h_c)
 
     # The latent heat of vaporization is 2.45 MJ kg-1
     # Assume rs24 is still in W m-2 day-1 and convert to MJ kg-1
-    # CGM - Leaving out scaling value for now
+    # Leaving out scaling value for now
     ET = (
         albedo
         .expression(
-            '((le_c + le_s) / rs_1) * (rs24 / 2.45) * scaling',
-            {
-                'le_c': le_c, 'le_s': le_s, 'rs_1': rs_1,
-                'rs24': rs24.multiply(0.0864 / 24.0), 'scaling': 1,
-            }
+            '((le_c + le_s) / rs_1) * (rs24 * (0.0864 / 24.0) / 2.45) * scaling',
+            {'le_c': le_c, 'le_s': le_s, 'rs_1': rs_1, 'rs24': rs24, 'scaling': 1}
         )
         .max(et_min)
     )
@@ -433,11 +417,35 @@ def tseb_pt(
 
 
 def tseb_invert(
-        et_alexi, t_air, t_rad, t_air0, e_air, u, p, z, rs_1, rs24, vza,
-        aleafv, aleafn, aleafl, adeadv, adeadn, adeadl,
-        albedo, ndvi, lai, clump, leaf_width, hc_min, hc_max,
-        datetime, lon=None, lat=None, a_pt_in=1.32,
-        stabil_iter=None, albedo_iter=10,
+        et_alexi,
+        t_air,
+        t_rad,
+        t_air0,
+        e_air,
+        u,
+        p, z,
+        rs_1,
+        rs24,
+        vza,
+        aleafv,
+        aleafn,
+        aleafl,
+        adeadv,
+        adeadn,
+        adeadl,
+        albedo,
+        ndvi,
+        lai,
+        clump,
+        leaf_width,
+        hc_min,
+        hc_max,
+        datetime,
+        lon=None,
+        lat=None,
+        a_pt_in=1.32,
+        stabil_iter=None,
+        albedo_iter=10,
 ):
     """Priestley-Taylor TSEB
 
@@ -538,13 +546,10 @@ def tseb_invert(
     # CGM - This can probably be removed if Rs is resampled/smoothed in disalexi.py
     rs_1 = mask.add(rs_1).rename(['rs'])
     rs24 = mask.add(rs24).rename(['rs'])
-    # t_air = mask.add(t_air).rename(['ta'])
-    # u = mask.add(u).rename(['windspeed'])
 
     # Estimate total daily latent heat (not in tseb_pt())
     le_tot = et_alexi.expression(
-        '(et_alexi * 2.45 / (Rsd * 0.0864 / 24)) * Rs',
-        {'et_alexi': et_alexi, 'Rsd': rs24, 'Rs': rs_1}
+        '(et_alexi * 2.45 / (Rsd * 0.0864 / 24)) * Rs', {'et_alexi': et_alexi, 'Rsd': rs24, 'Rs': rs_1}
     )
 
     # ************************************************************************
@@ -567,22 +572,16 @@ def tseb_invert(
     f = lai.multiply(clump)
 
     # Fraction cover at nadir (view=0)
-    # fc = 1.0 - exp(-0.5 * f)
     fc = f.multiply(-0.5).exp().multiply(-1).add(1.0).clamp(0.01, 0.9)
 
     # Compute canopy height and roughness parameters
-    # hc = hc_min + ((hc_max - hc_min) * fc)
     hc = hc_max.subtract(hc_min).multiply(fc).add(hc_min)
 
     # LAI relative to canopy projection only
     lai_c = lai.divide(fc)
 
     # Houborg modification (according to Anderson et al. 2005)
-    fc_q = (
-        et_alexi
-        .expression('1 - (exp(-0.5 * f / cos(vza)))', {'f': f, 'vza': vza})
-        .clamp(0.05, 0.90)
-    )
+    fc_q = et_alexi.expression('1 - (exp(-0.5 * f / cos(vza)))', {'f': f, 'vza': vza}).clamp(0.05, 0.90)
 
     # Brutsaert (1982)
     z0m = hc.multiply(0.123)
@@ -610,9 +609,7 @@ def tseb_invert(
         {'z_U': z_u, 'D0': d0, 'z0m': z0m}
     )
     # Further for z0m
-    z0m = et_alexi.expression(
-        '(z_U - D0) / (exp(1.0 / sqrt(z0m)))', {'z_U': z_u, 'D0': d0, 'z0m': z0m}
-    )
+    z0m = et_alexi.expression('(z_U - D0) / (exp(1.0 / sqrt(z0m)))', {'z_U': z_u, 'D0': d0, 'z0m': z0m})
 
     # Redefine z0h
     z0h = z0m.add(0)
@@ -636,24 +633,17 @@ def tseb_invert(
     # Saturation vapour pressure [kPa] (FAO56 3-8)
     # Yun modified to use METEO air temperature
     e_s0 = t_air0.expression(
-        '0.6108 * exp((17.27 * (t_air - 273.16)) / ((t_air - 273.16) + 237.3))',
-        {'t_air': t_air0}
+        '0.6108 * exp((17.27 * (t_air - 273.16)) / ((t_air - 273.16) + 237.3))', {'t_air': t_air0}
     )
     vpd = e_s0.subtract(e_air)
 
     # Saturation vapor pressure [kpa] using iterated air temperature
     e_s = t_air.expression(
-        '0.6108 * exp((17.27 * (t_air - 273.16)) / ((t_air - 273.16) + 237.3))',
-        {'t_air': t_air}
+        '0.6108 * exp((17.27 * (t_air - 273.16)) / ((t_air - 273.16) + 237.3))', {'t_air': t_air}
     )
 
     # Slope of the saturation vapor pressure [kPa] (FAO56 3-9)
-    # Ss = 4098 * e_s / (((t_air - 273.16) + 237.3) ** 2)
     Ss = t_air.subtract(273.16).add(237.3).pow(-2).multiply(e_s).multiply(4098)
-    #Ss = t_air.expression(
-    #    '4098. * e_s / (((t_air - 273.16) + 237.3) ** 2)',
-    #    {'e_s': e_s, 't_air': t_air}
-    #)
 
     # Latent heat of vaporization (~2.45 at 20 C) [MJ kg-1] (FAO56 3-1)
     # lambda1 = (2.501 - (2.361e-3 * (t_air - 273.16)))
@@ -673,8 +663,7 @@ def tseb_invert(
     if stabil_iter is None:
         # Compute the number of stability iterations dynamically
         a_pt_max = ee.Number(
-            a_pt.reduceRegion(reducer=ee.Reducer.max(), scale=4000, maxPixels=1E10)
-            .get('a_pt')
+            a_pt.reduceRegion(reducer=ee.Reducer.max(), scale=4000, maxPixels=1E10).get('a_pt')
         )
         stabil_iter = a_pt_max.divide(0.05).ceil().max(25).min(40)
 
@@ -687,9 +676,7 @@ def tseb_invert(
 
     # Density of air? (kg m-3)
     # CGM - Intentionally making this a function of t_air instead of z
-    # r_air = 101.3 * (((t_air - (0.0065 * z)) / t_air) ** 5.26) / 1.01 / t_air / 0.287
     r_air = (
-        #z.multiply(-0.0065).add(t_air).divide(t_air).pow(5.26).divide(t_air)
         t_air.subtract(z.multiply(0.0065)).divide(t_air).pow(5.26).divide(t_air)
         .multiply(101.3 / 1.01 / 0.287)
     )
@@ -700,8 +687,7 @@ def tseb_invert(
     r_ah = tseb_utils.compute_r_ah(u_attr=u_attr, d0=d0, z0h=z0h, z_t=z_t, fh=0)
     # CGM - Why is this function passing "lai" to "f"?
     r_s = tseb_utils.compute_r_s(
-        u_attr=u_attr, t_s=t_air, t_c=t_air, hc=hc, f=lai, d0=d0, z0m=z0m,
-        leaf=leaf, leaf_s=leaf_s, fm_h=0
+        u_attr=u_attr, t_s=t_air, t_c=t_air, hc=hc, f=lai, d0=d0, z0m=z0m, leaf=leaf, leaf_s=leaf_s, fm_h=0
     )
     r_x = tseb_utils.compute_r_x(
         u_attr=u_attr, hc=hc, f=lai, d0=d0, z0m=z0m, xl=leaf_width, leaf_c=leaf_c, fm_h=0
@@ -713,9 +699,6 @@ def tseb_invert(
         '(((t_rad - 273.16) - (fc_q * (t_c - 273.16))) / (1 - fc_q)) + 273.16',
         {'t_rad': t_rad, 't_c': t_c, 'fc_q': fc_q}
     )
-
-    # CGM - This doesn't seem to do anything, commenting out for now
-    # h_iter = t_air.multiply(0).add(200.16)
 
     # CGM - Initialize to match t_air shape
     ef_s = t_air.multiply(0)
@@ -743,24 +726,15 @@ def tseb_invert(
         # Yun - use the ALEXI ET to get daily LE and then to get H
         h = rn.subtract(le_tot).subtract(g)
 
-        # le_c_init = f_green * (a_pt_iter * Ss / (Ss + gamma)) * rn_c
-        # le_c_init[le_c_init < 0] = 0
         le_c_init = (
-            Ss.add(gamma).pow(-1).multiply(Ss).multiply(a_pt_iter).multiply(f_green)
-            .multiply(rn_c).max(0)
+            Ss.add(gamma).pow(-1).multiply(Ss).multiply(a_pt_iter).multiply(f_green).multiply(rn_c)
+            .max(0)
         )
 
         h_c_init = rn_c.subtract(le_c_init)
         h_s = h.subtract(h_c_init)
 
         le_s = rn_s.subtract(g).subtract(h_s)
-
-        # CGM - This won't do anything at this position in the code. Commenting out for now.
-        # r_ah_iter = r_ah_iter.where(r_ah_iter.eq(0), 10.0)
-
-        # CGM - This doesn't seem to do anything, commenting out for now
-        # mask_iter = h_iter.divide(h).lte(1.05).And(h_iter.divide(h).gte(0.95))
-        # chk_iter = np.sum(mask_iter) / np.size(mask_iter)
 
         fh = tseb_utils.compute_stability_fh(h, t_rad, u_attr_iter, r_air, z_t, d0, cp)
         fm = tseb_utils.compute_stability_fm(h, t_rad, u_attr_iter, r_air, z_u, d0, z0m, cp)
@@ -774,8 +748,7 @@ def tseb_invert(
         )
         # CGM - Why is this function passing "lai" to "f"?
         r_x_iter = tseb_utils.compute_r_x(
-            u_attr=u_attr_iter, hc=hc, f=lai, d0=d0, z0m=z0m,
-            xl=leaf_width, leaf_c=leaf_c, fm_h=fm_h
+            u_attr=u_attr_iter, hc=hc, f=lai, d0=d0, z0m=z0m, xl=leaf_width, leaf_c=leaf_c, fm_h=fm_h
         )
 
         t_c_iter = tseb_utils.temp_separation_tc(
@@ -787,56 +760,52 @@ def tseb_invert(
         )
         ta_iter = t_ac.subtract(h.multiply(r_ah_iter).divide(r_air.multiply(cp)))
 
-        a_pt_iter = (
-            a_pt_iter
-            .where(le_s.lte(0), a_pt_iter.subtract(0.05))
-            .where(a_pt_iter.lte(0), 0.01)
-        )
+        a_pt_iter = a_pt_iter.where(le_s.lte(0), a_pt_iter.subtract(0.05)).where(a_pt_iter.lte(0), 0.01)
 
         den_s = rn_s.subtract(g)
         den_s = den_s.updateMask(den_s.neq(0))
-        # den_s[den_s == 0.] = np.nan
 
         ef_s_iter = le_s.divide(den_s)
 
         return ee.Dictionary({
-            'a_pt': a_pt_iter, 'ef_s': ef_s_iter, 'g': g,
-            'rn_c': rn_c, 'rn_s': rn_s,
-            'r_ah': r_ah_iter, 'r_s': r_s_iter, 'r_x': r_x_iter,
-            't_ac': t_ac, 't_c': t_c_iter, 't_s': t_s_iter,
-            'u_attr': u_attr_iter, 'ta': ta_iter,
+            'a_pt': a_pt_iter,
+            'ef_s': ef_s_iter,
+            'g': g,
+            'rn_c': rn_c,
+            'rn_s': rn_s,
+            'r_ah': r_ah_iter,
+            'r_s': r_s_iter,
+            'r_x': r_x_iter,
+            't_ac': t_ac,
+            't_c': t_c_iter,
+            't_s': t_s_iter,
+            'u_attr': u_attr_iter,
+            'ta': ta_iter,
         })
 
     # Iterate the function n times
     # CGM - Iteration count is an input to the function
     input_images = ee.Dictionary({
-        'a_pt': a_pt, 'ef_s': ef_s, 'g': ee.Image(0),
-        'rn_c': ee.Image(0), 'rn_s': ee.Image(0),
-        'r_ah': r_ah, 'r_s': r_s, 'r_x': r_x, 'rs_1': rs_1,
-        't_ac': ee.Image(0), 't_c': t_c, 't_s': t_s,
-        'u_attr': u_attr, 'ta': t_air,
+        'a_pt': a_pt,
+        'ef_s': ef_s,
+        'g': ee.Image(0),
+        'rn_c': ee.Image(0),
+        'rn_s': ee.Image(0),
+        'r_ah': r_ah,
+        'r_s': r_s,
+        'r_x': r_x,
+        'rs_1': rs_1,
+        't_ac': ee.Image(0),
+        't_c': t_c,
+        't_s': t_s,
+        'u_attr': u_attr,
+        'ta': t_air,
     })
-    iter_output = ee.Dictionary(
-        ee.List.sequence(1, stabil_iter).iterate(iter_func, input_images)
-    )
+    iter_output = ee.Dictionary(ee.List.sequence(1, stabil_iter).iterate(iter_func, input_images))
 
     # Extract the Ta from the iteration output
     ta = ee.Image(iter_output.get('ta'))
     ta = ta.updateMask(ta.gte(173.16))
     ta = ta.updateMask(ta.lte(473.16))
-
-    # # Uncomment to extract the other iteration variables
-    # a_pt = ee.Image(iter_output.get('a_pt'))
-    # ef_s = ee.Image(iter_output.get('ef_s'))
-    # g = ee.Image(iter_output.get('g'))
-    # rn_c = ee.Image(iter_output.get('rn_c'))
-    # rn_s = ee.Image(iter_output.get('rn_s'))
-    # r_ah = ee.Image(iter_output.get('r_ah'))
-    # r_s = ee.Image(iter_output.get('r_s'))
-    # r_x = ee.Image(iter_output.get('r_x'))
-    # t_ac = ee.Image(iter_output.get('t_ac'))
-    # t_c = ee.Image(iter_output.get('t_c'))
-    # t_s = ee.Image(iter_output.get('t_s'))
-    # u_attr = ee.Image(iter_output.get('u_attr'))
 
     return ta.rename(['ta'])

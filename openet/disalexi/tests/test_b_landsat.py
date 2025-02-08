@@ -9,16 +9,22 @@ import openet.disalexi.utils as utils
 
 # Default property values
 l8_properties = {
-    'system:time_start': 1404839150550, 'system:index': 'LC08_028031_20140708',
-    'SPACECRAFT_ID': 'LANDSAT_8', 'SATELLITE': 'LANDSAT_8',
+    'system:time_start': 1404839150550,
+    'system:index': 'LC08_028031_20140708',
+    'SPACECRAFT_ID': 'LANDSAT_8',
+    'SATELLITE': 'LANDSAT_8',
 }
 l7_properties = {
-    'system:time_start': 992192137355, 'system:index': 'LE07_028031_20010610',
-    'SPACECRAFT_ID': 'LANDSAT_7', 'SATELLITE': 'LANDSAT_7',
+    'system:time_start': 992192137355,
+    'system:index': 'LE07_028031_20010610',
+    'SPACECRAFT_ID': 'LANDSAT_7',
+    'SATELLITE': 'LANDSAT_7',
 }
 l5_properties = {
-    'system:time_start': 988735571649, 'system:index': 'LT05_028031_20010501',
-    'SPACECRAFT_ID': 'LANDSAT_5', 'SATELLITE': 'LANDSAT_5',
+    'system:time_start': 988735571649,
+    'system:index': 'LT05_028031_20010501',
+    'SPACECRAFT_ID': 'LANDSAT_5',
+    'SATELLITE': 'LANDSAT_5',
 }
 
 Landsat_C02_L2_scalars_multi = [
@@ -42,8 +48,8 @@ def test_Landsat_C02_L2_init(img_id):
     l_info = ee.Image(img_id).getInfo()['properties']
     input_img = landsat.Landsat_C02_L2(ee.Image(img_id)).input_image
     input_info = ee.Image(input_img).getInfo()
-    assert set([b['id'] for b in input_info['bands']]) == set([
-        'blue', 'green', 'red', 'nir', 'swir1', 'swir2', 'lst', 'QA_PIXEL'])
+    bands = {'blue', 'green', 'red', 'nir', 'swir1', 'swir2', 'lst', 'QA_PIXEL'}
+    assert {b['id'] for b in input_info['bands']} == bands
     assert input_info['properties']['system:time_start'] == l_info['system:time_start']
     assert input_info['properties']['system:index'] == img_id.split('/')[-1]
 
@@ -51,7 +57,6 @@ def test_Landsat_C02_L2_init(img_id):
 def test_Landsat_C02_L2_prep(img_id='LANDSAT/LC08/C02/T1_L2/LC08_028031_20140708'):
     """Test that the prepped image has the target bands and properties"""
     l_info = ee.Image(img_id).getInfo()['properties']
-
     prepped_img = landsat.Landsat_C02_L2(ee.Image(img_id)).prep()
     prepped_info = ee.Image(prepped_img).getInfo()
     assert {b['id'] for b in prepped_info['bands']} == {'albedo', 'cfmask', 'ndvi'}
@@ -63,7 +68,7 @@ def test_Landsat_C02_L2_prep(img_id='LANDSAT/LC08/C02/T1_L2/LC08_028031_20140708
     'blue, green, red, nir, swir1, swir2',
     [
         [0.2, 0.1, 0.2, 0.2, 0.2, 0.2],
-        [0.2, 0.9, 0.2, 0.2, 0.2, 0.2]
+        [0.2, 0.9, 0.2, 0.2, 0.2, 0.2],
     ]
 )
 def test_Landsat_C02_L2_albedo(blue, green, red, nir, swir1, swir2, tol=0.000001):

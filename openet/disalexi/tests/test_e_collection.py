@@ -13,9 +13,6 @@ import openet.disalexi.utils as utils
 # CGM - Scene LE07_044033_20170724 isn't loaded in collection 2 yet
 C02_COLLECTIONS = ['LANDSAT/LC08/C02/T1_L2', 'LANDSAT/LE07/C02/T1_L2']
 C02_SCENE_ID_LIST = sorted(['LC08_044033_20170716', 'LE07_044033_20170708'])
-# TA_SOURCE = 'CONUS_V006'
-# LAI_SOURCE = 'openet-landsat-lai'
-# TIR_SOURCE = 'projects/openet/assets/lst/landsat/c02'
 
 
 START_DATE = '2017-07-01'
@@ -35,22 +32,17 @@ default_coll_args = {
     'variables': list(VARIABLES),
     'cloud_cover_max': 70,
     'model_args': {
-        # 'ta_source': TA_SOURCE,
-        # 'lai_source': LAI_SOURCE,
-        # 'tir_source': TIR_SOURCE,
         'et_reference_source': 'IDAHO_EPSCOR/GRIDMET',
         'et_reference_band': 'eto',
         'et_reference_factor': 0.85,
         'et_reference_resample': 'nearest',
     },
     'filter_args': {},
-    # 'interp_args': {},
 }
 interp_args = {
     'interp_source': 'IDAHO_EPSCOR/GRIDMET',
     'interp_band': 'eto',
     'interp_resample': 'nearest',
-    # 'interp_factor': 0.85,
 }
 
 def default_coll_obj(**kwargs):
@@ -70,14 +62,12 @@ def test_Collection_init_default_parameters():
     args = default_coll_args.copy()
     del args['variables']
     del args['model_args']
-    # del args['interp_args']
 
     m = disalexi.Collection(**args)
     assert m.variables == None
     assert m.cloud_cover_max == 70
     assert m.model_args == {}
     assert m.filter_args == {}
-    # assert m.interp_args == {}
 
 
 def test_Collection_init_collection_str(coll_id='LANDSAT/LC08/C02/T1_L2'):
@@ -144,23 +134,6 @@ def test_Collection_init_cloud_cover_exception():
         default_coll_obj(cloud_cover_max=101)
 
 
-# # TODO: Test for Error if geometry is not ee.Geometry
-# def test_Collection_init_geometry_exception():
-#     """Test if Exception is raised for an invalid geometry"""
-#     args = default_coll_args()
-#     args['geometry'] = 'DEADBEEF'
-#     s = disalexi.Collection(**args)
-#     assert utils.getinfo(s.geometry) ==
-
-
-# TODO: Test if a geojson string can be passed for the geometry
-# def test_Collection_init_geometry_geojson():
-#     """Test that the system:index from a merged collection is parsed"""
-#     args = default_coll_args()
-#     s = disalexi.Collection(**args)
-#     assert utils.getinfo(s._scene_id) == SCENE_ID
-
-
 def test_Collection_build_default():
     output = utils.getinfo(default_coll_obj()._build())
     assert output['type'] == 'ImageCollection'
@@ -171,8 +144,7 @@ def test_Collection_build_default():
 
 def test_Collection_build_variables_custom(variable='ndvi'):
     # Check that setting the build variables overrides the collection variables
-    output = utils.getinfo(default_coll_obj()._build(variables=[variable])
-                           .first().bandNames())
+    output = utils.getinfo(default_coll_obj()._build(variables=[variable]).first().bandNames())
     assert set(output) == {variable}
 
 
@@ -190,8 +162,7 @@ def test_Collection_build_variables_not_set():
 
 def test_Collection_build_variables_empty_list():
     # Setting variables to an empty list should return the merged Landsat collection
-    output = utils.getinfo(
-        default_coll_obj(variables=None)._build(variables=[]).first().bandNames())
+    output = utils.getinfo(default_coll_obj(variables=None)._build(variables=[]).first().bandNames())
     assert 'SR_B3' in output
 
 
@@ -210,8 +181,7 @@ def test_Collection_build_dates():
 
 def test_Collection_build_landsat_c02_l2():
     """Test if the Landsat SR collections can be built"""
-    coll_obj = default_coll_obj(
-        collections=['LANDSAT/LC08/C02/T1_L2', 'LANDSAT/LE07/C02/T1_L2'])
+    coll_obj = default_coll_obj(collections=['LANDSAT/LC08/C02/T1_L2', 'LANDSAT/LE07/C02/T1_L2'])
     output = utils.getinfo(coll_obj._build())
     assert parse_scene_id(output) == C02_SCENE_ID_LIST
     assert {y['id'] for x in output['features'] for y in x['bands']} == VARIABLES
@@ -269,8 +239,7 @@ def test_Collection_build_filter_dates_lc08(collection_id, start_date, end_date)
     output = utils.getinfo(default_coll_obj(
         collections=[collection_id], start_date=start_date, end_date=end_date,
         geometry=ee.Geometry.Rectangle(-125, 25, -65, 50))._build(variables=['et']))
-    assert not [x for x in parse_scene_id(output)
-                if x.split('_')[-1] < end_date.replace('-', '')]
+    assert not [x for x in parse_scene_id(output) if x.split('_')[-1] < end_date.replace('-', '')]
     assert parse_scene_id(output) == []
 
 
@@ -285,8 +254,7 @@ def test_Collection_build_filter_dates_lc09(collection_id, start_date, end_date)
     output = utils.getinfo(default_coll_obj(
         collections=[collection_id], start_date=start_date, end_date=end_date,
         geometry=ee.Geometry.Rectangle(-125, 25, -65, 50))._build(variables=['et']))
-    assert not [x for x in parse_scene_id(output)
-                if x.split('_')[-1] < end_date.replace('-', '')]
+    assert not [x for x in parse_scene_id(output) if x.split('_')[-1] < end_date.replace('-', '')]
     assert parse_scene_id(output) == []
 
 
@@ -300,7 +268,8 @@ def test_Collection_build_filter_args_keyword():
     coll_obj = default_coll_obj(
         collections=collections,
         geometry=ee.Geometry.Rectangle(-125, 35, -120, 40),
-        filter_args={c: wrs2_filter for c in collections})
+        filter_args={c: wrs2_filter for c in collections}
+    )
     output = utils.getinfo(coll_obj._build(variables=['et']))
     assert {x[5:11] for x in parse_scene_id(output)} == {'044033'}
 
@@ -308,8 +277,7 @@ def test_Collection_build_filter_args_keyword():
 def test_Collection_build_filter_args_eeobject():
     # Need to test with two collections to catch bug when deepcopy isn't used
     collections = ['LANDSAT/LC08/C02/T1_L2', 'LANDSAT/LE07/C02/T1_L2']
-    wrs2_filter = ee.Filter.And(ee.Filter.equals('WRS_PATH', 44),
-                                ee.Filter.equals('WRS_ROW', 33))
+    wrs2_filter = ee.Filter.And(ee.Filter.equals('WRS_PATH', 44), ee.Filter.equals('WRS_ROW', 33))
     coll_obj = default_coll_obj(
         collections=collections,
         geometry=ee.Geometry.Rectangle(-125, 35, -120, 40),
@@ -561,4 +529,4 @@ def test_Collection_get_image_ids(collections, scene_id_list):
     # get_image_ids method makes a getInfo call internally
     output = default_coll_obj(collections=collections, variables=None).get_image_ids()
     assert type(output) is list
-    assert set(x.split('/')[-1] for x in output) == set(scene_id_list)
+    assert {x.split('/')[-1] for x in output} == set(scene_id_list)

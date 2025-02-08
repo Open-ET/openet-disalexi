@@ -26,7 +26,8 @@ def test_point_image_value(tol=0.001):
 def point_coll_value(tol=0.001):
     expected = 2362
     output = utils.point_coll_value(
-        ee.ImageCollection([ee.Image('USGS/SRTMGL1_003')]), [-106.03249, 37.17777])
+        ee.ImageCollection([ee.Image('USGS/SRTMGL1_003')]), [-106.03249, 37.17777]
+    )
     assert abs(output['elevation']['2012-04-04'] - expected) <= tol
 
 
@@ -62,8 +63,7 @@ def test_boolean_exception():
     ]
 )
 def test_date_to_time_0utc(input, expected):
-    input_img = ee.Date(input)
-    assert utils.getinfo(utils.date_to_time_0utc(input_img)) == expected
+    assert utils.getinfo(utils.date_to_time_0utc(ee.Date(input))) == expected
 
 
 # TODO: Test a few more parameterization and timesteps
@@ -74,8 +74,7 @@ def test_interpolate():
         ee.Image.constant(10).set('system:time_start', a_dt.millis()),
         ee.Image.constant(20).set('system:time_start', b_dt.millis()),
     ])
-    output = utils.constant_image_value(
-        utils.interpolate(coll, a_dt.advance(0.5, 'hour'), timestep=1))
+    output = utils.constant_image_value(utils.interpolate(coll, a_dt.advance(0.5, 'hour'), timestep=1))
     assert output['constant'] == 15
 
 

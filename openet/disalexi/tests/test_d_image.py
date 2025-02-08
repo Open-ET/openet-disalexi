@@ -13,37 +13,16 @@ COLL_ID = 'LANDSAT/LC08/C02/T1_L2'
 SCENE_ID = 'LC08_044033_20170716'
 IMAGE_ID = f'{COLL_ID}/{SCENE_ID}'
 SCENE_TIME = 1500230731090
-# SCENE_ID = 'LC08_042035_20150713'
-# SCENE_TIME = 1436812419150
 SCENE_DT = datetime.fromtimestamp(SCENE_TIME / 1000.0, UTC)
-# SCENE_DT = datetime.strptime(SCENE_ID[-8:], '%Y%m%d')
 SCENE_DATE = SCENE_DT.strftime('%Y-%m-%d')
 SCENE_DOY = int(SCENE_DT.strftime('%j'))
-SCENE_HOUR = (SCENE_DT.hour + SCENE_DT.minute / 60.0 +
-              (SCENE_DT.second + SCENE_DT.microsecond / 1000000.0) / 3600.0)
-# SCENE_HOUR = 18 + 33.0/60 + 39.15/3600
-# SCENE_TIME = utils.millis(SCENE_DT)
+SCENE_HOUR = (
+    SCENE_DT.hour + SCENE_DT.minute / 60.0 +
+    (SCENE_DT.second + SCENE_DT.microsecond / 1000000.0) / 3600.0
+)
 SCENE_0UTC_DT = datetime.strptime(SCENE_DATE, '%Y-%m-%d')
 SCENE_POINT = (-119.5, 36.0)
 TEST_POINT = (-121.5265, 38.7399)
-# TEST_POINT = (-19.44252382373145, 36.04047742246546)
-
-# SCENE_TIME = utils.getinfo(ee.Date(SCENE_DATE).millis())
-# SCENE_POINT = (-19.44252382373145, 36.04047742246546)
-# SCENE_POINT = utils.getinfo(ee.Image(IMAGE_ID).geometry().centroid())['coordinates']
-
-
-# # Should these be test fixtures instead?
-# # I'm not sure how to make them fixtures and allow input parameters
-# def toa_image(red=0.1, nir=0.9, bt=305):
-#     """Construct a fake Landsat 8 TOA image with renamed bands"""
-#     return ee.Image.constant([red, nir, bt])\
-#         .rename(['red', 'nir', 'lst']) \
-#         .set({
-#             'system:time_start': ee.Date(SCENE_DATE).millis(),
-#             'k1_constant': ee.Number(607.76),
-#             'k2_constant': ee.Number(1260.56),
-#         })
 
 
 # DisALEXI needs a non-constant image since it computes lat/lon
@@ -56,8 +35,8 @@ def default_image(
         # lst=306.5,
         coll_id=None,
         scene_id=None,
-        scene_time=None
-        ):
+        scene_time=None,
+):
     if coll_id is None:
         coll_id = COLL_ID
     if scene_id is None:
@@ -65,12 +44,8 @@ def default_image(
     if scene_time is None:
         scene_time = SCENE_TIME
     mask_img = ee.Image(f'{coll_id}/{scene_id}').select(['SR_B1']).multiply(0)
-    # mask_img = ee.Image('projects/disalexi/ta/CONUS_V001/{}_0'.format(SCENE_ID))\
-    #     .select(0).multiply(0)
     return (
-        ee.Image([mask_img.add(albedo), mask_img.add(cfmask),
-                     # mask_img.add(lai), mask_img.add(lst),
-                     mask_img.add(ndvi)])
+        ee.Image([mask_img.add(albedo), mask_img.add(cfmask), mask_img.add(ndvi)])
         .rename(['albedo', 'cfmask', 'ndvi'])
         .set({
             'system:index': scene_id,
@@ -94,7 +69,7 @@ def default_image_args(
         et_reference_resample='nearest',
         stability_iterations=25,
         albedo_iterations=10,
-        ):
+):
     return {
         'image': default_image(albedo=albedo, cfmask=cfmask, ndvi=ndvi),
         'ta_source': ta_source,
@@ -123,9 +98,11 @@ def default_image_obj(
         et_reference_resample='nearest',
         stability_iterations=25,
         albedo_iterations=10,
-        ):
+):
     return disalexi.Image(**default_image_args(
-        albedo=albedo, cfmask=cfmask, ndvi=ndvi,
+        albedo=albedo,
+        cfmask=cfmask,
+        ndvi=ndvi,
         ta_source=ta_source,
         alexi_source=alexi_source,
         lai_source=lai_source,
@@ -147,15 +124,14 @@ def test_Image_init_default_parameters():
     #assert m.lai_source == 'projects/openet/assets/lai/landsat/c02'
     assert m.lst_source == 'projects/openet/assets/lst/landsat/c02'
     assert m.elevation_source == 'USGS/SRTMGL1_003'
-    assert m.landcover_source == 'USGS/NLCD_RELEASES/2021_REL/NLCD'
-    # assert m.landcover_source == 'projects/sat-io/open-datasets/USGS/ANNUAL_NLCD/LANDCOVER'
+    assert m.landcover_source == 'USGS/NLCD_RELEASES/2019_REL/NLCD'
     assert m.air_pres_source == 'CFSR'
     assert m.air_temp_source == 'CFSR'
     assert m.rs_daily_source == 'CFSR'
     assert m.rs_hourly_source == 'CFSR'
     assert m.vapor_pres_source == 'CFSR'
     assert m.wind_speed_source == 'CFSR'
-    # assert m.stabil_iter == 10
+    assert m.stabil_iter is None
     assert m.albedo_iter == 10
     assert m.rs_interp_flag is True
     assert m.ta_smooth_flag is True
@@ -169,48 +145,15 @@ def test_Image_init_default_parameters():
 def test_Image_init_calculated_properties():
     d = default_image_obj()
     assert utils.getinfo(d.time_start) == SCENE_TIME
-    # assert utils.getinfo(d.scene_id) == SCENE_ID
-    # assert utils.getinfo(d.wrs2_tile) == 'p{}r{}'.format(
-    #     SCENE_ID.split('_')[1][:3], SCENE_ID.split('_')[1][3:])
 
 
 def test_Image_init_date_properties():
     d = default_image_obj()
     assert utils.getinfo(d.datetime)['value'] == SCENE_TIME
-    # assert utils.getinfo(d.year) == int(SCENE_DATE.split('-')[0])
-    # assert utils.getinfo(d.month) == int(SCENE_DATE.split('-')[1])
     assert utils.getinfo(d.start_date)['value'] == utils.millis(SCENE_0UTC_DT)
     assert utils.getinfo(d.end_date)['value'] == utils.millis(SCENE_0UTC_DT + timedelta(days=1))
-    # assert utils.getinfo(d.doy) == SCENE_DOY
-    # assert utils.getinfo(d.cycle_day) == int((SCENE_DT - datetime(1970, 1, 3)).days % 8 + 1)
     assert utils.getinfo(d.hour) == SCENE_HOUR
     assert utils.getinfo(d.hour_int) == int(SCENE_HOUR)
-
-
-# def test_Image_init_scene_id_property():
-#     """Test that the system:index from a merged collection is parsed"""
-#     input_img = default_image()
-#     m = disalexi.Image(input_img.set('system:index', '1_2_' + SCENE_ID))
-#     assert utils.getinfo(m.scene_id) == SCENE_ID
-
-
-# CGM - These aren't lazy properties and don't have properties being set on them
-# def test_Image_ndvi_properties():
-#     """Test if properties are set on the NDVI image"""
-#     output = utils.getinfo(disalexi.Image(default_image()).ndvi)
-#     assert output['bands'][0]['id'] == 'ndvi'
-#     assert output['properties']['system:index'] == SCENE_ID
-#     assert output['properties']['system:time_start'] == SCENE_TIME
-#     assert output['properties']['image_id'] == IMAGE_ID
-#
-#
-# def test_Image_lst_properties():
-#     """Test if properties are set on the LST image"""
-#     output = utils.getinfo(disalexi.Image(default_image()).lst)
-#     assert output['bands'][0]['id'] == 'lst'
-#     assert output['properties']['system:index'] == SCENE_ID
-#     assert output['properties']['system:time_start'] == SCENE_TIME
-#     assert output['properties']['image_id'] == IMAGE_ID
 
 
 @pytest.mark.parametrize(
@@ -243,15 +186,18 @@ def test_Image_ta_source(source, xy, expected, tol=0.01):
 #   smoothing radius is currently too small to change the data
 def test_Image_ta_smooth_flag(tol=0.01):
     """The smooth flag defaults to True, so set False to test"""
-    m = disalexi.Image(default_image(), ta_source='CONUS_V006', ta_smooth_flag=False)
+    m = disalexi.Image(
+        default_image(), ta_source='projects/openet/assets/disalexi/tair/conus_v006_1k', ta_smooth_flag=False
+    )
     output = utils.point_image_value(ee.Image(m.ta), TEST_POINT)
     assert abs(output['ta'] - 290) <= tol
-    # assert abs(output['ta'] - 298.1013811163322) <= tol
 
 
 def test_Image_ta_interp_flag(tol=0.01):
     """The interp flag defaults to True, so set False to test"""
-    m = disalexi.Image(default_image(), ta_source='CONUS_V006', ta_interp_flag=False)
+    m = disalexi.Image(
+        default_image(), ta_source='projects/openet/assets/disalexi/tair/conus_v006_1k', ta_interp_flag=False
+    )
     output = utils.point_image_value(ee.Image(m.ta), TEST_POINT)
     assert abs(output['ta'] - 298.33333845091215) <= tol
 
@@ -268,7 +214,6 @@ def test_Image_ta_properties():
     assert output['properties']['system:index'] == SCENE_ID
     assert output['properties']['system:time_start'] == SCENE_TIME
     assert output['properties']['image_id'] == IMAGE_ID
-   # assert output['properties']['ta_iteration'] > 0
 
 
 # CGM - Added the scene_id for this test to make it easy to switch the datetime
@@ -279,8 +224,7 @@ def test_Image_ta_properties():
         # ALEXI ET is currently in MJ m-2 d-1
         ['LC08_044033_20200708', 'CONUS_V006', TEST_POINT, 17.999324798583984 * 0.408],
         ['LC08_044033_20200724', 'CONUS_V006', TEST_POINT, 17.819684982299805 * 0.408],
-        [None, 'projects/ee-tulipyangyun-2/assets/alexi/ALEXI_V006',
-         TEST_POINT, 12.765579223632812 * 0.408],
+        [None, 'projects/ee-tulipyangyun-2/assets/alexi/ALEXI_V006', TEST_POINT, 12.765579223632812 * 0.408],
         [None, ee.Image('USGS/SRTMGL1_003').multiply(0).add(10), TEST_POINT, 10],
         [None, '10.382039', TEST_POINT, 10.382039],
         [None, 10.382039, TEST_POINT, 10.382039],
@@ -291,9 +235,9 @@ def test_Image_alexi_source(scene_id, source, xy, expected, tol=0.0001):
         scene_time = ee.Image(f'{COLL_ID}/{scene_id}').get('system:time_start').getInfo()
     else:
         scene_time = None
-    output = utils.point_image_value(disalexi.Image(
-        default_image(scene_id=scene_id, scene_time=scene_time),
-        alexi_source=source).et_alexi, xy)
+    output = utils.point_image_value(
+        disalexi.Image(default_image(scene_id=scene_id, scene_time=scene_time),  alexi_source=source).et_alexi, xy
+    )
     assert abs(output['et_alexi'] - expected) <= tol
 
 
@@ -317,15 +261,15 @@ def test_Image_alexi_band_name():
     ]
 )
 def test_Image_elevation_source(source, xy, expected, tol=0.001):
-    output = utils.point_image_value(disalexi.Image(
-        default_image(), elevation_source=source).elevation, xy)
+    output = utils.point_image_value(
+        disalexi.Image(default_image(), elevation_source=source).elevation, xy
+    )
     assert abs(output['elevation'] - expected) <= tol
 
 
 # def test_Image_elevation_source_exception():
 #     with pytest.raises(ValueError):
-#         utils.getinfo(disalexi.Image(
-#             default_image(), elevation_source='').elevation)
+#         utils.getinfo(disalexi.Image(default_image(), elevation_source='').elevation)
 
 
 def test_Image_elevation_band_name():
@@ -336,8 +280,10 @@ def test_Image_elevation_band_name():
 @pytest.mark.parametrize(
     'source, xy, expected',
     [
-        ['projects/sat-io/open-datasets/USGS/ANNUAL_NLCD/LANDCOVER/Annual_NLCD_LndCov_2021_CU_C1V0',
-         TEST_POINT, 82],
+        [
+            'projects/sat-io/open-datasets/USGS/ANNUAL_NLCD/LANDCOVER/Annual_NLCD_LndCov_2021_CU_C1V0',
+            TEST_POINT, 82
+        ],
         ['projects/sat-io/open-datasets/USGS/ANNUAL_NLCD/LANDCOVER', TEST_POINT, 82],
         ['USGS/NLCD_RELEASES/2021_REL/NLCD/2021', TEST_POINT, 82],
         ['USGS/NLCD_RELEASES/2021_REL/NLCD', TEST_POINT, 82],
@@ -349,8 +295,9 @@ def test_Image_elevation_band_name():
     ]
 )
 def test_Image_landcover_source(source, xy, expected, tol=0.001):
-    output = utils.point_image_value(disalexi.Image(
-        default_image(), landcover_source=source).landcover, xy)
+    output = utils.point_image_value(
+        disalexi.Image(default_image(), landcover_source=source).landcover, xy
+    )
     assert abs(output['landcover'] - expected) <= tol
 
 
@@ -398,8 +345,9 @@ def test_Image_landcover_band_name():
     ]
 )
 def test_Image_air_pressure_source(source, xy, expected, tol=0.0001):
-    output = utils.point_image_value(disalexi.Image(
-        default_image(), air_pres_source=source).air_pressure, xy)
+    output = utils.point_image_value(
+        disalexi.Image(default_image(), air_pres_source=source).air_pressure, xy
+    )
     assert abs(output['air_pressure'] - expected) <= tol
 
 
@@ -422,8 +370,9 @@ def test_Image_air_pressure_band_name():
     ]
 )
 def test_Image_air_temperature_source(source, xy, expected, tol=0.0001):
-    output = utils.point_image_value(disalexi.Image(
-        default_image(), air_temp_source=source).air_temperature, xy)
+    output = utils.point_image_value(
+        disalexi.Image(default_image(), air_temp_source=source).air_temperature, xy
+    )
     assert abs(output['air_temperature'] - expected) <= tol
 
 
@@ -449,8 +398,7 @@ def test_Image_air_temperature_band_name():
     ]
 )
 def test_Image_rs_daily_source(source, xy, expected, tol=0.0001):
-    output = utils.point_image_value(disalexi.Image(
-        default_image(), rs_daily_source=source).rs24, xy)
+    output = utils.point_image_value(disalexi.Image(default_image(), rs_daily_source=source).rs24, xy)
     assert abs(output['rs'] - expected) <= tol
 
 
@@ -474,20 +422,21 @@ def test_Image_rs_daily_band_name():
     ]
 )
 def test_Image_rs_hourly_source(source, xy, expected, tol=0.0001):
-    output = utils.point_image_value(disalexi.Image(
-        default_image(), rs_hourly_source=source).rs1, xy)
+    output = utils.point_image_value(disalexi.Image(default_image(), rs_hourly_source=source).rs1, xy)
     assert abs(output['rs'] - expected) <= tol
 
 
 def test_Image_rs_hourly_interp(tol=0.001):
-    output = utils.point_image_value(disalexi.Image(
-        default_image(), rs_hourly_source='CFSR', rs_interp_flag=True).rs1, TEST_POINT)
+    output = utils.point_image_value(
+        disalexi.Image(default_image(), rs_hourly_source='CFSR', rs_interp_flag=True).rs1, TEST_POINT
+    )
     assert abs(output['rs'] - 936.7535839402974) <= tol
 
 
 def test_Image_rs_hourly_no_interp(tol=0.001):
-    output = utils.point_image_value(disalexi.Image(
-        default_image(), rs_hourly_source='CFSR', rs_interp_flag=False).rs1, TEST_POINT)
+    output = utils.point_image_value(
+        disalexi.Image( default_image(), rs_hourly_source='CFSR', rs_interp_flag=False).rs1, TEST_POINT
+    )
     assert abs(output['rs'] - 872.6183471679688) <= tol
 
 
@@ -510,8 +459,9 @@ def test_Image_rs_hourly_band_name():
     ]
 )
 def test_Image_vapor_pressure_source(source, xy, expected, tol=0.0001):
-    output = utils.point_image_value(disalexi.Image(
-        default_image(), vapor_pres_source=source).vapor_pressure, xy)
+    output = utils.point_image_value(
+        disalexi.Image(default_image(), vapor_pres_source=source).vapor_pressure, xy
+    )
     assert abs(output['vapor_pressure'] - expected) <= tol
 
 
@@ -535,8 +485,9 @@ def test_Image_vapor_pressure_band_name():
     ]
 )
 def test_Image_wind_speed_source(source, xy, expected, tol=0.0001):
-    output = utils.point_image_value(disalexi.Image(
-        default_image(), wind_speed_source=source).wind_speed, xy)
+    output = utils.point_image_value(
+        disalexi.Image(default_image(), wind_speed_source=source).wind_speed, xy
+    )
     assert abs(output['wind_speed'] - expected) <= tol
 
 
@@ -548,8 +499,9 @@ def test_Image_wind_speed_source(source, xy, expected, tol=0.0001):
     ]
 )
 def test_Image_wind_speed_clamping(source, xy, expected, tol=0.0001):
-    output = utils.point_image_value(disalexi.Image(
-        default_image(), wind_speed_source=source).wind_speed, xy)
+    output = utils.point_image_value(
+        disalexi.Image(default_image(), wind_speed_source=source).wind_speed, xy
+    )
     assert abs(output['wind_speed'] - expected) <= tol
 
 
@@ -647,8 +599,7 @@ def test_Image_et_reference_properties():
 
 def test_Image_et_reference_default_values(expected=10.0, tol=0.0001):
     output = utils.point_image_value(
-        default_image_obj(et_reference_source=expected).et_reference,
-        TEST_POINT
+        default_image_obj(et_reference_source=expected).et_reference, TEST_POINT
     )
     assert abs(output['et_reference'] - expected) <= tol
 
@@ -664,25 +615,11 @@ def test_Image_et_reference_default_values(expected=10.0, tol=0.0001):
     ]
 )
 def test_Image_et_reference_source(source, band, xy, expected, tol=0.001):
-    output = utils.point_image_value(default_image_obj(
-        et_reference_source=source, et_reference_band=band).et_reference, xy)
+    output = utils.point_image_value(
+        default_image_obj(et_reference_source=source, et_reference_band=band).et_reference, xy
+    )
     assert abs(output['et_reference'] - expected) <= tol
 
-
-# def test_Image_et_fraction_default_values(et_reference_source=10,
-#                                           expected=2.5799/10, tol=0.0001):
-#     # Check that ETf = ET / ETr
-#     output = utils.point_image_value(default_image_obj(
-#         et_reference_source=et_reference_source).et_fraction, TEST_POINT)
-#     assert abs(output['et_fraction'] - expected) <= tol
-#
-#
-# def test_Image_et_fraction_properties():
-#     """Test if properties are set on the ETf image"""
-#     output = utils.getinfo(default_image_obj().et_fraction)
-#     assert output['bands'][0]['id'] == 'et_fraction'
-#     assert output['properties']['system:index'] == SCENE_ID
-#     assert output['properties']['system:time_start'] == SCENE_TIME
 
 
 def test_Image_mask_values():
@@ -804,13 +741,6 @@ def test_Image_from_landsat_c02_l2_image():
     assert output['properties']['system:index'] == image_id.split('/')[-1]
 
 
-# def test_Image_from_landsat_c02_l2_et_fraction():
-#     """Test if ETf can be built for a Landsat images"""
-#     image_id = 'LANDSAT/LC08/C02/T1_L2/LC08_044033_20170716'
-#     output = utils.getinfo(disalexi.Image.from_landsat_c1_sr(image_id).et_fraction)
-#     assert output['properties']['system:index'] == image_id.split('/')[-1]
-
-
 def test_Image_from_landsat_c02_l2_et():
     """Test if ET can be built for a Landsat images"""
     image_id = 'LANDSAT/LC08/C02/T1_L2/LC08_044033_20170716'
@@ -829,8 +759,7 @@ def test_Image_from_landsat_c02_l2_scaling():
     sr_img = ee.Image('LANDSAT/LC08/C02/T1_L2/LC08_044033_20170716')
     input_img = (
         ee.Image.constant([10909, 10909, 10909, 14545, 10909, 10909, 44177.6, 21824, 0])
-        .rename(['SR_B2', 'SR_B3', 'SR_B4', 'SR_B5', 'SR_B6', 'SR_B7',
-                 'ST_B10', 'QA_PIXEL', 'QA_RADSAT'])
+        .rename(['SR_B2', 'SR_B3', 'SR_B4', 'SR_B5', 'SR_B6', 'SR_B7', 'ST_B10', 'QA_PIXEL', 'QA_RADSAT'])
         .set({'SPACECRAFT_ID': ee.String(sr_img.get('SPACECRAFT_ID')),
               'system:id': ee.String(sr_img.get('system:id')),
               'system:index': ee.String(sr_img.get('system:index')),
@@ -862,54 +791,3 @@ def test_Image_from_method_kwargs():
     assert disalexi.Image.from_landsat_c02_l2(
         'LANDSAT/LC08/C02/T1_L2/LC08_042035_20150713',
         elevation_source='DEADBEEF').elevation_source == 'DEADBEEF'
-
-
-# # CGM - Track the default input values to see if they change
-# @pytest.mark.parametrize(
-#     'xy, expected',
-#     [
-#         [TEST_POINT, 0.1259961],
-#         [[-121.50822, 38.71776], 0.1716302],
-#     ]
-# )
-# def test_Image_albedo_values(xy, expected, tol=0.0001):
-#     output = utils.point_image_value(disalexi.Image.from_image_id(
-#         'LANDSAT/LC08/C02/T1_L2/LC08_044033_20170716').albedo, xy)
-#     assert abs(output['albedo'] - expected) <= tol
-#
-#
-# @pytest.mark.parametrize(
-#     'xy, expected',
-#     [
-#         [TEST_POINT, 0.8743930074457752],
-#         [[-121.50822, 38.71776], 0.16195230171935662],
-#     ]
-# )
-# def test_Image_ndvi_values(xy, expected, tol=0.0001):
-#     output = utils.point_image_value(disalexi.Image.from_image_id(
-#         'LANDSAT/LC08/C02/T1_L2/LC08_044033_20170716').ndvi, xy)
-#     assert abs(output['ndvi'] - expected) <= tol
-#
-#
-# @pytest.mark.parametrize(
-#     'xy, expected',
-#     [
-#         [TEST_POINT, 4.234],
-#         [[-121.50822, 38.71776], 0.5791],
-#     ]
-# )
-# def test_Image_lai_values(xy, expected, tol=0.0001):
-#     output = utils.point_image_value(disalexi.Image(default_image()).lai, xy)
-#     assert abs(output['lai'] - expected) <= tol
-#
-#
-# @pytest.mark.parametrize(
-#     ' xy, expected',
-#     [
-#         [TEST_POINT, 306.5],
-#         [[-121.50822, 38.71776], 323.6],
-#     ]
-# )
-# def test_Image_lst_values(xy, expected, tol=0.0001):
-#     output = utils.point_image_value(disalexi.Image(default_image()).lst, xy)
-#     assert abs(output['lst'] - expected) <= tol
