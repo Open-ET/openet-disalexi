@@ -171,26 +171,6 @@ def test_Image_ta_mosaic_interpolate(ta_init=290):
 @pytest.mark.parametrize(
     'ta_values, bias_values, expected',
     [
-        [[280, 285, 290, 295, 300], [-4, -3, -2, 1, 3], 295],    # Normal bias profile
-        [[280, 285, 290, 295, 300], [-2, -2, -2, 1, 3], 295],    # Constant negative biases
-        [[280, 285, 290, 295, 300], [1, 2, 3, 4, 5], 280],       # All positive biases
-        [[280, 285, 290, 295, 300], [-5, -4, -3, -2, -1], 300],  # All negative biases
-    ]
-)
-def test_Image_ta_mosaic_min_bias_values(ta_values, bias_values, expected):
-    d_obj = disalexi.Image(**default_image_args())
-    mask_img = d_obj.et_alexi.multiply(0)
-    ta_images = [mask_img.add(x).rename(f'step_{i:02d}_ta') for i, x in enumerate(ta_values)]
-    bias_images = [mask_img.add(x).rename(f'step_{i:02d}_bias') for i, x in enumerate(bias_values)]
-    ta_mosaic_img = ee.Image(ta_images + bias_images)
-    ta_interp = disalexi.ta_mosaic_min_bias(ta_mosaic_img)
-    output = utils.point_image_value(ta_interp, TEST_POINT)
-    assert abs(output['ta'] - expected) < 1
-
-
-@pytest.mark.parametrize(
-    'ta_values, bias_values, expected',
-    [
         [[280, 285, 290, 295, 300], [-4, -3, -2, 1, 3], 293.33],
         [[280, 285, 290, 295, 300], [-2, -2, -1, 1, 3], 292.5],
         # Constant negative bias values should pick the last one before going positive
@@ -226,6 +206,26 @@ def test_Image_ta_mosaic_interpolate_values(ta_values, bias_values, expected):
         assert output['ta_interp'] is None
     else:
         assert abs(output['ta_interp'] - expected) < 1
+
+
+@pytest.mark.parametrize(
+    'ta_values, bias_values, expected',
+    [
+        [[280, 285, 290, 295, 300], [-4, -3, -2, 1, 3], 295],    # Normal bias profile
+        [[280, 285, 290, 295, 300], [-2, -2, -2, 1, 3], 295],    # Constant negative biases
+        [[280, 285, 290, 295, 300], [1, 2, 3, 4, 5], 280],       # All positive biases
+        [[280, 285, 290, 295, 300], [-5, -4, -3, -2, -1], 300],  # All negative biases
+    ]
+)
+def test_Image_ta_mosaic_min_bias_values(ta_values, bias_values, expected):
+    d_obj = disalexi.Image(**default_image_args())
+    mask_img = d_obj.et_alexi.multiply(0)
+    ta_images = [mask_img.add(x).rename(f'step_{i:02d}_ta') for i, x in enumerate(ta_values)]
+    bias_images = [mask_img.add(x).rename(f'step_{i:02d}_bias') for i, x in enumerate(bias_values)]
+    ta_mosaic_img = ee.Image(ta_images + bias_images)
+    ta_interp = disalexi.ta_mosaic_min_bias(ta_mosaic_img)
+    output = utils.point_image_value(ta_interp, TEST_POINT)
+    assert abs(output['ta'] - expected) < 1
 
 
 def test_Image_set_landcover_vars_default(tol=1E-6):

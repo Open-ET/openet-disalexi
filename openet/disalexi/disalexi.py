@@ -776,9 +776,18 @@ class Image(object):
             ta_coll = (
                 ee.ImageCollection(self.ta_source)
                 .filterMetadata('image_id', 'equals', self.id)
-                .limit(1, 'step_size', False)
             )
-            ta_img = self.ta_coarse_final(ta_mosaic_img=ee.Image(ta_coll.first()))
+            ta_img = ta_mosaic_interpolate(ee.Image(ta_coll.first())).select(['ta_interp'])
+            # Apply simple smoothing to the interpolated Ta image
+            # The updateMask call is to ensure that filled edge pixels are not included
+            if self.ta_smooth_flag:
+                ta_img = (
+                    ta_img.focal_mean(1, 'circle', 'pixels')
+                    .updateMask(ta_img.select(['ta_interp']).mask())
+                    .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)
+                )
+            # Interpolate to the Landsat grid
+            ta_img = ta_img.resample('bilinear').reproject(crs=self.crs, crsTransform=self.transform)
         else:
             raise ValueError(f'Unsupported ta_source: {self.ta_source}\n')
 
@@ -1206,40 +1215,7 @@ class Image(object):
 
         return ee.ImageCollection(ta_coll.map(ta_func)).toBands()
 
-    def ta_coarse_final(self, ta_mosaic_img):
-        """Compute final coarse scale air temperature estimate from Ta mosaic
 
-        Parameters
-        ----------
-        ta_mosaic_img : ee.Image
-            Mosaic Ta computed using ta_coarse_mosaic
-
-        Returns
-        -------
-        image : ee.Image
-            ALEXI scale air temperature image
-
-        """
-        # Interpolate the minimum bias Ta from the mosaic image
-        ta_interp_img = ta_mosaic_interpolate(ta_mosaic_img).select(['ta_interp'])
-
-        # Apply simple smoothing to the interpolated Ta image
-        # The updateMask call is to ensure that filled edge pixels are not included
-        if self.ta_smooth_flag:
-            ta_interp_img = (
-                ta_interp_img.focal_mean(1, 'circle', 'pixels')
-                # CGM - Testing without reproject call, but it may be needed
-                # .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)
-                .updateMask(ta_interp_img.select(['ta_interp']).mask())
-            )
-            # CGM - Commented out since rounding is not needed to save storage space
-            # ta_interp_img = ta_interp_img.multiply(10).round().divide(10)
-
-        return ta_interp_img.set(self.properties)
-
-
-# TODO: Maybe rename also, ta_mosaic_zero_bias()?
-# TODO: Could this be moved into the Class and/or into the ta_coarse_final function?
 def ta_mosaic_interpolate(ta_mosaic_img):
     """Interpolate the air temperature for a bias of 0 from a mosaic stack
 
@@ -1286,8 +1262,7 @@ def ta_mosaic_interpolate(ta_mosaic_img):
     # Identify the "bracketing" Ta and bias values
     # If there is a transition, use the "last" transition
     # If there is not a transition, use the minimum absolute bias for both
-    # Note, the index is for the reversed arrays
-    # B is the "high" value, A is the "low value"
+    # Note, the index is for the reversed arrays so B is the "high" value, A is the "low value"
     index_b = transition_index.subtract(1).max(0).where(transition_max.eq(0), min_bias_index)
     index_a = (
         transition_index.min(ta_bands.size().subtract(1))
@@ -1309,14 +1284,11 @@ def ta_mosaic_interpolate(ta_mosaic_img):
     # Mask out Ta cells outside the interpolation range
     ta_img = ta_img.updateMask(ta_a.lt(ta_b))
 
-    # # CGM - This is mostly needed for exporting 10k steps, commenting out
+    # # CGM - It doesn't seem like this is needed
+    # #   since the all negative test values are being masked out,
+    # #   but leaving commented out for now
     # # Mask out Ta cells with all negative biases
     # ta_img = ta_img.updateMask(bias_b.lt(0).And(bias_a.lt(0)).Not())
-
-    # # CGM - Not applying since the interpolate Ta is not being exported
-    # #   and we don't need to conserve storage space
-    # # Round to the nearest tenth (should it be hundredth?)
-    # ta_img = ta_img.multiply(10).round().divide(10)
 
     return (
         ta_img.addBands([ta_a, bias_a, ta_b, bias_b])

@@ -158,18 +158,18 @@ def test_Image_init_date_properties():
 @pytest.mark.parametrize(
     'source, xy, expected',
     [
-        #['projects/openet/assets/disalexi/tair/conus_v006', TEST_POINT, 298.047307556939],
-        #['projects/openet/assets/disalexi/tair/conus_v006', [-121.50822, 38.71776], 297.32998269291346],
-        ['projects/openet/assets/disalexi/tair/conus_v006_1k', TEST_POINT, 298.33333845091215],
-        ['projects/openet/assets/disalexi/tair/conus_v006_1k', [-121.50822, 38.71776], 297.9696997125633],
-        ['projects/openet/disalexi/tair/conus_v006_1k', TEST_POINT, 298.33333845091215],
-        ['projects/openet/disalexi/tair/conus_v006_1k', [-121.50822, 38.71776], 297.9696997125633],
-        # Note the CONUS_V006 keyword is currently pointed at the 1k steps assets
-        ['CONUS_V006', TEST_POINT, 298.33333845091215],
-        ['CONUS_V006', [-121.50822, 38.71776], 297.9696997125633],
-        # Backup of original CONUS_V006 test values
-        # ['CONUS_V006', TEST_POINT, 298.047307556939],
-        # ['CONUS_V006', [-121.50822, 38.71776], 297.32998269291346],
+        # Direct & variable step assets
+        ['projects/openet/assets/disalexi/tair/conus_v006', TEST_POINT, 299.68001353628875],
+        ['projects/openet/assets/disalexi/tair/conus_v006', [-121.50822, 38.71776], 298.61358548716754],
+        # 1k step assets
+        ['projects/openet/assets/disalexi/tair/conus_v006_1k', TEST_POINT, 298.047307556939],
+        ['projects/openet/assets/disalexi/tair/conus_v006_1k', [-121.50822, 38.71776], 297.32998269291346],
+        # The openet legacy assets will eventually be removed
+        ['projects/openet/disalexi/tair/conus_v006_1k', TEST_POINT, 298.047307556939],
+        ['projects/openet/disalexi/tair/conus_v006_1k', [-121.50822, 38.71776], 297.32998269291346],
+        # The CONUS_V006 keyword is currently pointed at the 1k steps assets
+        ['CONUS_V006', TEST_POINT, 298.047307556939],
+        ['CONUS_V006', [-121.50822, 38.71776], 297.32998269291346],
         [ee.Image('USGS/SRTMGL1_003').multiply(0).add(10), TEST_POINT, 10],
         ['294.8', TEST_POINT, 294.8],  # Check constant values
         [294.8, TEST_POINT, 294.8],    # Check constant values
@@ -198,7 +198,7 @@ def test_Image_ta_interp_flag(tol=0.01):
         default_image(), ta_source='projects/openet/assets/disalexi/tair/conus_v006_1k', ta_interp_flag=False
     )
     output = utils.point_image_value(ee.Image(m.ta), TEST_POINT)
-    assert abs(output['ta'] - 298.33333845091215) <= tol
+    assert abs(output['ta'] - 298.047307556939) <= tol
 
 
 def test_Image_ta_source_exception():
@@ -336,7 +336,7 @@ def test_Image_landcover_band_name():
 @pytest.mark.parametrize(
     'source, xy, expected',
     [
-        ['CFSR', TEST_POINT, 100.47268342807578],
+        ['CFSR', TEST_POINT, 100.48347318265635],
         ['ESTIMATE', TEST_POINT, 101.2395327760238],
         # ['ESTIMATE', TEST_POINT, 101.26454311195941],
         ['100.41653321557092', TEST_POINT, 100.41653321557092],
@@ -390,7 +390,7 @@ def test_Image_air_temperature_band_name():
     [
         # CGM - I'm not sure why these two values are different
         #   The intermediate values are identical but end up different after smoothing
-        ['CFSR', TEST_POINT, 8594.894085673388],
+        ['CFSR', TEST_POINT, 8594.84901460842],
         [ee.Image('USGS/SRTMGL1_003').multiply(0).add(10), TEST_POINT, 10],
         ['8587.4091796875', TEST_POINT, 8587.4091796875],
         [8587.4091796875, TEST_POINT, 8587.4091796875],
@@ -414,7 +414,7 @@ def test_Image_rs_daily_band_name():
 @pytest.mark.parametrize(
     'source, xy, expected',
     [
-        ['CFSR', TEST_POINT, 936.7535839402974],
+        ['CFSR', TEST_POINT, 936.7493916867356],
         [ee.Image('USGS/SRTMGL1_003').multiply(0).add(10), TEST_POINT, 10],
         ['946.6906', TEST_POINT, 946.6906],
         [946.6906, TEST_POINT, 946.6906],
@@ -429,14 +429,14 @@ def test_Image_rs_hourly_interp(tol=0.001):
     output = utils.point_image_value(
         disalexi.Image(default_image(), rs_hourly_source='CFSR', rs_interp_flag=True).rs1, TEST_POINT
     )
-    assert abs(output['rs'] - 936.7535839402974) <= tol
+    assert abs(output['rs'] - 936.7493916867356) <= tol
 
 
 def test_Image_rs_hourly_no_interp(tol=0.001):
     output = utils.point_image_value(
         disalexi.Image( default_image(), rs_hourly_source='CFSR', rs_interp_flag=False).rs1, TEST_POINT
     )
-    assert abs(output['rs'] - 872.6183471679688) <= tol
+    assert abs(output['rs'] - 872.6140747070312) <= tol
 
 
 def test_Image_rs_hourly_source_exception():
@@ -477,7 +477,7 @@ def test_Image_vapor_pressure_band_name():
 @pytest.mark.parametrize(
     'source, xy, expected',
     [
-        ['CFSR', TEST_POINT, 2.81451039191475],
+        ['CFSR', TEST_POINT, 2.814758509561662],
         [ee.Image('USGS/SRTMGL1_003').multiply(0).add(10), TEST_POINT, 10],
         ['2.001476', TEST_POINT, 2.001476],
         [2.001476, TEST_POINT, 2.001476],
@@ -572,7 +572,7 @@ def test_Image_lst_source(source, xy, expected, tol=0.0001):
     assert abs(output['lst'] - expected) <= tol
 
 
-def test_Image_et_default_values(expected=5.723344546815065, tol=0.0001):
+def test_Image_et_default_values(expected=5.6248832186825375, tol=0.0001):
     output = utils.point_image_value(default_image_obj().et, TEST_POINT)
     assert abs(output['et'] - expected) <= tol
 
@@ -700,7 +700,7 @@ def test_Image_calculate_values(tol=0.0001):
         .calculate(['et'])
     #     .calculate(['et', 'et_reference', 'et_fraction'])
     output = utils.point_image_value(output_img, TEST_POINT)
-    assert abs(output['et'] - 7.392630100250244) <= tol
+    assert abs(output['et'] - 7.392495155334473) <= tol
     # assert abs(output['et_reference'] - 10) <= tol
     # assert abs(output['et_fraction'] - 0.58) <= tol
 
