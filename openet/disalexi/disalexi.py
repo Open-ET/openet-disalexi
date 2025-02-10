@@ -265,7 +265,7 @@ class Image(object):
 
         # CGM - Hardcoding to the CONUS transform and ancillary assets since they
         #   are identical for all versions and global is not yet supported
-        self.alexi_geo = [0.04, 0, -125.04, 0, -0.04, 49.8]
+        self.alexi_geo = [0.04, 0, -125.02, 0, -0.04, 49.78]
         self.alexi_crs = 'EPSG:4326'
         self.alexi_elev = ee.Image('projects/openet/assets/alexi/ancillary/conus/v006/elevation')
         self.alexi_lat = ee.Image('projects/openet/assets/alexi/ancillary/conus/v006/latitude')
@@ -284,7 +284,7 @@ class Image(object):
         #             ee.Algorithms.Describe(alexi_img.projection())).get('transform'))
         #         self.alexi_crs = alexi_img.projection().crs()
         # else:
-        #     self.alexi_geo = [0.04, 0, -125.04, 0, -0.04, 49.8]
+        #     self.alexi_geo = [0.04, 0, -125.02, 0, -0.04, 49.78]
         #     self.alexi_crs = 'EPSG:4326'
 
     @classmethod
@@ -1220,23 +1220,26 @@ class Image(object):
             ALEXI scale air temperature image
 
         """
-        # Interpolate the minimum bias Ta from the 1k steps
+        # Interpolate the minimum bias Ta from the mosaic image
         ta_interp_img = ta_mosaic_interpolate(ta_mosaic_img).select(['ta_interp'])
 
-        # Apply simple smoothing to the interpolated Ta band and save as "ta_smooth"
-        # This will fill small 1 pixel holes and round to the nearest tenth
+        # Apply simple smoothing to the interpolated Ta image
+        # The updateMask call is to ensure that filled edge pixels are not included
         if self.ta_smooth_flag:
             ta_interp_img = (
                 ta_interp_img.focal_mean(1, 'circle', 'pixels')
                 # CGM - Testing without reproject call, but it may be needed
                 # .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)
-                .multiply(10).round().divide(10)
+                .updateMask(ta_interp_img.select(['ta_interp']).mask())
             )
+            # CGM - Commented out since rounding is not needed to save storage space
+            # ta_interp_img = ta_interp_img.multiply(10).round().divide(10)
 
         return ta_interp_img.set(self.properties)
 
 
 # TODO: Maybe rename also, ta_mosaic_zero_bias()?
+# TODO: Could this be moved into the Class and/or into the ta_coarse_final function?
 def ta_mosaic_interpolate(ta_mosaic_img):
     """Interpolate the air temperature for a bias of 0 from a mosaic stack
 
@@ -1306,15 +1309,17 @@ def ta_mosaic_interpolate(ta_mosaic_img):
     # Mask out Ta cells outside the interpolation range
     ta_img = ta_img.updateMask(ta_a.lt(ta_b))
 
-    # # CGM - This is mostly needed at the 10k step size
-    # #   Commenting out for now
+    # # CGM - This is mostly needed for exporting 10k steps, commenting out
     # # Mask out Ta cells with all negative biases
     # ta_img = ta_img.updateMask(bias_b.lt(0).And(bias_a.lt(0)).Not())
 
-    # Round to the nearest tenth (should it be hundredth?)
+    # # CGM - Not applying since the interpolate Ta is not being exported
+    # #   and we don't need to conserve storage space
+    # # Round to the nearest tenth (should it be hundredth?)
+    # ta_img = ta_img.multiply(10).round().divide(10)
+
     return (
-        ta_img.multiply(10).round().divide(10)
-        .addBands([ta_a, bias_a, ta_b, bias_b])
+        ta_img.addBands([ta_a, bias_a, ta_b, bias_b])
         .rename(['ta_interp', 'ta_a', 'bias_a', 'ta_b', 'bias_b'])
     )
 

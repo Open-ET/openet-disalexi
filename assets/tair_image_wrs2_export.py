@@ -457,8 +457,6 @@ def main(
     if ((alexi_coll_id.upper() == 'CONUS_V006') or
             alexi_coll_id.endswith('projects/ee-tulipyangyun-2/assets/alexi/ALEXI_V006')):
         alexi_coll_id = 'projects/ee-tulipyangyun-2/assets/alexi/ALEXI_V006'
-        alexi_mask_id = 'projects/earthengine-legacy/assets/projects/disalexi/alexi/conus_v004_mask'
-        alexi_mask = ee.Image(alexi_mask_id).double().multiply(0)
         # alexi_geo = [0.04, 0.0, -125.02, 0.0, -0.04, 49.78]
         alexi_cs = 0.04
         alexi_x, alexi_y = -125.02, 49.78
