@@ -186,7 +186,9 @@ def test_Image_ta_source(source, xy, expected, tol=0.01):
 def test_Image_ta_smooth_flag(tol=0.01):
     """The smooth flag defaults to True, so set False to test"""
     m = disalexi.Image(
-        default_image(), ta_source='projects/openet/assets/disalexi/tair/conus_v006_1k', ta_smooth_flag=False
+        default_image(),
+        ta_source='projects/openet/assets/disalexi/tair/conus_v006_1k',
+        ta_smooth_flag=False
     )
     output = utils.point_image_value(ee.Image(m.ta), TEST_POINT)
     assert abs(output['ta'] - 290) <= tol
@@ -195,7 +197,9 @@ def test_Image_ta_smooth_flag(tol=0.01):
 def test_Image_ta_interp_flag(tol=0.01):
     """The interp flag defaults to True, so set False to test"""
     m = disalexi.Image(
-        default_image(), ta_source='projects/openet/assets/disalexi/tair/conus_v006_1k', ta_interp_flag=False
+        default_image(),
+        ta_source='projects/openet/assets/disalexi/tair/conus_v006_1k',
+        ta_interp_flag=False
     )
     output = utils.point_image_value(ee.Image(m.ta), TEST_POINT)
     assert abs(output['ta'] - 298.047307556939) <= tol
@@ -234,9 +238,8 @@ def test_Image_alexi_source(scene_id, source, xy, expected, tol=0.0001):
         scene_time = ee.Image(f'{COLL_ID}/{scene_id}').get('system:time_start').getInfo()
     else:
         scene_time = None
-    output = utils.point_image_value(
-        disalexi.Image(default_image(scene_id=scene_id, scene_time=scene_time),  alexi_source=source).et_alexi, xy
-    )
+    m = disalexi.Image(default_image(scene_id=scene_id, scene_time=scene_time), alexi_source=source)
+    output = utils.point_image_value(m.et_alexi, xy)
     assert abs(output['et_alexi'] - expected) <= tol
 
 
@@ -618,7 +621,6 @@ def test_Image_et_reference_source(source, band, xy, expected, tol=0.001):
         default_image_obj(et_reference_source=source, et_reference_band=band).et_reference, xy
     )
     assert abs(output['et_reference'] - expected) <= tol
-
 
 
 def test_Image_mask_values():

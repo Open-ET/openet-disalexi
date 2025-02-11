@@ -1077,7 +1077,6 @@ class Image(object):
         #   a single reduceResolution call
         # TODO: Test out using a median reducer instead the mean
         rr_params = {'reducer': ee.Reducer.mean().unweighted(), 'maxPixels': 30000}
-        # rr_params = {'reducer': ee.Reducer.median().unweighted(), 'maxPixels': 30000}
         proj_params = {'crs': self.alexi_crs, 'crsTransform': self.alexi_geo}
 
         # Intentionally passing measured air temperature in for both t_air and t_air0
@@ -1113,8 +1112,7 @@ class Image(object):
             stabil_iter=self.stabil_iter,
             albedo_iter=self.albedo_iter,
         )
-
-        return ta_invert.round().rename(['ta_initial']).set(self.properties)
+        return ta_invert.round().clamp(260, 340).rename(['ta_initial']).set(self.properties)
 
     def ta_coarse_mosaic(
             self,
