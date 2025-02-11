@@ -13,6 +13,7 @@ import re
 import time
 
 import ee
+import pandas as pd
 
 import openet.disalexi
 import openet.core
@@ -220,6 +221,14 @@ def main(
         raise e
 
     try:
+        scene_id_skip_path = str(ini['INPUTS']['scene_skip_list'])
+    except KeyError:
+        scene_id_skip_path = None
+        logging.debug('  scene_skip_list: not set in INI, defaulting to None')
+    except Exception as e:
+        raise e
+
+    try:
         wrs2_tiles = str(ini['INPUTS']['wrs2_tiles'])
         wrs2_tiles = sorted([x.strip() for x in wrs2_tiles.split(',')])
         # wrs2_tiles = [x.replace('p', '').replace('r', '') for x in wrs2_tiles]
@@ -360,6 +369,45 @@ def main(
     logging.info(f'  Offsets:  {tair_args["offsets"]}')
     logging.debug(f'  Retile:   {retile}')
 
+    # Read the scene ID skip list
+    if (not scene_id_skip_path) or scene_id_skip_path.lower() in ['none', '']:
+        logging.info(f'\nScene ID skip list not set')
+        scene_id_skip_list = []
+    elif scene_id_skip_path and scene_id_skip_path.startswith('https://'):
+        logging.info(f'\nScene ID skip URL: {scene_id_skip_path}')
+        scene_id_skip_list = {
+            scene_id.upper() for scene_id in
+            pd.read_csv(scene_id_skip_path)['SCENE_ID'].values
+            if re.match('L[TEC]0[45789]_\d{3}\d{3}_\d{8}', scene_id)
+        }
+        logging.info(f'  Skip list count: {len(scene_id_skip_list)}')
+        # print(list(scene_id_skip_list)[:10])
+    elif (scene_id_skip_path and
+          scene_id_skip_path.endswith('.csv') and
+          os.path.isfile(scene_id_skip_path)
+    ):
+        logging.info(f'\nScene ID skip path: {scene_id_skip_path}')
+        scene_id_skip_list = {
+            scene_id.upper() for scene_id in
+            pd.read_csv(scene_id_skip_path)['SCENE_ID'].values
+            if re.match('L[TEC]0[45789]_\d{3}\d{3}_\d{8}', scene_id)
+        }
+        logging.info(f'  Skip list count: {len(scene_id_skip_list)}')
+        # print(list(scene_id_skip_list)[:10])
+    else:
+        raise Exception(f'Unsupported scene_skip_list parameter: {scene_id_skip_path}')
+
+    # Setup datastore task logging
+    if log_tasks:
+        # Assume function is being run deployed as a cloud function
+        #   and use the default credentials (should be the SA credentials)
+        logging.debug('\nInitializing task datastore client')
+        try:
+            from google.cloud import datastore
+            datastore_client = datastore.Client(project='openet-dri')
+        except Exception as e:
+            logging.info('  Task logging disabled, error setting up datastore client')
+            log_tasks = False
 
     # Initialize Earth Engine
     if gee_key_file:
@@ -398,19 +446,18 @@ def main(
     #                         'GOOGLE_APPLICATION_CREDENTIALS key file')
     #         return False
 
+    # Build output collection and folder if necessary
+    logging.debug(f'\nExport Collection: {export_coll_id}')
+    if not ee.data.getInfo(export_coll_id.rsplit('/', 1)[0]):
+        logging.debug('\nFolder does not exist and will be built'
+                      '\n  {}'.format(export_coll_id.rsplit('/', 1)[0]))
+        input('Press ENTER to continue')
+        ee.data.createAsset({'type': 'FOLDER'}, export_coll_id.rsplit('/', 1)[0])
 
-    # Setup datastore task logging
-    if log_tasks:
-        # Assume function is being run deployed as a cloud function
-        #   and use the default credentials (should be the SA credentials)
-        logging.debug('\nInitializing task datastore client')
-        try:
-            from google.cloud import datastore
-            datastore_client = datastore.Client(project='openet-dri')
-        except Exception as e:
-            logging.info('  Task logging disabled, error setting up datastore client')
-            log_tasks = False
-
+    if not ee.data.getInfo(export_coll_id):
+        logging.info(f'\nExport collection does not exist and will be built\n  {export_coll_id}')
+        input('Press ENTER to continue')
+        ee.data.createAsset({'type': 'IMAGE_COLLECTION'}, export_coll_id)
 
     # Get current running tasks
     if ready_task_max == -9999:
@@ -437,19 +484,6 @@ def main(
             delay_time=0, task_max=ready_task_max, task_count=ready_task_count
         )
 
-
-    if not ee.data.getInfo(export_coll_id.rsplit('/', 1)[0]):
-        logging.debug('\nFolder does not exist and will be built'
-                      '\n  {}'.format(export_coll_id.rsplit('/', 1)[0]))
-        input('Press ENTER to continue')
-        ee.data.createAsset({'type': 'FOLDER'}, export_coll_id.rsplit('/', 1)[0])
-    if not ee.data.getInfo(export_coll_id):
-        logging.info('\nExport collection does not exist and will be built'
-                     '\n  {}'.format(export_coll_id))
-        input('Press ENTER to continue')
-        ee.data.createAsset({'type': 'IMAGE_COLLECTION'}, export_coll_id)
-
-
     # Get an ET image to set the Ta values to
     logging.debug('\nALEXI ET properties')
     alexi_coll_id = model_args['alexi_source']
@@ -457,9 +491,9 @@ def main(
     if ((alexi_coll_id.upper() == 'CONUS_V006') or
             alexi_coll_id.endswith('projects/ee-tulipyangyun-2/assets/alexi/ALEXI_V006')):
         alexi_coll_id = 'projects/ee-tulipyangyun-2/assets/alexi/ALEXI_V006'
-        # alexi_geo = [0.04, 0.0, -125.02, 0.0, -0.04, 49.78]
         alexi_cs = 0.04
         alexi_x, alexi_y = -125.02, 49.78
+        # alexi_geo = [0.04, 0.0, -125.02, 0.0, -0.04, 49.78]
     else:
         raise ValueError(f'unsupported ALEXI source: {alexi_coll_id}')
 
@@ -646,10 +680,13 @@ def main(
                 if date_skip_list and (image_date in date_skip_list):
                     logging.info(f'  {scene_id} - Date in skip list, skipping')
                     continue
-                if image_date not in alexi_dates:
+                elif scene_id_skip_list and (scene_id.upper() in scene_id_skip_list):
+                    logging.debug(f'  {scene_id} - Scene ID in skip list, skipping')
+                    continue
+                elif image_date not in alexi_dates:
                     logging.info(f'  {scene_id} - No ALEXI image in source, skipping')
                     continue
-                if meteo_dates and (image_date not in meteo_dates):
+                elif meteo_dates and (image_date not in meteo_dates):
                     logging.info(f'  {scene_id} - No windspeed images for date, skipping')
                     continue
 
