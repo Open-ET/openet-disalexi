@@ -94,16 +94,17 @@ class Landsat(object):
     @lazy_property
     def _emissivity(self):
         """METRIC narrowband emissivity"""
-        # Initial values are for NDVI > 0 and LAI <= 3
+        # Initial values are for NDVI >= 0 and LAI <= 3
+        # CGM - This function originally set water as .lte(0)
         return (
             self._lai.divide(300).add(0.97)
-            .where(self._ndvi.lte(0), 0.99)
+            .where(self._ndvi.lt(0), 0.99)
             .where(self._ndvi.gt(0).And(self._lai.gt(3)), 0.98)
             .rename(['emissivity'])
         )
 
     @lazy_property
-    def _ndvi(self):
+    def _ndvi(self, gsw_extent_flag=True):
         """Normalized difference vegetation index
 
         Parameters
@@ -116,20 +117,21 @@ class Landsat(object):
         ndvi : ee.Image
 
         """
-        return self.input_image.normalizedDifference(['nir', 'red']).rename(['ndvi'])
+        # DEADBEEF - Original NDVI calculation that masks negative values
+        # return self.input_image.normalizedDifference(['nir', 'red']).rename(['ndvi'])
 
-        # # Force the input values to be at greater than or equal to zero
-        # #   since C02 surface reflectance values can be negative
-        # #   but the normalizedDifference function will return nodata
-        # ndvi = self.input_image.select(['nir', 'red']).max(0).normalizedDifference(['nir', 'red'])
-        #
-        # # Assume that very high reflectance values are unreliable for computing the index
-        # #   and set the output value to 0
-        # # Threshold value could be set lower, but for now only trying to catch saturated pixels
-        # b1 = self.input_image.select(['nir'])
-        # b2 = self.input_image.select(['red'])
-        # ndvi_img = ndvi_img.where(b1.gte(1).Or(b2.gte(1)), 0)
-        #
+        # Force the input values to be at greater than or equal to zero
+        #   since C02 surface reflectance values can be negative
+        #   but the normalizedDifference function will return nodata
+        ndvi_img = self.input_image.select(['nir', 'red']).max(0).normalizedDifference(['nir', 'red'])
+
+        # Assume that very high reflectance values are unreliable for computing the index
+        #   and set the output value to 0
+        # Threshold value could be set lower, but for now only trying to catch saturated pixels
+        b1 = self.input_image.select(['nir'])
+        b2 = self.input_image.select(['red'])
+        ndvi_img = ndvi_img.where(b1.gte(1).Or(b2.gte(1)), 0)
+
         # # Including the global surface water maximum extent to help remove shadows that
         # #   are misclassified as water
         # # The flag is needed so that the image can be bypassed during testing with constant images
@@ -137,14 +139,19 @@ class Landsat(object):
         # if gsw_extent_flag:
         #     gsw_mask = ee.Image('JRC/GSW1_4/GlobalSurfaceWater').select(['max_extent']).gte(1)
         #     qa_water_mask = qa_water_mask.And(gsw_mask)
-        #
-        # # Assume that low reflectance values are unreliable for computing the index
-        # # If both reflectance values are below the minimum, set the output to 0
-        # # If either of the reflectance values was below 0, set the output to 0
-        # ndvi = ndvi.where(b1.lt(0.01).And(b2.lt(0.01)), 0)
-        # # ndvi = ndvi.where(b1.lt(0).Or(b2.lt(0)), 0)
-        #
-        # return ndvi.rename(['ndvi'])
+
+        # Assume that low reflectance values are unreliable for computing the index
+        # If both reflectance values are below the threshold,
+        #   and if the pixel is flagged as water, set the output to -0.1 (should this be -1?)
+        #   otherwise set the output to 0
+        ndvi_img = ndvi_img.where(b1.lt(0.01).And(b2.lt(0.01)), 0)
+        # TODO: Add in once qa_water_mask is defined above
+        # ndvi_img = ndvi_img.where(b1.lt(0.01).And(b2.lt(0.01)).And(qa_water_mask), -0.1)
+
+        # Should there be an additional check for if either value was negative?
+        # ndvi_img = ndvi_img.where(b1.lt(0).Or(b2.lt(0)), 0)
+
+        return ndvi_img.rename(['ndvi'])
 
 
 class Landsat_C02_L2(Landsat):
