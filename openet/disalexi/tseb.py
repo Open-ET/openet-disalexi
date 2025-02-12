@@ -177,7 +177,7 @@ def tseb_pt(
 
     # Correction of roughness parameters for water bodies
     # (NDVI < 0 and albedo < 0.05)
-    water_mask = ndvi.lte(0).And(albedo.lte(0.05))
+    water_mask = ndvi.lt(0).And(albedo.lt(0.05))
     d0 = d0.where(water_mask, 0.00001)
     z0m = z0m.where(water_mask, 0.00035)
     z0h = z0h.where(water_mask, 0.00035)
