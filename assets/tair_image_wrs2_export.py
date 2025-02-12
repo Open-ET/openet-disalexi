@@ -229,6 +229,14 @@ def main(
         raise e
 
     try:
+        scene_id_cloudscore_path = str(ini['INPUTS']['scene_cloudscore_list'])
+    except KeyError:
+        scene_id_cloudscore_path = None
+        logging.debug('  scene_cloudscore_list: not set in INI, defaulting to None')
+    except Exception as e:
+        raise e
+
+    try:
         wrs2_tiles = str(ini['INPUTS']['wrs2_tiles'])
         wrs2_tiles = sorted([x.strip() for x in wrs2_tiles.split(',')])
         # wrs2_tiles = [x.replace('p', '').replace('r', '') for x in wrs2_tiles]
@@ -372,30 +380,29 @@ def main(
     # Read the scene ID skip list
     if (not scene_id_skip_path) or scene_id_skip_path.lower() in ['none', '']:
         logging.info(f'\nScene ID skip list not set')
-        scene_id_skip_list = []
-    elif scene_id_skip_path and scene_id_skip_path.startswith('https://'):
-        logging.info(f'\nScene ID skip URL: {scene_id_skip_path}')
+        scene_id_skip_list = {}
+    elif scene_id_skip_path:
+        if scene_id_skip_path.startswith('https://'):
+            logging.info(f'\nScene ID skip URL: {scene_id_skip_path}')
+        else:
+            logging.info(f'\nScene ID skip path: {scene_id_skip_path}')
         scene_id_skip_list = {
             scene_id.upper() for scene_id in
             pd.read_csv(scene_id_skip_path)['SCENE_ID'].values
             if re.match('L[TEC]0[45789]_\d{3}\d{3}_\d{8}', scene_id)
         }
         logging.info(f'  Skip list count: {len(scene_id_skip_list)}')
-        # print(list(scene_id_skip_list)[:10])
-    elif (scene_id_skip_path and
-          scene_id_skip_path.endswith('.csv') and
-          os.path.isfile(scene_id_skip_path)
-    ):
-        logging.info(f'\nScene ID skip path: {scene_id_skip_path}')
-        scene_id_skip_list = {
-            scene_id.upper() for scene_id in
-            pd.read_csv(scene_id_skip_path)['SCENE_ID'].values
-            if re.match('L[TEC]0[45789]_\d{3}\d{3}_\d{8}', scene_id)
-        }
-        logging.info(f'  Skip list count: {len(scene_id_skip_list)}')
-        # print(list(scene_id_skip_list)[:10])
     else:
         raise Exception(f'Unsupported scene_skip_list parameter: {scene_id_skip_path}')
+
+    # Read the cloudscore masking scene ID list
+    # Cloud score scenes will be skipped in DisALEXI (for now) instead of masked
+    if scene_id_cloudscore_path:
+        scene_id_skip_list.update([
+            scene_id.upper()
+            for scene_id in pd.read_csv(scene_id_cloudscore_path)['SCENE_ID'].values
+            if re.match('L[TEC]0[45789]_\d{3}\d{3}_\d{8}', scene_id)
+        ])
 
     # Setup datastore task logging
     if log_tasks:
