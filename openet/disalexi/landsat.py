@@ -44,6 +44,12 @@ class Landsat(object):
         IDL code and [Liang2001] indicate that the green band is not used.
         Coefficients were derived for Landsat 7 ETM+, but were found to be
             "suitable" to Landsat 4/5 TM also.
+        Using a sum reducer was returning an unbounded image,
+            but this could probably be fixed with a setDefaultProjection() call
+        Clamping the reflectance bands instead of the output
+            since the saturated bands have a significant jump from 0.6-1.0 up to 1.6
+            but also adding a max(0) on the output to avoid any possibility
+            of a negative output
 
         References
         ----------
@@ -57,27 +63,18 @@ class Landsat(object):
         albedo = (
             self.input_image
             .select(['blue', 'red', 'nir', 'swir1', 'swir2'])
+            .clamp(0, 1)
             .multiply([0.356, 0.130, 0.373, 0.085, 0.072])
         )
         return (
             albedo.select([0]).add(albedo.select([1])).add(albedo.select([2]))
             .add(albedo.select([3])).add(albedo.select([4])).subtract(0.0018)
+            .max(0)
             .rename(['albedo'])
         )
 
-        # # Using a sum reducer was returning an unbounded image
-        # # CGM - This could probably be fixed with a setDefaultProjection() call
-        # return (
-        #     ee.Image(self.input_image)
-        #     .select(['blue', 'red', 'nir', 'swir1', 'swir2'])
-        #     .multiply([0.356, 0.130, 0.373, 0.085, 0.072])
-        #     .reduce(ee.Reducer.sum())
-        #     .subtract(0.0018)
-        #     .rename(['albedo'])
-        # )
-
-    # DEADBEEF - LAI is being read from a source image collection
-    #   Leaving this method since it is currently used in emissivity calculation
+    # LAI is being read from a source image collection
+    #   but keeping this method since it is currently used in emissivity calculation
     @lazy_property
     def _lai(self):
         """Leaf Area Index (LAI) computed from METRIC NDVI / LAI equation
@@ -119,7 +116,35 @@ class Landsat(object):
         ndvi : ee.Image
 
         """
-        return ee.Image(self.input_image).normalizedDifference(['nir', 'red']).rename(['ndvi'])
+        return self.input_image.normalizedDifference(['nir', 'red']).rename(['ndvi'])
+
+        # # Force the input values to be at greater than or equal to zero
+        # #   since C02 surface reflectance values can be negative
+        # #   but the normalizedDifference function will return nodata
+        # ndvi = self.input_image.select(['nir', 'red']).max(0).normalizedDifference(['nir', 'red'])
+        #
+        # # Assume that very high reflectance values are unreliable for computing the index
+        # #   and set the output value to 0
+        # # Threshold value could be set lower, but for now only trying to catch saturated pixels
+        # b1 = self.input_image.select(['nir'])
+        # b2 = self.input_image.select(['red'])
+        # ndvi_img = ndvi_img.where(b1.gte(1).Or(b2.gte(1)), 0)
+        #
+        # # Including the global surface water maximum extent to help remove shadows that
+        # #   are misclassified as water
+        # # The flag is needed so that the image can be bypassed during testing with constant images
+        # qa_water_mask = landsat_c2_qa_water_mask(landsat_image)
+        # if gsw_extent_flag:
+        #     gsw_mask = ee.Image('JRC/GSW1_4/GlobalSurfaceWater').select(['max_extent']).gte(1)
+        #     qa_water_mask = qa_water_mask.And(gsw_mask)
+        #
+        # # Assume that low reflectance values are unreliable for computing the index
+        # # If both reflectance values are below the minimum, set the output to 0
+        # # If either of the reflectance values was below 0, set the output to 0
+        # ndvi = ndvi.where(b1.lt(0.01).And(b2.lt(0.01)), 0)
+        # # ndvi = ndvi.where(b1.lt(0).Or(b2.lt(0)), 0)
+        #
+        # return ndvi.rename(['ndvi'])
 
 
 class Landsat_C02_L2(Landsat):
@@ -274,7 +299,10 @@ class Landsat_C02_L2(Landsat):
         """
         qa_img = ee.Image(self.input_image).select(['QA_PIXEL'])
         cloud_mask = qa_img.rightShift(3).bitwiseAnd(1).neq(0).multiply(4)
-        #     .And(qa_img.rightShift(6).bitwiseAnd(3).gte(cloud_confidence))
+        # The following line could be added to the mask_img call
+        #     to include the cloud confidence bits
+        # .Or(qa_img.rightShift(8).bitwiseAnd(3).gte(cloud_confidence))
+
         if cirrus_flag:
             cirrus_mask = qa_img.rightShift(2).bitwiseAnd(1).neq(0)
             cloud_mask = cloud_mask.add(cirrus_mask.multiply(5))

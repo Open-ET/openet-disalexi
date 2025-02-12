@@ -69,17 +69,22 @@ def test_Landsat_C02_L2_prep(img_id='LANDSAT/LC08/C02/T1_L2/LC08_028031_20140708
     [
         [0.2, 0.1, 0.2, 0.2, 0.2, 0.2],
         [0.2, 0.9, 0.2, 0.2, 0.2, 0.2],
+        # Check albedo calculation for saturated pixels
+        [1.6, 1.6, 1.6, 1.0, 1.0, 1.0],
+        # Check albedo calculation for negative pixels
+        [-0.1, -0.1, -0.1, 0.0, 0.0, 0.0],
     ]
 )
 def test_Landsat_C02_L2_albedo(blue, green, red, nir, swir1, swir2, tol=0.000001):
     """Test the albedo calculation
 
-    Ensure that the Green band is not being used to compute albedo
+    Note that the Green band is not being used to compute albedo
     """
-    expected = sum([a * b for a, b in zip(
+    expected = sum([max(min(a, 1), 0) * b for a, b in zip(
         [blue, red, nir, swir1, swir2, 1],
         [0.356, 0.130, 0.373, 0.085, 0.072, -0.0018]
     )])
+    expected = max(0, expected)
 
     # Undo the scalars that are applied in the init
     raw_img = (
@@ -117,8 +122,6 @@ def test_Landsat_C02_L2_cfmask(pixel_qa, expected):
     assert utils.constant_image_value(cfmask)['cfmask'] == expected
 
 
-# DEADBEEF - LAI is being read from a source image collection
-#   Leaving this test since existing lai method is used in emissivity calculation
 def test_Landsat_C02_L2_lai(red=0.2, nir=0.7, expected=1.200, tol=0.001):
     # Undo the scalars that are applied in the init
     input_img = (
@@ -164,3 +167,42 @@ def test_Landsat_C02_L2_ndvi(red=0.2, nir=0.7, expected=0.5556, tol=0.001):
     )
     ndvi = ee.Image(landsat.Landsat_C02_L2(input_img)._ndvi)
     assert abs(utils.constant_image_value(ndvi)['ndvi'] - expected) <= tol
+
+
+# # TODO: Add tests if NDVI calculation is modified for negative reflectance values
+# @pytest.mark.parametrize(
+#     'red, nir, expected',
+#     [
+#         [0.2, 9.0 / 55, -0.1],
+#         [0.2, 0.2, 0.0],
+#         [0.1, 11.0 / 90,  0.1],
+#         [0.2, 0.3, 0.2],
+#         [0.1, 13.0 / 70, 0.3],
+#         [0.3, 0.7, 0.4],
+#         [0.2, 0.6, 0.5],
+#         [0.2, 0.8, 0.6],
+#         [0.1, 17.0 / 30, 0.7],
+#         [0.2, 0.7, 0.55555555],
+#         # Check that negative values are not masked
+#         [-0.01, 0.1, 1.0],
+#         [0.1, -0.01, -1.0],
+#         # Check that low values are set to 0
+#         [-0.1, -0.1, 0.0],
+#         [0.0, 0.0, 0.0],
+#         [0.009, 0.009, 0.0],
+#         [0.009, -0.01, 0.0],
+#         [-0.01, 0.009, 0.0],
+#         # Don't adjust NDVI if only one reflectance value is low
+#         [0.005, 0.1, 0.9047619104385376],
+#     ]
+# )
+# def test_Landsat_C02_L2_ndvi_calculation(red, nir, expected, tol=0.000001):
+#     input_img = (
+#         ee.Image.constant([0.2, 0.2, red, nir, 0.2, 0.2, 300, 0])
+#         .rename(['SR_B2', 'SR_B3', 'SR_B4', 'SR_B5', 'SR_B6', 'SR_B7', 'ST_B10', 'QA_PIXEL'])
+#         .subtract(Landsat_C02_L2_scalars_add)
+#         .divide(Landsat_C02_L2_scalars_multi)
+#         .set(l8_properties)
+#     )
+#     ndvi = ee.Image(landsat.Landsat_C02_L2(input_img)._ndvi)
+#     assert abs(utils.constant_image_value(ndvi)['ndvi'] - expected) <= tol

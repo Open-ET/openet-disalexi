@@ -159,8 +159,8 @@ def test_Image_init_date_properties():
     'source, xy, expected',
     [
         # Direct & variable step assets
-        ['projects/openet/assets/disalexi/tair/conus_v006', TEST_POINT, 299.68001353628875],
-        ['projects/openet/assets/disalexi/tair/conus_v006', [-121.50822, 38.71776], 298.61358548716754],
+        ['projects/openet/assets/disalexi/tair/conus_v006', TEST_POINT, 299.29018345953114],
+        ['projects/openet/assets/disalexi/tair/conus_v006', [-121.50822, 38.71776], 298.70255495831776],
         # 1k step assets
         ['projects/openet/assets/disalexi/tair/conus_v006_1k', TEST_POINT, 298.047307556939],
         ['projects/openet/assets/disalexi/tair/conus_v006_1k', [-121.50822, 38.71776], 297.32998269291346],
