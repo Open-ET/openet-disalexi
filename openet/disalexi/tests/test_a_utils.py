@@ -80,7 +80,7 @@ def test_interpolate():
 
 @pytest.mark.parametrize(
     # Note: These are made up values
-    'input, expected',
+    'value, expected',
     [
         [300, True],
         ['300', True],
@@ -89,8 +89,8 @@ def test_interpolate():
         ['a', False],
     ]
 )
-def test_is_number(input, expected):
-    assert utils.is_number(input) == expected
+def test_is_number(value, expected):
+    assert utils.is_number(value) == expected
 
 
 def test_millis():

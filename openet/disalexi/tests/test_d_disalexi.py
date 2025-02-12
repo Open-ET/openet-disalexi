@@ -184,6 +184,9 @@ def test_Image_ta_mosaic_interpolate(ta_init=290):
         [[280, 285, 290, 295, 300], [1, 2, 3, 4, 5], None],
         [[270, 275, 280, 285, 290, 295, 300], [2, 2, 2, 2, 3, 4, 5], None],
         [[280, 285, 290, 295, 300], [-5, -4, -3, -2, -1], None],
+        # # DEADBEEF
+        # #   The following tests can eventually be removed
+        # #   if pixels that have all positive or negative bias values are masked
         # # All positive biases
         # [[280, 285, 290, 295, 300], [1, 2, 3, 4, 5], 280],
         # # Test that the Ta for the first "increasing" bias is used
@@ -243,7 +246,6 @@ def test_Image_set_landcover_vars_default(tol=1E-6):
     assert utils.point_image_value(d_obj.adeadl, ne1_xy)['adeadl'] == 0.95
     assert utils.point_image_value(d_obj.leaf_width, ne1_xy)['xl'] == 0.05
     assert utils.point_image_value(d_obj.clump, ne1_xy)['omega'] == 0.83
-    # assert abs(utils.image_value(d_obj.hc, ne1_xy)['hc'] - 0.44531310527793) <= tol
 
 
 def test_Image_set_landcover_vars_init_asset(tol=1E-6):

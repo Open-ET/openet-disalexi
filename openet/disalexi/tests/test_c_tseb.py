@@ -58,7 +58,6 @@ def test_tseb_pt(
         t_air=ee.Image.constant(t_air),
         t_rad=ee.Image.constant(t_rad),
         t_air0=ee.Image.constant(t_air0),
-        # t_air0=mask.add(t_air0),
         e_air=ee.Image.constant(e_air),
         u=ee.Image.constant(u),
         p=ee.Image.constant(p),
@@ -89,7 +88,6 @@ def test_tseb_pt(
     )
 
     output = list(utils.constant_image_value(output_image).values())[0]
-    # output = list(utils.point_image_value(output_image, [lon, lat], 30).values())[0]
     logging.debug(f'\n  Target values: {expected}')
     logging.debug(f'  Output values: {output}')
     assert abs(output - expected) <= tol

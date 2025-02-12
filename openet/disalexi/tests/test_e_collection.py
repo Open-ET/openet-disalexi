@@ -17,7 +17,6 @@ END_DATE = '2017-08-01'
 SCENE_GEOM = (-121.91, 38.99, -121.89, 39.01)
 SCENE_POINT = (-121.9, 39)
 VARIABLES = {'et'}
-# VARIABLES = {'et', 'et_fraction', 'et_reference'}
 TEST_POINT = (-121.5265, 38.7399)
 
 interp_args = {
@@ -201,8 +200,8 @@ def test_Collection_build_exclusive_enddate():
 
 def test_Collection_build_cloud_cover():
     """Test if the cloud cover max parameter is being applied"""
-    # CGM - The filtered images should probably be looked up programmatically
     output = utils.getinfo(default_coll_obj(cloud_cover_max=0.5)._build(variables=['et']))
+    # TODO: Identify the filtered images programmatically instead of hardcoding
     assert 'LE07_044033_20170724' not in parse_scene_id(output)
 
 

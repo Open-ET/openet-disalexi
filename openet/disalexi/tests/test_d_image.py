@@ -550,8 +550,8 @@ def test_Image_lai_source(source, xy, expected, tol=0.0001):
     ]
 )
 def test_Image_lai_version_property(source):
-    # Trigger building the LAI in order to set the landsat_lai_version
     model_obj = disalexi.Image(default_image(), lai_source=source)
+    # Trigger building the LAI in order to set the landsat_lai_version
     lai_img = model_obj.lai
     assert model_obj.landsat_lai_version
 
@@ -587,7 +587,6 @@ def test_Image_et_properties():
     assert output['properties']['system:index'] == SCENE_ID
     assert output['properties']['system:time_start'] == SCENE_TIME
     assert output['properties']['image_id'] == IMAGE_ID
-    # assert output['properties']['ta_iteration'] > 0
 
 
 def test_Image_et_reference_properties():
@@ -678,7 +677,6 @@ def test_Image_calculate_variables_custom(variables, expected):
 
 def test_Image_calculate_variables_all():
     variables = {'et', 'mask', 'ndvi', 'time'}
-    # variables = {'et', 'etf', 'etr', 'mask', 'ndvi', 'time'}
     output = utils.getinfo(default_image_obj().calculate(variables=list(variables)))
     assert {x['id'] for x in output['bands']} == variables
 
@@ -784,7 +782,6 @@ def test_Image_from_image_id(image_id):
     """Test instantiating the class using the from_image_id method"""
     output = utils.getinfo(disalexi.Image.from_image_id(image_id).ndvi)
     assert output['properties']['system:index'] == image_id.split('/')[-1]
-    # assert output['properties']['image_id'] == image_id
 
 
 def test_Image_from_method_kwargs():
