@@ -228,7 +228,7 @@ class Image(object):
         # Check reference ET parameters
         if self.et_reference_factor and not utils.is_number(self.et_reference_factor):
             raise ValueError('et_reference_factor must be a number')
-        if self.et_reference_factor and self.et_reference_factor < 0:
+        if self.et_reference_factor and (self.et_reference_factor < 0):
             raise ValueError('et_reference_factor must be greater than zero')
         resample_methods = ['nearest', 'bilinear', 'bicubic']
         if self.et_reference_resample and (self.et_reference_resample.lower() not in resample_methods):
@@ -456,12 +456,16 @@ class Image(object):
             # Assume a string source is an image collection ID (not an image ID)
             et_reference_img = ee.Image(
                 ee.ImageCollection(self.et_reference_source)
-                .filterDate(self.start_date, self.end_date)
+                .filterDate(self.start_date, self.end_date).first()
                 .select([self.et_reference_band])
-                .first()
             )
+            if self.et_reference_resample in ['bilinear', 'bicubic']:
+                et_reference_img = et_reference_img.resample(self.et_reference_resample)
         else:
-            raise ValueError(f'Unsupported etr_source: {self.etr_source}\n')
+            raise ValueError(f'Unsupported etr_source: {self.et_reference_source}\n')
+
+        if self.et_reference_factor:
+            et_reference_img = et_reference_img.multiply(self.et_reference_factor)
 
         # Map ETr values directly to the input (i.e. Landsat) image pixels
         # The benefit of this is the ETr image is now in the same crs as the
@@ -469,7 +473,6 @@ class Image(object):
         # CGM - Should the output band name match the input ETr band name?
         return (
             self.ndvi.multiply(0).add(et_reference_img)
-            .multiply(self.et_reference_factor)
             .rename(['et_reference']).set(self.properties)
         )
 
@@ -777,17 +780,21 @@ class Image(object):
                 ee.ImageCollection(self.ta_source)
                 .filterMetadata('image_id', 'equals', self.id)
             )
-            ta_img = ta_mosaic_interpolate(ee.Image(ta_coll.first())).select(['ta_interp'])
+            ta_interp_img = ta_mosaic_interpolate(ee.Image(ta_coll.first())).select(['ta_interp'])
+            ta_interp_mask = ta_interp_img.select(['ta_interp']).mask()
             # Apply simple smoothing to the interpolated Ta image
-            # The updateMask call is to ensure that filled edge pixels are not included
             if self.ta_smooth_flag:
-                ta_img = (
-                    ta_img.focal_mean(1, 'circle', 'pixels')
-                    .updateMask(ta_img.select(['ta_interp']).mask())
+                ta_interp_img = (
+                    ta_interp_img.focal_mean(1, 'circle', 'pixels')
                     .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)
                 )
             # Interpolate to the Landsat grid
-            ta_img = ta_img.resample('bilinear').reproject(crs=self.crs, crsTransform=self.transform)
+            # The updateMask call is to ensure that filled edge pixels are not included
+            ta_img = (
+                ta_interp_img.resample('bilinear')
+                .reproject(crs=self.crs, crsTransform=self.transform)
+                # .updateMask(ta_interp_mask)
+            )
         else:
             raise ValueError(f'Unsupported ta_source: {self.ta_source}\n')
 
