@@ -794,6 +794,7 @@ class Image(object):
                 ta_interp_img.resample('bilinear')
                 .reproject(crs=self.crs, crsTransform=self.transform)
                 # .updateMask(ta_interp_mask)
+                .updateMask(self.et_alexi.mask())
             )
         else:
             raise ValueError(f'Unsupported ta_source: {self.ta_source}\n')
