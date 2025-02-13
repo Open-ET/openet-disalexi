@@ -131,30 +131,8 @@ def test_Landsat_C02_L2_lai(red=0.2, nir=0.7, expected=1.200, tol=0.001):
         .divide(Landsat_C02_L2_scalars_multi)
         .set(l8_properties)
     )
-    lai = ee.Image(landsat.Landsat_C02_L2(input_img)._lai)
+    lai = ee.Image(landsat.Landsat_C02_L2(input_img, gsw_extent_flag=False)._lai)
     assert abs(utils.constant_image_value(lai)['lai'] - expected) <= tol
-
-
-# # DEADBEEF - LST is being read from a source image collection
-# @pytest.mark.parametrize(
-#     'red, nir, bt, expected',
-#     [
-#         [0.2, 0.7, 300, 304.5866],
-#         [0.2, 0.3, 300, 304.8238],
-#         [0.2, 0.1, 300, 303.6067],
-#     ]
-# )
-# def test_Landsat_C02_L2_lst(red, nir, bt, expected, tol=0.001):
-#     """Test that different emissivity values (from NDVI & LAI) change LST"""
-#     input_img = (
-#         ee.Image.constant([0.2, 0.2, red, nir, 0.2, 0.2, bt, 0])
-#         .rename(['SR_B2', 'SR_B3', 'SR_B4', 'SR_B5', 'SR_B6', 'SR_B7', 'ST_B10', 'QA_PIXEL'])
-#         .subtract(Landsat_C02_L2_scalars_add)
-#         .divide(Landsat_C02_L2_scalars_multi)
-#         .set(l8_properties)
-#     )
-#     lst = ee.Image(landsat.Landsat_C02_L2(input_img)._lst)
-#     assert abs(utils.constant_image_value(lst)['lst'] - expected) <= tol
 
 
 def test_Landsat_C02_L2_ndvi(red=0.2, nir=0.7, expected=0.5556, tol=0.001):
@@ -165,7 +143,7 @@ def test_Landsat_C02_L2_ndvi(red=0.2, nir=0.7, expected=0.5556, tol=0.001):
         .divide(Landsat_C02_L2_scalars_multi)
         .set(l8_properties)
     )
-    ndvi = ee.Image(landsat.Landsat_C02_L2(input_img)._ndvi)
+    ndvi = ee.Image(landsat.Landsat_C02_L2(input_img, gsw_extent_flag=False)._ndvi)
     assert abs(utils.constant_image_value(ndvi)['ndvi'] - expected) <= tol
 
 
@@ -203,5 +181,5 @@ def test_Landsat_C02_L2_ndvi_calculation(red, nir, expected, tol=0.000001):
         .divide(Landsat_C02_L2_scalars_multi)
         .set(l8_properties)
     )
-    ndvi = ee.Image(landsat.Landsat_C02_L2(input_img)._ndvi)
+    ndvi = ee.Image(landsat.Landsat_C02_L2(input_img, gsw_extent_flag=False)._ndvi)
     assert abs(utils.constant_image_value(ndvi)['ndvi'] - expected) <= tol

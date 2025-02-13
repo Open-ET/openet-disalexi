@@ -104,7 +104,7 @@ class Landsat(object):
         )
 
     @lazy_property
-    def _ndvi(self, gsw_extent_flag=True):
+    def _ndvi(self):
         """Normalized difference vegetation index
 
         Parameters
@@ -132,21 +132,20 @@ class Landsat(object):
         b2 = self.input_image.select(['red'])
         ndvi_img = ndvi_img.where(b1.gte(1).Or(b2.gte(1)), 0)
 
-        # # Including the global surface water maximum extent to help remove shadows that
-        # #   are misclassified as water
-        # # The flag is needed so that the image can be bypassed during testing with constant images
-        # qa_water_mask = landsat_c2_qa_water_mask(landsat_image)
-        # if gsw_extent_flag:
-        #     gsw_mask = ee.Image('JRC/GSW1_4/GlobalSurfaceWater').select(['max_extent']).gte(1)
-        #     qa_water_mask = qa_water_mask.And(gsw_mask)
-
         # Assume that low reflectance values are unreliable for computing the index
         # If both reflectance values are below the threshold,
         #   and if the pixel is flagged as water, set the output to -0.1 (should this be -1?)
         #   otherwise set the output to 0
         ndvi_img = ndvi_img.where(b1.lt(0.01).And(b2.lt(0.01)), 0)
-        # TODO: Add in once qa_water_mask is defined above
-        # ndvi_img = ndvi_img.where(b1.lt(0.01).And(b2.lt(0.01)).And(qa_water_mask), -0.1)
+
+        # Including the global surface water maximum extent to help remove shadows that
+        #   are misclassified as water
+        # The flag is needed so that the image can be bypassed during testing with constant images
+        if self.gsw_extent_flag:
+            qa_water_mask = self.input_image.select(['QA_PIXEL']).rightShift(7).bitwiseAnd(1).neq(0)
+            gsw_mask = ee.Image('JRC/GSW1_4/GlobalSurfaceWater').select(['max_extent']).gte(1)
+            qa_water_mask = qa_water_mask.And(gsw_mask)
+            ndvi_img = ndvi_img.where(b1.lt(0.01).And(b2.lt(0.01)).And(qa_water_mask), -0.1)
 
         # Should there be an additional check for if either value was negative?
         # ndvi_img = ndvi_img.where(b1.lt(0).Or(b2.lt(0)), 0)
@@ -155,7 +154,7 @@ class Landsat(object):
 
 
 class Landsat_C02_L2(Landsat):
-    def __init__(self, raw_image):
+    def __init__(self, raw_image, gsw_extent_flag=True):
         """Initialize a Landsat Collection 2 SR image
 
         Parameters
@@ -199,6 +198,7 @@ class Landsat_C02_L2(Landsat):
                 'SPACECRAFT_ID': self._spacecraft_id,
             })
         )
+        self.gsw_extent_flag = gsw_extent_flag
         super()
 
     def prep(self):
