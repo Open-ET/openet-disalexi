@@ -1120,7 +1120,7 @@ class Image(object):
             stabil_iter=self.stabil_iter,
             albedo_iter=self.albedo_iter,
         )
-        return ta_invert.round().clamp(260, 335).rename(['ta_initial']).set(self.properties)
+        return ta_invert.round().clamp(265, 335).rename(['ta_initial']).set(self.properties)
 
     def ta_coarse_mosaic(
             self,
