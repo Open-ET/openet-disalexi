@@ -57,8 +57,9 @@ def default_image(
 
 def default_image_args(
         albedo=0.125,
-        cfmask=0, ndvi=0.875,
-        ta_source='CONUS_V006',
+        cfmask=0,
+        ndvi=0.875,
+        ta_source='projects/openet/assets/disalexi/tair/conus_v006_1k',
         alexi_source='CONUS_V006',
         lai_source=4.2,
         lst_source=306.5,
@@ -87,7 +88,7 @@ def default_image_obj(
         albedo=0.125,
         cfmask=0,
         ndvi=0.875,
-        ta_source='CONUS_V006',
+        ta_source='projects/openet/assets/disalexi/tair/conus_v006_1k',
         alexi_source='CONUS_V006',
         lai_source=4.2,
         lst_source=306.5,
@@ -117,7 +118,7 @@ def default_image_obj(
 
 def test_Image_init_default_parameters():
     m = disalexi.Image(default_image())
-    assert m.ta_source == 'CONUS_V006'
+    assert m.ta_source == 'projects/openet/assets/disalexi/tair/conus_v006_1k'
     assert m.alexi_source == 'CONUS_V006'
     assert m.lai_source == 'openet-landsat-lai'
     #assert m.lai_source == 'projects/openet/assets/lai/landsat/c02'
@@ -158,18 +159,18 @@ def test_Image_init_date_properties():
 @pytest.mark.parametrize(
     'source, xy, expected',
     [
-        # Direct & variable step assets
-        ['projects/openet/assets/disalexi/tair/conus_v006', TEST_POINT, 299.29018345953114],
-        ['projects/openet/assets/disalexi/tair/conus_v006', [-121.50822, 38.71776], 298.70255495831776],
+        # # Direct & variable step assets
+        # ['projects/openet/assets/disalexi/tair/conus_v006', TEST_POINT, 299.29018345953114],
+        # ['projects/openet/assets/disalexi/tair/conus_v006', [-121.50822, 38.71776], 298.70255495831776],
         # 1k step assets
-        ['projects/openet/assets/disalexi/tair/conus_v006_1k', TEST_POINT, 298.047307556939],
-        ['projects/openet/assets/disalexi/tair/conus_v006_1k', [-121.50822, 38.71776], 297.32998269291346],
+        ['projects/openet/assets/disalexi/tair/conus_v006_1k', TEST_POINT, 297.43695649857256],
+        ['projects/openet/assets/disalexi/tair/conus_v006_1k', [-121.50822, 38.71776], 296.8168524398712],
+        # 10k step assets
+        ['projects/openet/assets/disalexi/tair/conus_v006_10k', TEST_POINT, 297.59696761008615],
+        ['projects/openet/assets/disalexi/tair/conus_v006_10k', [-121.50822, 38.71776], 296.9584595786429],
         # The openet legacy assets will eventually be removed
-        ['projects/openet/disalexi/tair/conus_v006_1k', TEST_POINT, 298.047307556939],
-        ['projects/openet/disalexi/tair/conus_v006_1k', [-121.50822, 38.71776], 297.32998269291346],
-        # The CONUS_V006 keyword is currently pointed at the 1k steps assets
-        ['CONUS_V006', TEST_POINT, 298.047307556939],
-        ['CONUS_V006', [-121.50822, 38.71776], 297.32998269291346],
+        ['projects/openet/disalexi/tair/conus_v006_1k', TEST_POINT, 298.0321014683174],
+        ['projects/openet/disalexi/tair/conus_v006_1k', [-121.50822, 38.71776], 297.3697441658701],
         [ee.Image('USGS/SRTMGL1_003').multiply(0).add(10), TEST_POINT, 10],
         ['294.8', TEST_POINT, 294.8],  # Check constant values
         [294.8, TEST_POINT, 294.8],    # Check constant values
@@ -191,7 +192,7 @@ def test_Image_ta_smooth_flag(tol=0.01):
         ta_smooth_flag=False
     )
     output = utils.point_image_value(ee.Image(m.ta), TEST_POINT)
-    assert abs(output['ta'] - 290) <= tol
+    assert abs(output['ta'] - 293.55681670055793) <= tol
 
 
 def test_Image_ta_interp_flag(tol=0.01):
@@ -202,7 +203,7 @@ def test_Image_ta_interp_flag(tol=0.01):
         ta_interp_flag=False
     )
     output = utils.point_image_value(ee.Image(m.ta), TEST_POINT)
-    assert abs(output['ta'] - 298.047307556939) <= tol
+    assert abs(output['ta'] - 297.43695649857256) <= tol
 
 
 def test_Image_ta_source_exception():
@@ -283,7 +284,7 @@ def test_Image_elevation_band_name():
     'source, xy, expected',
     [
         [
-            'projects/sat-io/open-datasets/USGS/ANNUAL_NLCD/LANDCOVER/Annual_NLCD_LndCov_2021_CU_C1V0',
+            'projects/sat-io/open-datasets/USGS/ANNUAL_NLCD/LANDCOVER/Annual_NLCD_LndCov_2020_CU_C1V1',
             TEST_POINT, 82
         ],
         ['projects/sat-io/open-datasets/USGS/ANNUAL_NLCD/LANDCOVER', TEST_POINT, 82],
@@ -527,7 +528,7 @@ def test_Image_lai_band_name():
     [
         ['openet-landsat-lai', TEST_POINT, 3.6301],
         ['openet-landsat-lai', [-121.50822, 38.71776], 0.5750],
-        # # DEADBEEF - These collections will be removed in the future
+        # # DEADBEEF - These collections will likely be removed in the future
         # ['projects/openet/assets/lai/landsat/c02', TEST_POINT, 3.6301],
         # ['projects/openet/assets/lai/landsat/c02', [-121.50822, 38.71776], 0.5750],
         ['OPENET-LAI', TEST_POINT, 3.6301],
@@ -564,8 +565,8 @@ def test_Image_lst_band_name():
 @pytest.mark.parametrize(
     ' source, xy, expected',
     [
-        ['projects/openet/assets/lst/landsat/c02', TEST_POINT, 304.5],
-        ['projects/openet/assets/lst/landsat/c02', [-121.50822, 38.71776], 323.8],
+        ['projects/openet/assets/lst/landsat/c02', TEST_POINT, 303.9],
+        ['projects/openet/assets/lst/landsat/c02', [-121.50822, 38.71776], 324.8],
         ['300', TEST_POINT, 300],
         [300, TEST_POINT, 300],
     ]
@@ -575,7 +576,7 @@ def test_Image_lst_source(source, xy, expected, tol=0.0001):
     assert abs(output['lst'] - expected) <= tol
 
 
-def test_Image_et_default_values(expected=5.6248832186825375, tol=0.0001):
+def test_Image_et_default_values(expected=5.414691933931705, tol=0.0001):
     output = utils.point_image_value(default_image_obj().et, TEST_POINT)
     assert abs(output['et'] - expected) <= tol
 

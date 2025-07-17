@@ -38,7 +38,7 @@ class Image(object):
     def __init__(
             self,
             image,
-            ta_source='CONUS_V006',
+            ta_source='projects/openet/assets/disalexi/tair/conus_v006_1k',
             alexi_source='CONUS_V006',
             lai_source='openet-landsat-lai',
             # lai_source='projects/openet/assets/lai/landsat/c02',
@@ -68,21 +68,20 @@ class Image(object):
         ----------
         image : ee.Image
             Prepped image
-        ta_source : {'CONUS_V006'}
+        ta_source : {'projects/openet/assets/disalexi/tair/conus_v006_1k'}
             ALEXI scale air temperature image collection ID.
-            The default is 'CONUS_V006'.
         alexi_source : {'CONUS_V006'}
             ALEXI ET image collection ID (the default is 'CONUS_V006').
-        lai_source : string
-            LAI image collection ID or "openet-landsat-lai" to compute dynamically
-            using the openet-landsat-lai module.
-        lst_source : string
+        lai_source : {'openet-landsat-lai'}
+            LAI image collection ID or set to "openet-landsat-lai" to compute LAI
+            dynamically using the openet-landsat-lai module.
+        lst_source : {'projects/openet/assets/lst/landsat/c02'}
             LST image collection ID.
         elevation_source : str, ee.Image
-            Elevation source keyword or asset (the default is USGS/SRTMGL1_003).
+            Elevation source keyword or asset (the default is "USGS/SRTMGL1_003").
             Units must be in meters.
         landcover_source : {'projects/sat-io/open-datasets/USGS/ANNUAL_NLCD/LANDCOVER',
-                            'projects/sat-io/open-datasets/USGS/ANNUAL_NLCD/LANDCOVER/Annual_NLCD_LndCov_2023_CU_C1V0',
+                            'projects/sat-io/open-datasets/USGS/ANNUAL_NLCD/LANDCOVER/Annual_NLCD_LndCov_2023_CU_C1V1',
                             'USGS/NLCD_RELEASES/2021_REL/NLCD',
                             'USGS/NLCD_RELEASES/2019_REL/NLCD',
                             'USGS/NLCD_RELEASES/2021_REL/NLCD/2021'}
@@ -545,7 +544,7 @@ class Image(object):
             # If the source is an ee.Image assume it is an NLCD image
             lc_img = self.landcover_source.rename(['landcover'])
             self.lc_type = 'NLCD'
-        elif re.match('projects/sat-io/open-datasets/USGS/ANNUAL_NLCD/LANDCOVER/Annual_NLCD_LndCov_\\d{4}_CU_C1V0',
+        elif re.match('projects/sat-io/open-datasets/USGS/ANNUAL_NLCD/LANDCOVER/Annual_NLCD_LndCov_\\d{4}_CU_C1V1',
                       self.landcover_source, re.I):
             # Assume an annual NLCD image ID was passed in and use it directly
             lc_img = ee.Image(self.landcover_source).rename(['landcover'])
@@ -728,7 +727,7 @@ class Image(object):
 
     @lazy_property
     def ta(self):
-        """Return the precomputed Ta asset for the target image
+        """Return the interpolate Ta from the precomputed Ta mosaic asset for the target image
 
         Returns
         -------
@@ -736,63 +735,20 @@ class Image(object):
             Ta image
 
         """
-        ta_keyword_sources = {
-            'CONUS_V006': 'projects/openet/assets/disalexi/tair/conus_v006_1k',
-        }
-        ta_source_re = re.compile(
-            '(projects/earthengine-legacy/assets/)?projects/(\\w+/)?(assets/)?'
-            'disalexi/ta(ir)?/(conus|global)_v\\d{3}\\w?(_\\w+)?',
-            re.IGNORECASE
-        )
-
         if utils.is_number(self.ta_source):
             ta_img = ee.Image.constant(float(self.ta_source))
             #     .set({'ta_iteration': 'constant'})
         elif isinstance(self.ta_source, ee.computedobject.ComputedObject):
             ta_img = ee.Image(self.ta_source)
-        elif ((self.ta_source.upper() in ta_keyword_sources.keys()) and
-              (('1k' in ta_keyword_sources[self.ta_source.upper()]) or
-               ('10k' in ta_keyword_sources[self.ta_source.upper()]))):
-            ta_coll_id = ta_keyword_sources[self.ta_source.upper()]
-            ta_coll = (
-                ee.ImageCollection(ta_coll_id)
-                .filterMetadata('image_id', 'equals', self.id)
-                .limit(1, 'step_size', False)
-            )
-            ta_img = ta_mosaic_min_bias(ee.Image(ta_coll.first()))
-            if self.ta_smooth_flag:
-                ta_img = (
-                    ta_img.focal_mean(1, 'circle', 'pixels')
-                    .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)
-                    .resample('bilinear')
-                    .reproject(crs=self.crs, crsTransform=self.transform)
-                )
-        elif (ta_source_re.match(self.ta_source) and
-              (('1k' in self.ta_source) or ('10k' in self.ta_source))):
-            ta_coll = (
-                ee.ImageCollection(self.ta_source)
-                .filterMetadata('image_id', 'equals', self.id)
-                .limit(1, 'step_size', False)
-            )
-            ta_img = ta_mosaic_min_bias(ee.Image(ta_coll.first()))
-            if self.ta_smooth_flag:
-                ta_img = (
-                    ta_img.focal_mean(1, 'circle', 'pixels')
-                    .reproject(crs=self.alexi_crs, crsTransform=self.alexi_geo)
-                    .resample('bilinear')
-                    .reproject(crs=self.crs, crsTransform=self.transform)
-                )
-        elif ta_source_re.match(self.ta_source):
-            # For new dynamic Ta mosaic images (i.e. not 1k or 10k steps)
-            #   interpolate between the values to identify the final Ta
-            #   instead of selecting a single min bias Ta
+        elif type(self.ta_source) is str and self.ta_source:
+            # Interpolate between mosaic Ta values to identify the source Ta image
             ta_coll = (
                 ee.ImageCollection(self.ta_source)
                 .filterMetadata('image_id', 'equals', self.id)
             )
             ta_interp_img = ta_mosaic_interpolate(ee.Image(ta_coll.first())).select(['ta_interp'])
             ta_interp_mask = ta_interp_img.select(['ta_interp']).mask()
-            # Apply simple smoothing to the interpolated Ta image
+            # Apply simple smoothing to the interpolated Ta image at the coarse scale
             if self.ta_smooth_flag:
                 ta_interp_img = (
                     ta_interp_img.focal_mean(1, 'circle', 'pixels')
@@ -1317,6 +1273,8 @@ def ta_mosaic_interpolate(ta_mosaic_img):
     )
 
 
+# DEADBEEF - This function is no longer being used in the tair export tool
+#   and can be removed at some point along with the corresponding tests
 def ta_mosaic_min_bias(ta_mosaic_img):
     """Return the air temperature with the minimum bias from a mosaic stack
 

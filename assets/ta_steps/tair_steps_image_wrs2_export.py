@@ -774,19 +774,18 @@ def main(
                 logging.debug(f'  Collection: {os.path.dirname(asset_id)}')
                 logging.debug(f'  Image ID:   {os.path.basename(asset_id)}')
 
-                if tair_args['source_coll'] is None:
+                if utils.is_number(tair_args['source_coll']):
                     logging.debug(f'  Tair source: {tair_args["ta_start"]}')
-                    ta_source_img = alexi_mask.add(float(tair_args['ta_start'])).rename(['ta'])
-                elif tair_args['source_coll'] == 'NLDAS':
-                    logging.debug('  Tair source: NLDAS')
+                    ta_source_img = alexi_mask.add(float(tair_args['source_coll'])).rename(['ta'])
+                elif tair_args['source_coll'] in ['NASA/NLDAS/FORA0125_H002', 'NLDAS', 'NLDAS2']:
+                    logging.debug(f'  Tair source: tair_args["source_coll"]')
                     ta_source_coll = (
                         ee.ImageCollection('NASA/NLDAS/FORA0125_H002')
                         .filterDate(image_date, next_date)
                         .select(['temperature'])
                     )
-                    # Pulling maximum air temperature instead of 0 UTC
+                    # Select the maximum air temperature for the date
                     input_image = ee.Image(ta_source_coll.reduce(ee.Reducer.max())).add(273.15).floor()
-                    # input_image = ee.Image(ta_source_coll.first()).add(273.15).floor()
                     ta_source_img = alexi_mask.add(input_image).rename(['ta'])
                 else:
                     logging.debug(f'  Tair source: {tair_args["source_coll"]}')
@@ -798,7 +797,12 @@ def main(
                         logging.info(f'  {scene_id} - No Tair image in source coll, skipping')
                         # input('ENTER')
                         continue
-                    ta_source_img = ta_min_bias(ee.Image(ta_source_coll.first()))
+                    # Interpolate the minimum bias Ta from the source mosaic image
+                    ta_source_img = (
+                        openet.disalexi.ta_mosaic_interpolate(ee.Image(ta_source_coll.first()))
+                        .select(['ta_interp'])
+                        .round()
+                    )
 
                 # Manually check if the source LAI and LST images are present
                 # Eventually this should/could be done inside the model instead
@@ -875,8 +879,6 @@ def main(
                     'landsat_lst_version': landsat_lst_version,
                     'model_name': model_metadata['Name'],
                     'model_version': model_metadata["Version"],
-                    # 'model_name': model_name,
-                    # 'model_version': openet.disalexi.__version__,
                     'scene_id': scene_id,
                     'tool_name': TOOL_NAME,
                     'tool_version': TOOL_VERSION,
@@ -888,7 +890,6 @@ def main(
                     'CLOUD_COVER_LAND': landsat_img.get('CLOUD_COVER_LAND'),
                     # 'CLOUD_COVER': landsat_info['properties']['CLOUD_COVER'],
                     # 'CLOUD_COVER_LAND': landsat_info['properties']['CLOUD_COVER_LAND'],
-                    # CGM - Should we use the Landsat time or the ALEXI time?
                     'system:time_start': landsat_img.get('system:time_start'),
                     # 'system:time_start': landsat_info['properties']['system:time_start'],
                     # 'system:time_start': utils.millis(image_dt),
@@ -1032,73 +1033,6 @@ def main(
                 )
 
                 logging.debug('')
-
-
-# CGM - Intentionally not using version in disalexi.py in order to match old exports/versions
-def ta_min_bias(input_img):
-    """
-
-    Parameters
-    ----------
-    input_img
-
-    Returns
-    -------
-
-    """
-    input_img = ee.Image(input_img)
-
-    # Reverse the band order so that we can find the last transition
-    #   from decreasing to increasing with a positive bias
-    ta_bands = input_img.select('step_\\d+_ta').bandNames().reverse()
-    bias_bands = input_img.select('step_\\d+_bias').bandNames().reverse()
-    ta_array = input_img.select(ta_bands).toArray()
-    bias_array = input_img.select(bias_bands).toArray()
-
-    # Assign the bias that are very similar a very large value so that they will not be selected
-    diff = bias_array.arraySlice(0, 1).subtract(bias_array.arraySlice(0, 0, -1))
-    bias_array_mask = diff.abs().lt(0.001)
-    # Repeat the last value to make the array the same length. array is reversed order.
-    bias_array_mask = bias_array_mask.arrayCat(bias_array_mask.arraySlice(0, -1), 0)
-    bias_array = bias_array.add(bias_array_mask.multiply(99))
-
-    # Identify the "last" transition from a negative to positive bias
-    # CGM - Having problems with .ceil() limiting result to the image data range
-    #   Multiplying by a big number seemed to fix the issue but this could still
-    #     be a problem with the bias ranges get really small
-    sign_array = bias_array.multiply(1000).ceil().max(0).min(1).int()
-    transition_array = sign_array.arraySlice(0, 0, -1).subtract(sign_array.arraySlice(0, 1))
-    # Insert an extra value at the beginning (of reverse, so actually at end)
-    #   of the transition array so the indexing lines up for all steps
-    transition_array = bias_array.arraySlice(0, 0, 1).multiply(0).arrayCat(transition_array, 0)
-    transition_index = transition_array.arrayArgmax().arrayFlatten([['index']])
-    # Get the max transition value in order to know if there was a transition
-    transition_max = transition_array.arrayReduce(ee.Reducer.max(), [0]).arrayFlatten([['max']])
-
-    # Identify the position of minimum absolute bias
-    min_bias_index = bias_array.abs().multiply(-1).arrayArgmax().arrayFlatten([['index']])
-
-    # Identify the "bracketing" Ta and bias values
-    # If there is a transition, use the "last" transition
-    # If there is not a transition, use the minimum absolute bias for both
-    # Note, the index is for the reversed arrays
-    index_b = transition_index.subtract(1).max(0).where(transition_max.eq(0), min_bias_index)
-    index_a = transition_index.min(ta_bands.size().subtract(1))\
-        .where(transition_max.eq(0), min_bias_index)
-    ta_b = ta_array.arrayGet(index_b)
-    ta_a = ta_array.arrayGet(index_a)
-    bias_b = bias_array.arrayGet(index_b)
-    bias_a = bias_array.arrayGet(index_a)
-
-    # For now, compute the target Ta as the average of the bracketing Ta values
-    # Eventually Ta could be linearly interpolated or computed
-    #   as some sort of weighted average (based on the biases)
-    ta_source_img = ta_a.add(ta_b).multiply(0.5).rename(['ta'])
-
-    # Mask out Ta cells with all negative biases
-    ta_source_img = ta_source_img.updateMask(bias_b.lt(0).And(bias_a.lt(0)).Not())
-
-    return ta_source_img
 
 
 def read_ini(ini_path):
