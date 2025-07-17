@@ -20,19 +20,15 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 dependencies = [
-    "earthengine-api>=0.1.392",
-    "openet-core>=0.6.0",
-    "openet-landsat-lai>=0.2.0",
+    "earthengine-api>=1.5.2",
+    "openet-core>=0.7.0",
+    "openet-landsat-lai>=0.3.0",
     # "openet-refet-gee>=0.2.0",
     "python-dateutil",
 ]
 
 [project.urls]
 "Homepage" = "https://github.com/Open-ET/openet-disalexi"
-# "Repository" = "https://github.com/Open-ET/openet-disalexi.git"
-# "Documentation" = "https://github.com/Open-ET/openet-disalexi"
-# "Bug Tracker" = "https://github.com/Open-ET/openet-disalexi"
-# "Changelog" = "https://github.com/Open-ET/openet-disalexi"
 
 [build-system]
 requires = ["setuptools>=61.0"]

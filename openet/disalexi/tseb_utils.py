@@ -750,6 +750,7 @@ def compute_r_x(u_attr, hc, f, d0, z0m, xl, leaf_c, fm_h):
     d0 : ee.Image
     z0m : ee.Image
     xl : ee.Image
+        Leaf width
     leaf_c : ee.Image
     fm_h : ee.Image
 
@@ -771,14 +772,7 @@ def compute_r_x(u_attr, hc, f, d0, z0m, xl, leaf_c, fm_h):
     u_d = d0.add(z0m).divide(hc).add(-1).multiply(leaf_c).exp().multiply(u_c)
     u_d = u_d.where(u_d.lte(0), 100)
 
-    # TODO: Check the order of operations on the c / f
-    #   Is c / f supposed to be in paranthesis?
     r_x = xl.divide(u_d).pow(0.5).multiply(c).divide(f).where(u_d.eq(100), 0.1)
-    #r_x = u_attr.expression(
-    #    #'(c / f) * ((xl / u_d) ** 0.5)', {'c': c, 'f': f, 'u_d': u_d, 'xl': xl}
-    #    'c / f * ((xl / u_d) ** 0.5)', {'c': c, 'f': f, 'u_d': u_d, 'xl': xl}
-    #)
-    #r_x = r_x.where(u_d.eq(100), 0.1)
 
     return r_x
 
@@ -812,7 +806,7 @@ def compute_Rn_c(albedo_c, t_air, t_c, t_s, e_atm, rs_c, f):
     eps_c = 0.99
 
     # Stephan Boltzmann constant (W m-2 K-4)
-    # CGM - Original DisALEXI code used shortened version version
+    # CGM - Original DisALEXI code used shortened version
     sb = 5.67E-8
     # sb = 5.670373e-8
 

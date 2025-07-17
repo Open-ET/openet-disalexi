@@ -120,7 +120,7 @@ References
 
 .. |build| image:: https://github.com/Open-ET/openet-disalexi/actions/workflows/build.yml/badge.svg
    :alt: Build status
-   :target: https://travis-ci.org/Open-ET/openet-disalexi-beta
+   :target: https://travis-ci.org/Open-ET/openet-disalexi
 .. |version| image:: https://badge.fury.io/py/openet-disalexi.svg
    :alt: Latest version on PyPI
    :target: https://badge.fury.io/py/openet-disalexi
