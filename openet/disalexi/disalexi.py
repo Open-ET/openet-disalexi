@@ -12,6 +12,8 @@ from . import landsat
 from . import tseb
 from . import tseb_utils
 from . import utils
+# CGM - Testing out running tseb_invert with extra logging
+# from . import tseb_invert
 
 
 def lazy_property(fn):
@@ -51,6 +53,7 @@ class Image(object):
             vapor_pres_source='CFSR',
             wind_speed_source='CFSR',
             stability_iterations=None,
+            tseb_invert_stability_iterations=20,
             albedo_iterations=10,
             rs_interp_flag=True,
             ta_smooth_flag=True,
@@ -100,6 +103,9 @@ class Image(object):
         stability_iterations : int, optional
             Number of stability calculation iterations.  If not set, the
             number will be computed dynamically.
+        tseb_invert_stability_iterations : int, optional
+            Number of stability calculation iterations to use in the Ta initial calculation
+            (the default is 20).
         albedo_iterations : int, optional
             Number albedo separation iterations (the default is 10).
         rs_interp_flag : bool, optional
@@ -202,6 +208,7 @@ class Image(object):
             self.stabil_iter = int(stability_iterations + 0.5)
         else:
             self.stabil_iter = None
+        self.tseb_invert_stabil_iter = int(tseb_invert_stability_iterations + 0.5)
         self.albedo_iter = int(albedo_iterations + 0.5)
         self.rs_interp_flag = utils.boolean(rs_interp_flag)
         self.ta_smooth_flag = utils.boolean(ta_smooth_flag)
@@ -307,11 +314,11 @@ class Image(object):
         # CGM - Should the supported image collection IDs and helper
         # function mappings be set in a property or method of the Image class?
         collection_methods = {
-            'LANDSAT/LC09/C02/T1_L2': 'from_landsat_c02_l2',
-            'LANDSAT/LC08/C02/T1_L2': 'from_landsat_c02_l2',
-            'LANDSAT/LE07/C02/T1_L2': 'from_landsat_c02_l2',
-            'LANDSAT/LT05/C02/T1_L2': 'from_landsat_c02_l2',
             'LANDSAT/LT04/C02/T1_L2': 'from_landsat_c02_l2',
+            'LANDSAT/LT05/C02/T1_L2': 'from_landsat_c02_l2',
+            'LANDSAT/LE07/C02/T1_L2': 'from_landsat_c02_l2',
+            'LANDSAT/LC08/C02/T1_L2': 'from_landsat_c02_l2',
+            'LANDSAT/LC09/C02/T1_L2': 'from_landsat_c02_l2',
         }
 
         try:
@@ -392,7 +399,7 @@ class Image(object):
             t_air=self.ta,
             t_rad=self.lst,
             t_air0=self.air_temperature,
-            e_air=self.vapor_pressure,
+            ea=self.vapor_pressure,
             u=self.wind_speed,
             p=self.air_pressure,
             z=self.elevation,
@@ -547,11 +554,14 @@ class Image(object):
             # Select the closest year in time from the Annual NLCD image collection
             # Hardcoding the year ranges for now but we might want to change this to
             #   a more dynamic approach to allow for additional years to be added.
-            nlcd_year = self.year.min(2023).max(1985)
+            lc_coll = ee.ImageCollection(self.landcover_source)
+            lc_year = (
+                ee.Number(self.year)
+                .max(ee.Date(lc_coll.aggregate_min('system:time_start')).get('year'))
+                .min(ee.Date(lc_coll.aggregate_max('system:time_start')).get('year'))
+            )
             lc_img = (
-                ee.ImageCollection(self.landcover_source)
-                .filter(ee.Filter.calendarRange(nlcd_year, nlcd_year, 'year'))
-                .first()
+                lc_coll.filter(ee.Filter.calendarRange(lc_year, lc_year, 'year')).first()
                 .rename(['landcover'])
             )
             self.lc_type = 'NLCD'
@@ -793,7 +803,7 @@ class Image(object):
             ta_img = (
                 ta_interp_img.resample('bilinear')
                 .reproject(crs=self.crs, crsTransform=self.transform)
-                # .updateMask(ta_interp_mask)
+                .updateMask(ta_interp_mask)
                 .updateMask(self.et_alexi.mask())
             )
         else:
@@ -1087,13 +1097,16 @@ class Image(object):
         rr_params = {'reducer': ee.Reducer.mean().unweighted(), 'maxPixels': 30000}
         proj_params = {'crs': self.alexi_crs, 'crsTransform': self.alexi_geo}
 
+        # CGM - Was testing out runing tseb_invert with extra logging to compare to pyTSEB
+        # ta_invert = tseb_invert.tseb_invert(
+
         # Intentionally passing measured air temperature in for both t_air and t_air0
         # The "coarse" images are already at the ALEXI scale and shouldn't need to be reduced
         ta_invert = tseb.tseb_invert(
             et_alexi=self.et_alexi,
             t_air=self.air_temperature_coarse,
             t_air0=self.air_temperature_coarse,
-            e_air=self.vapor_pressure_coarse,
+            ea=self.vapor_pressure_coarse,
             u=self.wind_speed_coarse,
             p=self.air_pressure_coarse,
             rs_1=self.rs1_coarse,
@@ -1117,14 +1130,16 @@ class Image(object):
             datetime=self.datetime,
             lat=self.alexi_lat,
             lon=self.alexi_lon,
-            stabil_iter=self.stabil_iter,
+            stabil_iter=self.tseb_invert_stabil_iter,
             albedo_iter=self.albedo_iter,
         )
+
         return ta_invert.round().clamp(265, 335).rename(['ta_initial']).set(self.properties)
 
     def ta_coarse_mosaic(
             self,
             ta_initial_img,
+            #offsets=[-20, -12, -7, -4, -2, -1, 0, 1, 2, 4, 7, 12, 20],
             offsets=[-12, -7, -4, -2, -1, 0, 1, 2, 4, 7, 12],
             #offsets=[-5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5],
             threshold=0.5,
@@ -1156,7 +1171,7 @@ class Image(object):
                 t_air=ta,
                 t_rad=self.lst,
                 t_air0=self.air_temperature,
-                e_air=self.vapor_pressure,
+                ea=self.vapor_pressure,
                 u=self.wind_speed,
                 p=self.air_pressure,
                 z=self.elevation,

@@ -344,7 +344,7 @@ def from_scene_et_fraction(
 
     daily_coll = daily_coll.map(compute_et)
 
-    # CGM - This function is being declared here to avoid passing in all the common parameters
+    # This function is being declared here to avoid passing in all the common parameters
     #   such as: daily_coll, daily_et_ref_coll, interp_properties, variables, etc.
     # Long term it should probably be declared outside of this function
     #   so it can be called directly and tested separately
@@ -446,11 +446,11 @@ def from_scene_et_fraction(
         ))
     elif t_interval.lower() == 'daily':
         def agg_daily(daily_img):
-            # CGM - Double check that this time_start is a 0 UTC time.
+            # TODO: Double check that this time_start is a 0 UTC time.
             # It should be since it is coming from the interpolate source
             #   collection, but what if source is GRIDMET (+6 UTC)?
             agg_start_date = ee.Date(daily_img.get('system:time_start'))
-            # CGM - This calls .sum() on collections with only one image
+            # This calls .sum() on collections with only one image
             return aggregate_image(
                 agg_start_date=agg_start_date,
                 agg_end_date=ee.Date(agg_start_date).advance(1, 'day'),
@@ -753,7 +753,6 @@ def from_scene_et_actual(
         )
 
         return (
-            #img.select(interp_vars)
             img.select(['et'])
             .double().multiply(ee.Number(scale_factor.get('scale_factor')))
             .addBands([mask_img, time_img])
@@ -817,12 +816,6 @@ def from_scene_et_actual(
             et_norm_img = et_norm_img.min(float(interp_args['et_fraction_max']))
         if 'et_fraction_min' in interp_args.keys():
             et_norm_img = et_norm_img.max(float(interp_args['et_fraction_min']))
-        # if ('et_fraction_min' in interp_args.keys() and
-        #     'et_fraction_max' in interp_args.keys()):
-        #     et_norm_img = et_norm_img.clamp(
-        #         float(interp_args['et_fraction_min']),
-        #         float(interp_args['et_fraction_max'])
-        #     )
 
         return img.addBands([et_norm_img.double(), target_img.rename(['norm'])])
 
@@ -853,12 +846,11 @@ def from_scene_et_actual(
     # # if 'et' in variables or 'et_fraction' in variables:
     # def compute_et(img):
     #     """This function assumes ETr and ETf are present"""
-    #     et_img = img.select(['et_norm']).multiply(
-    #         img.select(['et_reference']))
+    #     et_img = img.select(['et_norm']).multiply(img.select(['et_reference']))
     #     return img.addBands(et_img.double().rename('et'))
     # daily_coll = daily_coll.map(compute_et)
 
-    # CGM - This function is being declared here to avoid passing in all the common parameters
+    # This function is being declared here to avoid passing in all the common parameters
     #   such as: daily_coll, daily_et_ref_coll, interp_properties, variables, etc.
     # Long term it should probably be declared outside of this function
     #   so it can be called directly and tested separately
@@ -962,11 +954,11 @@ def from_scene_et_actual(
         ))
     elif t_interval.lower() == 'daily':
         def agg_daily(daily_img):
-            # CGM - Double check that this time_start is a 0 UTC time.
+            # TODO: Double check that this time_start is a 0 UTC time.
             # It should be since it is coming from the interpolate source
             #   collection, but what if source is GRIDMET (+6 UTC)?
             agg_start_date = ee.Date(daily_img.get('system:time_start'))
-            # CGM - This calls .sum() on collections with only one image
+            # This calls .sum() on collections with only one image
             return aggregate_image(
                 agg_start_date=agg_start_date,
                 agg_end_date=ee.Date(agg_start_date).advance(1, 'day'),

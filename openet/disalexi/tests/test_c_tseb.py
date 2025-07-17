@@ -13,7 +13,7 @@ ne3_xy = [-96.43968912903934, 41.17964494123755]
 
 
 @pytest.mark.parametrize(
-    't_air, t_rad, t_air0, e_air, u, p, '
+    't_air, t_rad, t_air0, ea, u, p, '
     'z, rs_1, rs24, vza, aleafv, aleafn, aleafl, adeadv, adeadn, adeadl,'
     'albedo, ndvi, lai, clump,hc_min, hc_max, leaf_width, datetime, '
     'lon, lat, a_pt_in, stabil_iter, albedo_iter, expected, tol',
@@ -49,7 +49,7 @@ ne3_xy = [-96.43968912903934, 41.17964494123755]
     ]
 )
 def test_tseb_pt(
-        t_air, t_rad, t_air0, e_air, u, p,
+        t_air, t_rad, t_air0, ea, u, p,
         z, rs_1, rs24, vza, aleafv, aleafn, aleafl, adeadv, adeadn, adeadl,
         albedo, ndvi, lai, clump, hc_min, hc_max, leaf_width, datetime,
         lon, lat, a_pt_in, stabil_iter, albedo_iter, expected, tol,
@@ -58,7 +58,7 @@ def test_tseb_pt(
         t_air=ee.Image.constant(t_air),
         t_rad=ee.Image.constant(t_rad),
         t_air0=ee.Image.constant(t_air0),
-        e_air=ee.Image.constant(e_air),
+        ea=ee.Image.constant(ea),
         u=ee.Image.constant(u),
         p=ee.Image.constant(p),
         z=ee.Image.constant(z),

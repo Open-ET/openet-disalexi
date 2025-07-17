@@ -238,14 +238,14 @@ def test_Image_set_landcover_vars_default(tol=1E-6):
     is 82 (for NLCD) for 10 (for GLC30)"""
     d_obj = disalexi.Image(**default_image_args())
     d_obj.set_landcover_vars()
-    assert utils.point_image_value(d_obj.aleafv, ne1_xy)['aleafv'] == 0.83
-    assert utils.point_image_value(d_obj.aleafn, ne1_xy)['aleafn'] == 0.35
-    assert utils.point_image_value(d_obj.aleafl, ne1_xy)['aleafl'] == 0.95
-    assert utils.point_image_value(d_obj.adeadv, ne1_xy)['adeadv'] == 0.49
-    assert utils.point_image_value(d_obj.adeadn, ne1_xy)['adeadn'] == 0.13
-    assert utils.point_image_value(d_obj.adeadl, ne1_xy)['adeadl'] == 0.95
-    assert utils.point_image_value(d_obj.leaf_width, ne1_xy)['xl'] == 0.05
-    assert utils.point_image_value(d_obj.clump, ne1_xy)['omega'] == 0.83
+    assert utils.point_image_value(d_obj.aleafv, ne1_xy, scale=30)['aleafv'] == 0.83
+    assert utils.point_image_value(d_obj.aleafn, ne1_xy, scale=30)['aleafn'] == 0.35
+    assert utils.point_image_value(d_obj.aleafl, ne1_xy, scale=30)['aleafl'] == 0.95
+    assert utils.point_image_value(d_obj.adeadv, ne1_xy, scale=30)['adeadv'] == 0.49
+    assert utils.point_image_value(d_obj.adeadn, ne1_xy, scale=30)['adeadn'] == 0.13
+    assert utils.point_image_value(d_obj.adeadl, ne1_xy, scale=30)['adeadl'] == 0.95
+    assert utils.point_image_value(d_obj.leaf_width, ne1_xy, scale=30)['xl'] == 0.05
+    assert utils.point_image_value(d_obj.clump, ne1_xy, scale=30)['omega'] == 0.83
 
 
 def test_Image_set_landcover_vars_init_asset(tol=1E-6):
@@ -253,7 +253,7 @@ def test_Image_set_landcover_vars_init_asset(tol=1E-6):
     d_obj = disalexi.Image(landcover_source='USGS/NLCD_RELEASES/2019_REL/NLCD/2011', **default_image_args())
     d_obj.set_landcover_vars()
     # Only need to check the first test value
-    assert utils.point_image_value(d_obj.aleafv, ne1_xy)['aleafv'] == 0.83
+    assert utils.point_image_value(d_obj.aleafv, ne1_xy, scale=30)['aleafv'] == 0.83
 
 
 def test_Image_set_landcover_vars_set_asset(tol=1E-6):
@@ -262,4 +262,4 @@ def test_Image_set_landcover_vars_set_asset(tol=1E-6):
     d_obj.landcover_source = 'USGS/NLCD_RELEASES/2019_REL/NLCD/2011'
     d_obj.set_landcover_vars()
     # Only need to check the first test value
-    assert utils.point_image_value(d_obj.aleafv, ne1_xy)['aleafv'] == 0.83
+    assert utils.point_image_value(d_obj.aleafv, ne1_xy, scale=30)['aleafv'] == 0.83

@@ -1,6 +1,7 @@
 import calendar
 from datetime import datetime, UTC
 import logging
+import pprint
 import time
 
 import ee
@@ -167,3 +168,39 @@ def valid_date(date_str, date_fmt='%Y-%m-%d'):
         return True
     except Exception as e:
         return False
+
+
+# def point_image_value(image, xy, scale=None, transform=None, crs=None,):
+#     """Extract the output value from a calculation at a point"""
+#     rr_args = {
+#         'reducer': ee.Reducer.first(),
+#         'geometry': ee.Geometry.Point(xy),
+#         'crs': 'EPSG:4326',
+#         'scale': 1,
+#     }
+#     if transform:
+#         rr_args.update({'crsTransform': transform})
+#         del rr_args['scale']
+#     if scale:
+#         rr_args.update({'scale': scale})
+#         del rr_args['crsTransform']
+#     if crs:
+#         rr_args.update({'crs': crs})
+#
+#     return ee.Image(image).select([0], ['value']).reduceRegion(**rr_args).get('value').getInfo()
+
+
+# def point_image_values(image, band_name):
+#     """Extract the output value from a calculation at a point"""
+#     # print(f'\n{band_name}')
+#     points = [
+#         # Bad XY
+#         [-106.60, 39.72],
+#         # # Good XYs
+#         # [-106.56, 39.72],
+#         # [-106.60, 39.76],
+#         # [-106.64, 39.72],
+#         # [-106.60, 39.68],
+#     ]
+#     for xy in points:
+#         print(f'{band_name}: {point_image_value(image, xy, transform=[0.04, 0, -125.02, 0, -0.04, 49.78])}')

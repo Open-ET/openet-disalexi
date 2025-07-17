@@ -9,7 +9,7 @@ def tseb_pt(
         t_air,
         t_rad,
         t_air0,
-        e_air,
+        ea,
         u,
         p,
         z,
@@ -50,7 +50,7 @@ def tseb_pt(
         Radiometric composite temperature [K].
     t_air0 : ee.Image
         Measured Air Temperature [K]
-    e_air : ee.Image
+    ea : ee.Image
         Vapour pressure [kPa]
     u : ee.Image
         Wind speed above the canopy [m s-1].
@@ -210,15 +210,15 @@ def tseb_pt(
     e_s0 = t_air0.expression(
         '0.6108 * exp((17.27 * (t_air - 273.16)) / ((t_air - 273.16) + 237.3))', {'t_air': t_air0}
     )
-    vpd = e_s0.subtract(e_air)
+    vpd = e_s0.subtract(ea)
 
     # Saturation vapor pressure [kpa] using iterated air temperature
-    e_s = t_air.expression(
+    es = t_air.expression(
         '0.6108 * exp((17.27 * (t_air - 273.16)) / ((t_air - 273.16) + 237.3))', {'t_air': t_air}
     )
 
     # Slope of the saturation vapor pressure [kPa] (FAO56 3-9)
-    Ss = t_air.subtract(273.16).add(237.3).pow(-2).multiply(e_s).multiply(4098)
+    Ss = t_air.subtract(273.16).add(237.3).pow(-2).multiply(es).multiply(4098)
 
     # Latent heat of vaporization (~2.45 at 20 C) [MJ kg-1] (FAO56 3-1)
     lambda1 = t_air.subtract(273.16).multiply(2.361e-3).multiply(-1).add(2.501)
@@ -255,7 +255,6 @@ def tseb_pt(
     # Assume neutral conditions on first iteration (use t_air for Ts and Tc)
     u_attr = tseb_utils.compute_u_attr(u=u, d0=d0, z0m=z0m, z_u=z_u, fm=0)
     r_ah = tseb_utils.compute_r_ah(u_attr=u_attr, d0=d0, z0h=z0h, z_t=z_t, fh=0)
-    # CGM - Why is this function passing "lai" to "f"?
     r_s = tseb_utils.compute_r_s(
         u_attr=u_attr, t_s=t_air, t_c=t_air, hc=hc, f=lai, d0=d0, z0m=z0m, leaf=leaf, leaf_s=leaf_s, fm_h=0
     )
@@ -324,7 +323,6 @@ def tseb_pt(
             u_attr=u_attr_iter, t_s=t_s_iter, t_c=t_c_iter, hc=hc, f=lai,
             d0=d0, z0m=z0m, leaf=leaf, leaf_s=leaf_s, fm_h=fm_h
         )
-        # CGM - Why is this function is passing "lai" to "f"?
         r_x_iter = tseb_utils.compute_r_x(
             u_attr=u_attr_iter, hc=hc, f=lai, d0=d0, z0m=z0m, xl=leaf_width, leaf_c=leaf_c, fm_h=fm_h
         )
@@ -374,9 +372,7 @@ def tseb_pt(
         't_s': t_s,
         'u_attr': u_attr,
     })
-    iter_output = ee.Dictionary(
-        ee.List.sequence(1, stabil_iter).iterate(iter_func, input_images)
-    )
+    iter_output = ee.Dictionary(ee.List.sequence(1, stabil_iter).iterate(iter_func, input_images))
 
     # Unpack the iteration output
     a_pt = ee.Image(iter_output.get('a_pt'))
@@ -421,9 +417,10 @@ def tseb_invert(
         t_air,
         t_rad,
         t_air0,
-        e_air,
+        ea,
         u,
-        p, z,
+        p,
+        z,
         rs_1,
         rs24,
         vza,
@@ -462,7 +459,7 @@ def tseb_invert(
         Radiometric composite temperature [K].
     t_air0 : ee.Image
         Measured air Temperature [K]
-    e_air : ee.Image
+    ea : ee.Image
         Vapour pressure [kPa]
     u : ee.Image
         Wind speed above the canopy [m s-1].
@@ -538,7 +535,6 @@ def tseb_invert(
         http://dx.doi.org/10.1016/S0168-1923(99)00005-2.
 
     """
-
     mask = lai.double().multiply(0).rename(['mask'])
 
     # ************************************************************************
@@ -631,19 +627,19 @@ def tseb_invert(
     # ************************************************************************
     # Atmospheric Parameters
     # Saturation vapour pressure [kPa] (FAO56 3-8)
-    # Yun modified to use METEO air temperature
+    # Modified from tseb_pt() to use METEO air temperature
     e_s0 = t_air0.expression(
         '0.6108 * exp((17.27 * (t_air - 273.16)) / ((t_air - 273.16) + 237.3))', {'t_air': t_air0}
     )
-    vpd = e_s0.subtract(e_air)
+    vpd = e_s0.subtract(ea)
 
     # Saturation vapor pressure [kpa] using iterated air temperature
-    e_s = t_air.expression(
+    es = t_air.expression(
         '0.6108 * exp((17.27 * (t_air - 273.16)) / ((t_air - 273.16) + 237.3))', {'t_air': t_air}
     )
 
     # Slope of the saturation vapor pressure [kPa] (FAO56 3-9)
-    Ss = t_air.subtract(273.16).add(237.3).pow(-2).multiply(e_s).multiply(4098)
+    Ss = t_air.subtract(273.16).add(237.3).pow(-2).multiply(es).multiply(4098)
 
     # Latent heat of vaporization (~2.45 at 20 C) [MJ kg-1] (FAO56 3-1)
     # lambda1 = (2.501 - (2.361e-3 * (t_air - 273.16)))
@@ -684,14 +680,13 @@ def tseb_invert(
 
     # Assume neutral conditions on first iteration (use t_air for Ts and Tc)
     u_attr = tseb_utils.compute_u_attr(u=u, d0=d0, z0m=z0m, z_u=z_u, fm=0)
-    r_ah = tseb_utils.compute_r_ah(u_attr=u_attr, d0=d0, z0h=z0h, z_t=z_t, fh=0)
-    # CGM - Why is this function passing "lai" to "f"?
-    r_s = tseb_utils.compute_r_s(
-        u_attr=u_attr, t_s=t_air, t_c=t_air, hc=hc, f=lai, d0=d0, z0m=z0m, leaf=leaf, leaf_s=leaf_s, fm_h=0
-    )
-    r_x = tseb_utils.compute_r_x(
-        u_attr=u_attr, hc=hc, f=lai, d0=d0, z0m=z0m, xl=leaf_width, leaf_c=leaf_c, fm_h=0
-    )
+    # r_ah = tseb_utils.compute_r_ah(u_attr=u_attr, d0=d0, z0h=z0h, z_t=z_t, fh=0)
+    # r_s = tseb_utils.compute_r_s(
+    #     u_attr=u_attr, t_s=t_air, t_c=t_air, hc=hc, f=lai, d0=d0, z0m=z0m, leaf=leaf, leaf_s=leaf_s, fm_h=0
+    # )
+    # r_x = tseb_utils.compute_r_x(
+    #     u_attr=u_attr, hc=hc, f=lai, d0=d0, z0m=z0m, xl=leaf_width, leaf_c=leaf_c, fm_h=0
+    # )
 
     t_c = t_air.multiply(1)
     # Modified from tseb_pt() approach
@@ -709,9 +704,9 @@ def tseb_invert(
         # Extract inputs from previous iteration
         a_pt_iter = ee.Image(ee.Dictionary(prev).get('a_pt'))
         ef_s_iter = ee.Image(ee.Dictionary(prev).get('ef_s'))
-        r_ah_iter = ee.Image(ee.Dictionary(prev).get('r_ah'))
-        r_s_iter = ee.Image(ee.Dictionary(prev).get('r_s'))
-        r_x_iter = ee.Image(ee.Dictionary(prev).get('r_x'))
+        # r_ah_iter = ee.Image(ee.Dictionary(prev).get('r_ah'))
+        # r_s_iter = ee.Image(ee.Dictionary(prev).get('r_s'))
+        # r_x_iter = ee.Image(ee.Dictionary(prev).get('r_x'))
         t_c_iter = ee.Image(ee.Dictionary(prev).get('t_c'))
         t_s_iter = ee.Image(ee.Dictionary(prev).get('t_s'))
         u_attr_iter = ee.Image(ee.Dictionary(prev).get('u_attr'))
@@ -746,7 +741,6 @@ def tseb_invert(
             u_attr=u_attr_iter, t_s=t_s_iter, t_c=t_c_iter, hc=hc, f=lai,
             d0=d0, z0m=z0m, leaf=leaf, leaf_s=leaf_s, fm_h=fm_h
         )
-        # CGM - Why is this function passing "lai" to "f"?
         r_x_iter = tseb_utils.compute_r_x(
             u_attr=u_attr_iter, hc=hc, f=lai, d0=d0, z0m=z0m, xl=leaf_width, leaf_c=leaf_c, fm_h=fm_h
         )
@@ -770,13 +764,9 @@ def tseb_invert(
         return ee.Dictionary({
             'a_pt': a_pt_iter,
             'ef_s': ef_s_iter,
-            'g': g,
-            'rn_c': rn_c,
-            'rn_s': rn_s,
-            'r_ah': r_ah_iter,
-            'r_s': r_s_iter,
-            'r_x': r_x_iter,
-            't_ac': t_ac,
+            #'r_ah': r_ah_iter,
+            #'r_s': r_s_iter,
+            #'r_x': r_x_iter,
             't_c': t_c_iter,
             't_s': t_s_iter,
             'u_attr': u_attr_iter,
@@ -788,14 +778,9 @@ def tseb_invert(
     input_images = ee.Dictionary({
         'a_pt': a_pt,
         'ef_s': ef_s,
-        'g': ee.Image(0),
-        'rn_c': ee.Image(0),
-        'rn_s': ee.Image(0),
-        'r_ah': r_ah,
-        'r_s': r_s,
-        'r_x': r_x,
-        'rs_1': rs_1,
-        't_ac': ee.Image(0),
+        #'r_ah': r_ah,
+        #'r_s': r_s,
+        #'r_x': r_x,
         't_c': t_c,
         't_s': t_s,
         'u_attr': u_attr,
