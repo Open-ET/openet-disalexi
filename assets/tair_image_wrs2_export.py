@@ -10,13 +10,13 @@ import math
 import os
 import pprint
 import re
-import time
 
 import ee
 import pandas as pd
 
 import openet.disalexi
 import openet.core
+import openet.core.export
 import openet.core.utils as utils
 
 TOOL_NAME = 'tair_image_wrs2_export'
@@ -127,12 +127,9 @@ def main(
     wrs2_row_skip_list = [25, 24, 43]
     mgrs_skip_list = []
     date_skip_list = []
+    # date_skip_list = ['2023-06-16']
 
     export_id_fmt = '{model}_{index}'
-
-    # TODO: Move to INI file
-    # mask_ocean_flag = True
-    # clip_ocean_flag = False
 
     # Read config file
     logging.info(f'  {os.path.basename(ini_path)}')
@@ -398,6 +395,7 @@ def main(
     # Read the cloudscore masking scene ID list
     # Cloud score scenes will be skipped in DisALEXI (for now) instead of masked
     if scene_id_cloudscore_path:
+        logging.info(f'\nScene ID cloudscore path: {scene_id_cloudscore_path}')
         scene_id_skip_list.update([
             scene_id.upper()
             for scene_id in pd.read_csv(scene_id_cloudscore_path)['SCENE_ID'].values
@@ -487,7 +485,7 @@ def main(
         logging.info(f'  Ready Tasks:   {ready_task_count}')
 
         # Hold the job here if the ready task count is already over the max
-        ready_task_count = delay_task(
+        ready_task_count = utils.delay_task(
             delay_time=0, task_max=ready_task_max, task_count=ready_task_count
         )
 
@@ -536,7 +534,7 @@ def main(
 
     # Get list of MGRS tiles that intersect the study area
     logging.debug('\nMGRS Tiles/Zones')
-    export_list = mgrs_export_tiles(
+    export_list = openet.core.export.mgrs_export_tiles(
         study_area_coll_id=study_area_coll_id,
         mgrs_coll_id=mgrs_ftr_coll_id,
         study_area_property=study_area_property,
@@ -567,7 +565,9 @@ def main(
         logging.debug('  Getting list of available model images and existing assets')
         export_image_id_list = []
         asset_props = {}
-        for year_start_dt, year_end_dt in date_range_by_year(start_dt, end_dt, exclusive_end_dates=True):
+        for year_start_dt, year_end_dt in utils.date_years(
+                start_dt, end_dt, exclusive_end_dates=True
+        ):
             year_start_date = year_start_dt.strftime("%Y-%m-%d")
             year_end_date = year_end_dt.strftime("%Y-%m-%d")
             logging.debug(f'  {year_start_date} {year_end_date}')
@@ -669,7 +669,7 @@ def main(
             # image_id is the full Earth Engine ID to the asset
             for image_id in image_id_list:
                 coll_id, scene_id = image_id.rsplit('/', 1)
-                l, p, r, year, month, day = parse_landsat_id(scene_id)
+                l, p, r, year, month, day = utils.parse_landsat_id(scene_id)
                 image_dt = datetime.strptime('{:04d}{:02d}{:02d}'.format(year, month, day), '%Y%m%d')
                 image_date = image_dt.strftime('%Y-%m-%d')
 
@@ -703,9 +703,9 @@ def main(
                         continue
                     elif asset_props and (asset_id in asset_props.keys()):
                         # In update mode only overwrite if the version is old
-                        model_ver = version_number(model_metadata["Version"])
-                        # model_ver = version_number(openet.disalexi.__version__)
-                        asset_ver = version_number(asset_props[asset_id]['model_version'])
+                        model_ver = utils.ver_str_2_num(model_metadata["Version"])
+                        # model_ver = utils.ver_str_2_num(openet.disalexi.__version__)
+                        asset_ver = utils.ver_str_2_num(asset_props[asset_id]['model_version'])
 
                         if asset_ver < model_ver:
                             logging.info(f'  {scene_id} - Existing asset model version is old, removing')
@@ -731,8 +731,8 @@ def main(
                         #     except:
                         #         logging.info('  Error removing asset, skipping')
                         #         continue
-                        # elif (version_number(asset_props[asset_id]['tool_version']) <
-                        #       version_number(TOOL_VERSION)):
+                        # elif (utils.ver_str_2_num(asset_props[asset_id]['tool_version']) <
+                        #       utils.ver_str_2_num(TOOL_VERSION)):
                         #     logging.info('  Asset tool version is old, removing')
                         #     try:
                         #         ee.data.deleteAsset(asset_id)
@@ -813,7 +813,7 @@ def main(
                         continue
 
                 if (('windspeed_source' in model_args.keys()) and
-                       (model_args['windspeed_source'] == 'CFSR')):
+                        (model_args['windspeed_source'] == 'CFSR')):
                     windspeed_coll_id = 'projects/disalexi/meteo_data/windspeed/global_v001_3hour'
                     windspeed_coll = (
                         ee.ImageCollection(windspeed_coll_id)
@@ -927,7 +927,6 @@ def main(
                     crs=alexi_crs,
                     crsTransform='[' + ','.join(list(map(str, export_geo))) + ']',
                     dimensions='{0}x{1}'.format(*export_shape),
-                    #shardSize=64,
                 )
                 #     # except ee.ee_exception.EEException as e:
                 #     except Exception as e:
@@ -945,7 +944,7 @@ def main(
                     logging.warning(f'  {scene_id} - Export task was not built, skipping')
                     continue
 
-                logging.info(f'  {scene_id} - Starting export task')
+                logging.debug(f'  {scene_id} - Starting export task')
                 # TODO: We should not blindly keeping starting the task
                 #   Need to only retry on specific errors, otherwise exit
                 try:
@@ -961,7 +960,7 @@ def main(
                 #     except Exception as e:
                 #         logging.info(f'  Resending query ({i}/{max_retries})')
                 #         logging.debug(f'  {e}')
-                #         time.sleep(i ** 2)
+                #         time.sleep(i ** 3)
 
                 # # Not using ee_task_start since it doesn't return the task object
                 # utils.ee_task_start(task)
@@ -983,14 +982,9 @@ def main(
                         )
                         for k, v in task.status().items():
                             task_obj[k] = v
-                        # task_obj['date'] = datetime.today().strftime('%Y-%m-%d')
-                        # task_obj['eecu_seconds'] = 0
                         task_obj['eecu_hours'] = 0
-                        # task_obj['eecu'] = 0
                         task_obj['index'] = properties.pop('wrs2_tile')
-                        # task_obj['wrs2_tile'] = properties.pop('wrs2_tile')
                         task_obj['model_name'] = properties.pop('model_name')
-                        # task_obj['model_version'] = properties.pop('model_version')
                         task_obj['runtime'] = 0
                         task_obj['start_timestamp_ms'] = 0
                         task_obj['tool_name'] = properties.pop('tool_name')
@@ -1003,7 +997,7 @@ def main(
 
                 # Pause before starting the next export task
                 ready_task_count += 1
-                ready_task_count = delay_task(
+                ready_task_count = utils.delay_task(
                     delay_time=delay_time,
                     task_max=ready_task_max,
                     task_count=ready_task_count,
@@ -1012,180 +1006,6 @@ def main(
                 logging.debug('')
 
 
-def mgrs_export_tiles(
-        study_area_coll_id,
-        mgrs_coll_id,
-        study_area_property=None,
-        study_area_features=[],
-        mgrs_tiles=[],
-        mgrs_skip_list=[],
-        utm_zones=[],
-        wrs2_tiles=[],
-        mgrs_property='mgrs',
-        utm_property='utm',
-        wrs2_property='wrs2',
-):
-    """Select MGRS tiles and metadata that intersect the study area geometry
-
-    Parameters
-    ----------
-    study_area_coll_id : str
-        Study area feature collection asset ID.
-    mgrs_coll_id : str
-        MGRS feature collection asset ID.
-    study_area_property : str, optional
-        Property name to use for inList() filter call of study area collection.
-        Filter will only be applied if both 'study_area_property' and
-        'study_area_features' parameters are both set.
-    study_area_features : list, optional
-        List of study area feature property values to filter on.
-    mgrs_tiles : list, optional
-        User defined MGRS tile subset.
-    mgrs_skip_list : list, optional
-        User defined list MGRS tiles to skip.
-    utm_zones : list, optional
-        User defined UTM zone subset.
-    wrs2_tiles : list, optional
-        User defined WRS2 tile subset.
-    mgrs_property : str, optional
-        MGRS property in the MGRS feature collection (the default is 'mgrs').
-    utm_property : str, optional
-        UTM zone property in the MGRS feature collection (the default is 'utm').
-    wrs2_property : str, optional
-        WRS2 property in the MGRS feature collection (the default is 'wrs2').
-
-    Returns
-    ------
-    list of dicts: export information
-
-    """
-    # Build and filter the study area feature collection
-    logging.debug('Building study area collection')
-    logging.debug(f'  {study_area_coll_id}')
-    study_area_coll = ee.FeatureCollection(study_area_coll_id)
-    if (study_area_property == 'STUSPS') and ('CONUS' in [x.upper() for x in study_area_features]):
-        # Exclude AK, HI, AS, GU, PR, MP, VI, (but keep DC)
-        study_area_features = [
-            'AL', 'AR', 'AZ', 'CA', 'CO', 'CT', 'DC', 'DE', 'FL', 'GA',
-            'IA', 'ID', 'IL', 'IN', 'KS', 'KY', 'LA', 'MA', 'MD', 'ME',
-            'MI', 'MN', 'MO', 'MS', 'MT', 'NC', 'ND', 'NE', 'NH', 'NJ',
-            'NM', 'NV', 'NY', 'OH', 'OK', 'OR', 'PA', 'RI', 'SC', 'SD',
-            'TN', 'TX', 'UT', 'VA', 'VT', 'WA', 'WI', 'WV', 'WY',
-        ]
-    study_area_features = sorted(list(set(study_area_features)))
-
-    if study_area_property and study_area_features:
-        logging.debug('  Filtering study area collection')
-        logging.debug(f'  Property: {study_area_property}')
-        logging.debug(f'  Features: {",".join(study_area_features)}')
-        study_area_coll = study_area_coll.filter(
-            ee.Filter.inList(study_area_property, study_area_features)
-        )
-
-    logging.debug('Building MGRS tile list')
-    tiles_coll = ee.FeatureCollection(mgrs_coll_id).filterBounds(study_area_coll.geometry())
-
-    # Filter collection by user defined lists
-    if utm_zones:
-        logging.debug(f'  Filter user UTM Zones:    {utm_zones}')
-        tiles_coll = tiles_coll.filter(ee.Filter.inList(utm_property, utm_zones))
-    if mgrs_skip_list:
-        logging.debug(f'  Filter MGRS skip list:    {mgrs_skip_list}')
-        tiles_coll = tiles_coll.filter(ee.Filter.inList(mgrs_property, mgrs_skip_list).Not())
-    if mgrs_tiles:
-        logging.debug(f'  Filter MGRS tiles/zones:  {mgrs_tiles}')
-        # Allow MGRS tiles to be subsets of the full tile code
-        #   i.e. mgrs_tiles = 10TE, 10TF
-        mgrs_filters = [
-            ee.Filter.stringStartsWith(mgrs_property, mgrs_id.upper())
-            for mgrs_id in mgrs_tiles
-        ]
-        tiles_coll = tiles_coll.filter(ee.call('Filter.or', mgrs_filters))
-
-    def drop_geometry(ftr):
-        return ee.Feature(None).copyProperties(ftr)
-
-    logging.debug('  Requesting tile/zone info')
-    tiles_info = utils.get_info(tiles_coll.map(drop_geometry))
-
-    # Constructed as a list of dicts to mimic other interpolation/export tools
-    tiles_list = []
-    for tile_ftr in tiles_info['features']:
-        tiles_list.append({
-            'crs': 'EPSG:{:d}'.format(int(tile_ftr['properties']['epsg'])),
-            'extent': [int(tile_ftr['properties']['xmin']),
-                       int(tile_ftr['properties']['ymin']),
-                       int(tile_ftr['properties']['xmax']),
-                       int(tile_ftr['properties']['ymax'])],
-            'index': tile_ftr['properties']['mgrs'].upper(),
-            'wrs2_tiles': sorted(utils.wrs2_str_2_set(tile_ftr['properties'][wrs2_property])),
-        })
-
-    # Apply the user defined WRS2 tile list
-    if wrs2_tiles:
-        logging.debug(f'  Filter WRS2 tiles: {wrs2_tiles}')
-        for tile in tiles_list:
-            tile['wrs2_tiles'] = sorted(list(set(tile['wrs2_tiles']) & set(wrs2_tiles)))
-
-    # Only return export tiles that have intersecting WRS2 tiles
-    export_list = [tile for tile in sorted(tiles_list, key=lambda k: k['index']) if tile['wrs2_tiles']]
-
-    return export_list
-
-
-# TODO: Move to openet.core.utils?
-def date_range_by_year(start_dt, end_dt, exclusive_end_dates=False):
-    """
-
-    Parameters
-    ----------
-    start_dt : datetime
-    end_dt : datetime
-    exclusive_end_dates : bool, optional
-        If True, set the end dates for each iteration range to be exclusive.
-
-    Returns
-    -------
-    list of start and end datetimes split by year
-
-    """
-    if (end_dt - start_dt).days > 366:
-        for year in range(start_dt.year, end_dt.year+1):
-            year_start_dt = max(datetime(year, 1, 1), start_dt)
-            year_end_dt = datetime(year+1, 1, 1) - timedelta(days=1)
-            year_end_dt = min(year_end_dt, end_dt)
-            if exclusive_end_dates:
-                year_end_dt = year_end_dt + timedelta(days=1)
-            yield year_start_dt, year_end_dt
-    else:
-        if exclusive_end_dates:
-            year_end_dt = end_dt + timedelta(days=1)
-        yield start_dt, year_end_dt
-
-
-# TODO: Move to openet.core.utils?
-def parse_landsat_id(system_index):
-    """Return the components of an EE Landsat Collection 1 system:index
-
-    Parameters
-    ----------
-    system_index : str
-
-    Notes
-    -----
-    LT05_PPPRRR_YYYYMMDD
-
-    """
-    sensor = system_index[0:4]
-    path = int(system_index[5:8])
-    row = int(system_index[8:11])
-    year = int(system_index[12:16])
-    month = int(system_index[16:18])
-    day = int(system_index[18:20])
-    return sensor, path, row, year, month, day
-
-
-# DEADBEEF - Was in utils.py
 def read_ini(ini_path):
     logging.debug('\nReading Input File')
     # Open config file
@@ -1207,80 +1027,6 @@ def read_ini(ini_path):
         for k, v in config[section].items():
             ini[str(section)][str(k)] = v
     return ini
-
-
-# CGM - This is a modified copy of openet.utils.delay_task()
-#   It was changed to take and return the number of ready tasks
-#   This change may eventually be pushed to openet.utils.delay_task()
-def delay_task(delay_time=0, task_max=-1, task_count=0):
-    """Delay script execution based on number of READY tasks
-
-    Parameters
-    ----------
-    delay_time : float, int
-        Delay time in seconds between starting export tasks or checking the
-        number of queued tasks if "ready_task_max" is > 0.  The default is 0.
-        The delay time will be set to a minimum of 10 seconds if
-        ready_task_max > 0.
-    task_max : int, optional
-        Maximum number of queued "READY" tasks.
-    task_count : int
-        The current/previous/assumed number of ready tasks.
-        Value will only be updated if greater than or equal to ready_task_max.
-
-    Returns
-    -------
-    int : ready_task_count
-
-    """
-    if task_max > 3000:
-        raise ValueError('The maximum number of queued tasks must be less than 3000')
-
-    # Force delay time to be a positive value since the parameter used to
-    #   support negative values
-    if delay_time < 0:
-        delay_time = abs(delay_time)
-
-    if ((task_max is None) or (task_max <= 0)) and (delay_time >= 0):
-        # Assume task_max was not set and just wait the delay time
-        logging.debug(f'  Pausing {delay_time} seconds, not checking task list')
-        time.sleep(delay_time)
-        return 0
-    elif task_max and (task_count < task_max):
-        # Skip waiting or checking tasks if a maximum number of tasks was set
-        #   and the current task count is below the max
-        logging.debug(f'  Ready tasks: {task_count}')
-        return task_count
-
-    # If checking tasks, force delay_time to be at least 10 seconds if
-    #   ready_task_max is set to avoid excessive EE calls
-    delay_time = max(delay_time, 10)
-
-    # Make an initial pause before checking tasks lists to allow
-    #   for previous export to start up
-    # CGM - I'm not sure what a good default first pause time should be,
-    #   but capping it at 30 seconds is probably fine for now
-    logging.debug(f'  Pausing {min(delay_time, 30)} seconds for tasks to start')
-    time.sleep(delay_time)
-
-    # If checking tasks, don't continue to the next export until the number
-    #   of READY tasks is greater than or equal to "ready_task_max"
-    while True:
-        ready_task_count = len(utils.get_ee_tasks(states=['READY']).keys())
-        logging.debug(f'  Ready tasks: {ready_task_count}')
-        if ready_task_count >= task_max:
-            logging.debug(f'  Pausing {delay_time} seconds')
-            time.sleep(delay_time)
-        else:
-            logging.debug(f'  {task_max - ready_task_count} open task '
-                          f'slots, continuing processing')
-            break
-
-    return ready_task_count
-
-
-def version_number(version_str):
-    return list(map(int, version_str.split('.')))
 
 
 def arg_parse():
