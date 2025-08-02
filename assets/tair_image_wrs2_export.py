@@ -10,6 +10,7 @@ import math
 import os
 import pprint
 import re
+import time
 
 import ee
 import pandas as pd
@@ -126,8 +127,7 @@ def main(
     wrs2_path_skip_list = [9, 49]
     wrs2_row_skip_list = [25, 24, 43]
     mgrs_skip_list = []
-    date_skip_list = []
-    # date_skip_list = ['2023-06-16']
+    date_skip_list = ['2023-06-16']
 
     export_id_fmt = '{model}_{index}'
 
@@ -222,14 +222,6 @@ def main(
     except KeyError:
         scene_id_skip_path = None
         logging.debug('  scene_skip_list: not set in INI, defaulting to None')
-    except Exception as e:
-        raise e
-
-    try:
-        scene_id_cloudscore_path = str(ini['INPUTS']['scene_cloudscore_list'])
-    except KeyError:
-        scene_id_cloudscore_path = None
-        logging.debug('  scene_cloudscore_list: not set in INI, defaulting to None')
     except Exception as e:
         raise e
 
@@ -392,16 +384,6 @@ def main(
     else:
         raise Exception(f'Unsupported scene_skip_list parameter: {scene_id_skip_path}')
 
-    # Read the cloudscore masking scene ID list
-    # Cloud score scenes will be skipped in DisALEXI (for now) instead of masked
-    if scene_id_cloudscore_path:
-        logging.info(f'\nScene ID cloudscore path: {scene_id_cloudscore_path}')
-        scene_id_skip_list.update([
-            scene_id.upper()
-            for scene_id in pd.read_csv(scene_id_cloudscore_path)['SCENE_ID'].values
-            if re.match('L[TEC]0[45789]_\d{3}\d{3}_\d{8}', scene_id)
-        ])
-
     # Setup datastore task logging
     if log_tasks:
         # Assume function is being run deployed as a cloud function
@@ -418,7 +400,10 @@ def main(
     if gee_key_file:
         logging.info(f'\nInitializing GEE using user key file: {gee_key_file}')
         try:
-            ee.Initialize(ee.ServiceAccountCredentials('_', key_file=gee_key_file))
+            ee.Initialize(
+                ee.ServiceAccountCredentials('_', key_file=gee_key_file),
+                opt_url='https://earthengine-highvolume.googleapis.com'
+            )
         except ee.ee_exception.EEException:
             logging.warning('Unable to initialize GEE using user key file')
             return False
@@ -429,27 +414,21 @@ def main(
         credentials, project_id = google.auth.default(
             default_scopes=['https://www.googleapis.com/auth/earthengine']
         )
-        ee.Initialize(credentials)
+        ee.Initialize(
+            credentials, project=project_id, opt_url='https://earthengine-highvolume.googleapis.com'
+        )
     elif project_id is not None:
         logging.info(f'\nInitializing Earth Engine using project credentials'
                      f'\n  Project ID: {project_id}')
         try:
-            ee.Initialize(project=project_id)
+            ee.Initialize(project=project_id, opt_url='https://earthengine-highvolume.googleapis.com')
         except Exception as e:
             logging.warning(f'\nUnable to initialize GEE using project ID\n  {e}')
             return False
     else:
         logging.info('\nInitializing Earth Engine using user credentials')
         ee.Initialize()
-    # elif 'GOOGLE_APPLICATION_CREDENTIALS' in os.environ:
-    #     logging.info(f'\nInitializing GEE using GOOGLE_APPLICATION_CREDENTIALS key')
-    #     try:
-    #         ee.Initialize(ee.ServiceAccountCredentials(
-    #             "_", key_file=os.environ.get('GOOGLE_APPLICATION_CREDENTIALS')))
-    #     except Exception as e:
-    #         logging.warning('Unable to initialize GEE using '
-    #                         'GOOGLE_APPLICATION_CREDENTIALS key file')
-    #         return False
+
 
     # Build output collection and folder if necessary
     logging.debug(f'\nExport Collection: {export_coll_id}')
@@ -525,9 +504,11 @@ def main(
             ee.ImageCollection(meteo_coll_id)
             .filterDate(iter_start_dt.strftime('%Y-%m-%d'), iter_end_dt.strftime('%Y-%m-%d'))
         )
-        def set_date(x):
-            return x.set('date', ee.Date(x.get('system:time_start')).format('yyyy-MM-dd'))
-        meteo_dates = set(utils.get_info(meteo_coll.map(set_date).aggregate_histogram('date').keys()))
+        meteo_dates = set(utils.get_info(meteo_coll.aggregate_histogram('date').keys()))
+        # DEADBEEF - The windspeed assets already have a date property so the map is not needed
+        # def set_date(x):
+        #     return x.set('date', ee.Date(x.get('system:time_start')).format('yyyy-MM-dd'))
+        # meteo_dates = set(utils.get_info(meteo_coll.map(set_date).aggregate_histogram('date').keys()))
     else:
         meteo_dates = {}
 
@@ -565,9 +546,7 @@ def main(
         logging.debug('  Getting list of available model images and existing assets')
         export_image_id_list = []
         asset_props = {}
-        for year_start_dt, year_end_dt in utils.date_years(
-                start_dt, end_dt, exclusive_end_dates=True
-        ):
+        for year_start_dt, year_end_dt in utils.date_years(start_dt, end_dt, exclusive_end_dates=True):
             year_start_date = year_start_dt.strftime("%Y-%m-%d")
             year_end_date = year_end_dt.strftime("%Y-%m-%d")
             logging.debug(f'  {year_start_date} {year_end_date}')
@@ -581,9 +560,11 @@ def main(
                 end_date=year_end_date,
                 geometry=tile_geom.buffer(1000),
             )
-            year_image_id_list = utils.get_info(ee.List(
-                model_obj.overpass(variables=['ndvi']).aggregate_array('image_id')
-            ))
+            # The overpass/ndvi call is much slower than the get_image_ids() call
+            year_image_id_list = utils.get_info(ee.List(model_obj.get_image_ids()))
+            # year_image_id_list = utils.get_info(ee.List(
+            #     model_obj.overpass(variables=['ndvi']).aggregate_array('image_id')
+            # ))
 
             # Filter to the wrs2_tile list
             # The WRS2 tile filtering should be done in the Collection call above,
@@ -690,7 +671,7 @@ def main(
                 elif scene_id_skip_list and (scene_id.upper() in scene_id_skip_list):
                     logging.debug(f'  {scene_id} - Scene ID in skip list, skipping')
                     continue
-                elif image_date not in alexi_dates:
+                elif alexi_dates and (image_date not in alexi_dates):
                     logging.info(f'  {scene_id} - No ALEXI image in source, skipping')
                     continue
                 elif meteo_dates and (image_date not in meteo_dates):
@@ -828,6 +809,14 @@ def main(
                         logging.info(f'  {scene_id} - No windspeed images, skipping')
                         continue
 
+                # CGM: We could pre-compute (or compute once and then save)
+                #   the crs, transform, and shape since they should (will?) be
+                #   the same for each wrs2 tile
+                image_info = utils.get_info(ee.Image(image_id).select([0]))
+                if not image_info:
+                    logging.info(f'  {scene_id} - Could not get image projection, skipping')
+                    continue
+
                 d_obj = openet.disalexi.Image.from_image_id(image_id, **model_args)
 
                 # Compute the Ta mosaic and final Ta values from the initial Ta image
@@ -840,6 +829,7 @@ def main(
                 properties = {
                     # Custom properties
                     'build_date': datetime.today().strftime('%Y-%m-%d'),
+                    # 'build_status': 'provisional',
                     'coll_id': coll_id,
                     'core_version': openet.core.__version__,
                     'image_id': image_id,
@@ -854,16 +844,10 @@ def main(
                     'tool_version': TOOL_VERSION,
                     'wrs2_tile': wrs2_tile_fmt.format(p, r),
                     # Source properties
-                    # CGM - Note, setting the properties as server side objects
-                    #   won't work for COG exports
-                    'CLOUD_COVER': landsat_img.get('CLOUD_COVER'),
-                    'CLOUD_COVER_LAND': landsat_img.get('CLOUD_COVER_LAND'),
-                    # 'CLOUD_COVER': landsat_info['properties']['CLOUD_COVER'],
-                    # 'CLOUD_COVER_LAND': landsat_info['properties']['CLOUD_COVER_LAND'],
-                    # CGM - Should we use the Landsat time or the ALEXI time?
-                    'system:time_start': landsat_img.get('system:time_start'),
-                    # 'system:time_start': landsat_info['properties']['system:time_start'],
-                    # 'system:time_start': utils.millis(image_dt),
+                    'CLOUD_COVER': image_info['properties']['CLOUD_COVER'],
+                    'CLOUD_COVER_LAND': image_info['properties']['CLOUD_COVER_LAND'],
+                    'system:index': scene_id,
+                    'system:time_start': image_info['properties']['system:time_start'],
                     # Other properties
                     # 'spacecraft_id': landsat_img.get('SATELLITE'),
                     # 'landsat': landsat,
