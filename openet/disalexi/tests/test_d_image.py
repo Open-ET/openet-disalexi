@@ -118,7 +118,7 @@ def default_image_obj(
 
 def test_Image_init_default_parameters():
     m = disalexi.Image(default_image())
-    assert m.ta_source == 'projects/openet/assets/disalexi/tair/conus_v006_1k'
+    assert m.ta_source == 'projects/openet/assets/disalexi/tair/conus_v006'
     assert m.alexi_source == 'CONUS_V006'
     assert m.lai_source == 'openet-landsat-lai'
     #assert m.lai_source == 'projects/openet/assets/lai/landsat/c02'

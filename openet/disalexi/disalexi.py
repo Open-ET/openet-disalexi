@@ -38,7 +38,7 @@ class Image(object):
     def __init__(
             self,
             image,
-            ta_source='projects/openet/assets/disalexi/tair/conus_v006_1k',
+            ta_source='projects/openet/assets/disalexi/tair/conus_v006',
             alexi_source='CONUS_V006',
             lai_source='openet-landsat-lai',
             # lai_source='projects/openet/assets/lai/landsat/c02',
@@ -544,7 +544,7 @@ class Image(object):
             # If the source is an ee.Image assume it is an NLCD image
             lc_img = self.landcover_source.rename(['landcover'])
             self.lc_type = 'NLCD'
-        elif re.match('projects/sat-io/open-datasets/USGS/ANNUAL_NLCD/LANDCOVER/Annual_NLCD_LndCov_\\d{4}_CU_C1V1',
+        elif re.match('projects/sat-io/open-datasets/USGS/ANNUAL_NLCD/LANDCOVER/Annual_NLCD_LndCov_\\d{4}_CU_\w+',
                       self.landcover_source, re.I):
             # Assume an annual NLCD image ID was passed in and use it directly
             lc_img = ee.Image(self.landcover_source).rename(['landcover'])
