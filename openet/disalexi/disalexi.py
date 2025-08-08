@@ -68,10 +68,12 @@ class Image(object):
         ----------
         image : ee.Image
             Prepped image
-        ta_source : {'projects/openet/assets/disalexi/tair/conus_v006_1k'}
+        ta_source : {'projects/openet/assets/disalexi/tair/conus_v006'
+                     'projects/openet/assets/disalexi/tair/conus_v006_1k',
+                     'projects/openet/assets/disalexi/tair/conus_v007'}
             ALEXI scale air temperature image collection ID.
-        alexi_source : {'CONUS_V006'}
-            ALEXI ET image collection ID (the default is 'CONUS_V006').
+        alexi_source : {'CONUS_V006', 'CONUS_V007'}
+            ALEXI ET image collection ID keyword (the default is 'CONUS_V006').
         lai_source : {'openet-landsat-lai'}
             LAI image collection ID or set to "openet-landsat-lai" to compute LAI
             dynamically using the openet-landsat-lai module.
@@ -491,10 +493,8 @@ class Image(object):
         """
         alexi_keyword_sources = {
             'CONUS_V006': 'projects/ee-tulipyangyun-2/assets/alexi/ALEXI_V006',
+            'CONUS_V007': 'projects/ee-tulipyangyun-2/assets/alexi/ALEXI_V007',
         }
-        alexi_re = re.compile(
-            '(projects/earthengine-legacy/assets/)?projects/disalexi/alexi/CONUS_V\\w+'
-        )
 
         if utils.is_number(self.alexi_source):
             # Interpret numbers as constant images
@@ -506,13 +506,9 @@ class Image(object):
             alexi_coll = ee.ImageCollection(alexi_coll_id).filterDate(self.start_date, self.end_date)
             # TODO: Check if collection size is 0
             alexi_img = ee.Image(alexi_coll.first()).multiply(0.408)
-        elif alexi_re.match(self.alexi_source):
-            alexi_coll = ee.ImageCollection(self.alexi_source).filterDate(self.start_date, self.end_date)
-            alexi_img = ee.Image(alexi_coll.first()).multiply(0.408)
-        elif self.alexi_source in alexi_keyword_sources.values():
-            # CGM - Quick fix for catching if the alexi_source was to as the
-            #   collection ID, specifically for V005 since it is currently in a
-            #   different project and won't get matched by the regex.
+        elif (self.alexi_source.lower().startswith('projects')
+              and ('alexi' in self.alexi_source.lower())):
+            # For now assume that "alexi" must be somewhere in the asset ID
             alexi_coll = ee.ImageCollection(self.alexi_source).filterDate(self.start_date, self.end_date)
             alexi_img = ee.Image(alexi_coll.first()).multiply(0.408)
         else:
@@ -544,7 +540,7 @@ class Image(object):
             # If the source is an ee.Image assume it is an NLCD image
             lc_img = self.landcover_source.rename(['landcover'])
             self.lc_type = 'NLCD'
-        elif re.match('projects/sat-io/open-datasets/USGS/ANNUAL_NLCD/LANDCOVER/Annual_NLCD_LndCov_\\d{4}_CU_\w+',
+        elif re.match('projects/sat-io/open-datasets/USGS/ANNUAL_NLCD/LANDCOVER/Annual_NLCD_LndCov_\\d{4}_CU_\\w+',
                       self.landcover_source, re.I):
             # Assume an annual NLCD image ID was passed in and use it directly
             lc_img = ee.Image(self.landcover_source).rename(['landcover'])
