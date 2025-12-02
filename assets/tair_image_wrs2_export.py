@@ -478,8 +478,22 @@ def main(
         alexi_cs = 0.04
         alexi_x, alexi_y = -125.02, 49.78
         # alexi_geo = [0.04, 0.0, -125.02, 0.0, -0.04, 49.78]
+    elif ((alexi_coll_id.upper() == 'CONUS_V007') or
+            alexi_coll_id.endswith('projects/ee-tulipyangyun-2/assets/alexi/ALEXI_V007')):
+        alexi_coll_id = 'projects/ee-tulipyangyun-2/assets/alexi/ALEXI_V007'
+        alexi_cs = 0.04
+        alexi_x, alexi_y = -125.02, 49.78
+        # alexi_geo = [0.04, 0.0, -125.02, 0.0, -0.04, 49.78]
     else:
-        raise ValueError(f'unsupported ALEXI source: {alexi_coll_id}')
+        raise ValueError(f'Unsupported ALEXI source: {alexi_coll_id}')
+    # # CGM - We could support reading any image collection for the source
+    # #   but this would require modifications to disalexi.py
+    # else:
+    #     alexi_info = ee.ImageCollection(alexi_coll_id).first().getInfo()['bands'][0]
+    #     alexi_crs = alexi_info['crs']
+    #     alexi_cs = alexi_info['crs_transform'][0]
+    #     alexi_x = alexi_info['crs_transform'][2]
+    #     alexi_y = alexi_info['crs_transform'][5]
 
     logging.debug(f'  Collection: {alexi_coll_id}')
 

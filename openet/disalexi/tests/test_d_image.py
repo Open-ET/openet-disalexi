@@ -226,9 +226,12 @@ def test_Image_ta_properties():
     'scene_id, source, xy, expected',
     [
         # ALEXI ET is currently in MJ m-2 d-1
-        ['LC08_044033_20200708', 'CONUS_V006', TEST_POINT, 17.999324798583984 * 0.408],
-        ['LC08_044033_20200724', 'CONUS_V006', TEST_POINT, 17.819684982299805 * 0.408],
-        [None, 'projects/ee-tulipyangyun-2/assets/alexi/ALEXI_V006', TEST_POINT, 12.765579223632812 * 0.408],
+        ['LC08_044033_20200708', 'CONUS_V006', TEST_POINT, 17.99932480 * 0.408],
+        ['LC08_044033_20200724', 'CONUS_V006', TEST_POINT, 17.81968498 * 0.408],
+        [None, 'projects/ee-tulipyangyun-2/assets/alexi/ALEXI_V006', TEST_POINT, 12.76557922 * 0.408],
+        ['LC08_044033_20200708', 'CONUS_V007', TEST_POINT, 16.55301476 * 0.408],
+        ['LC08_044033_20200724', 'CONUS_V007', TEST_POINT, 16.44197273 * 0.408],
+        [None, 'projects/ee-tulipyangyun-2/assets/alexi/ALEXI_V007', TEST_POINT, 11.36735344 * 0.408],
         [None, ee.Image('USGS/SRTMGL1_003').multiply(0).add(10), TEST_POINT, 10],
         [None, '10.382039', TEST_POINT, 10.382039],
         [None, 10.382039, TEST_POINT, 10.382039],
