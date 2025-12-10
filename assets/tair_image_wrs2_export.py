@@ -124,12 +124,51 @@ def main(
         'p011r032',  # Rhode Island coast
         'p010r030',  # Maine
     ]
-    wrs2_path_skip_list = [9, 49]
-    wrs2_row_skip_list = [25, 24, 43]
+    wrs2_path_skip_list = [
+        9, 49
+    ]
+    wrs2_row_skip_list = [
+        25, 24, 43
+    ]
     mgrs_skip_list = []
-    date_skip_list = ['2023-06-16']
+    date_skip_list = [
+        '2023-06-16', '2023-12-31'
+    ]
 
     export_id_fmt = '{model}_{index}'
+
+    # Initialize Earth Engine
+    if gee_key_file:
+        logging.info(f'\nInitializing GEE using user key file: {gee_key_file}')
+        try:
+            ee.Initialize(
+                ee.ServiceAccountCredentials('_', key_file=gee_key_file),
+                opt_url='https://earthengine-highvolume.googleapis.com'
+            )
+        except ee.ee_exception.EEException:
+            logging.warning('Unable to initialize GEE using user key file')
+            return False
+    elif 'FUNCTION_REGION' in os.environ:
+        # Assume code is deployed to a cloud function
+        logging.debug(f'\nInitializing GEE using application default credentials')
+        import google.auth
+        credentials, project_id = google.auth.default(
+            default_scopes=['https://www.googleapis.com/auth/earthengine']
+        )
+        ee.Initialize(
+            credentials, project=project_id, opt_url='https://earthengine-highvolume.googleapis.com'
+        )
+    elif project_id is not None:
+        logging.info(f'\nInitializing Earth Engine using project credentials'
+                     f'\n  Project ID: {project_id}')
+        try:
+            ee.Initialize(project=project_id, opt_url='https://earthengine-highvolume.googleapis.com')
+        except Exception as e:
+            logging.warning(f'\nUnable to initialize GEE using project ID\n  {e}')
+            return False
+    else:
+        logging.info('\nInitializing Earth Engine using user credentials')
+        ee.Initialize()
 
     # Read config file
     logging.info(f'  {os.path.basename(ini_path)}')
@@ -292,7 +331,8 @@ def main(
     if tiles:
         logging.info('\nOverriding INI mgrs_tiles and utm_zones parameters')
         logging.info(f'  user tiles: {tiles}')
-        mgrs_tiles = sorted([y.strip() for x in tiles for y in x.split(',')])
+        mgrs_tiles = sorted([x.strip() for x in tiles.split(',')])
+        # mgrs_tiles = sorted([y.strip() for x in tiles for y in x.split(',')])
         mgrs_tiles = [x.upper() for x in mgrs_tiles if x]
         logging.info(f'  mgrs_tiles: {", ".join(mgrs_tiles)}')
         utm_zones = sorted(list(set([int(x[:2]) for x in mgrs_tiles])))
@@ -396,40 +436,6 @@ def main(
             logging.info('  Task logging disabled, error setting up datastore client')
             log_tasks = False
 
-    # Initialize Earth Engine
-    if gee_key_file:
-        logging.info(f'\nInitializing GEE using user key file: {gee_key_file}')
-        try:
-            ee.Initialize(
-                ee.ServiceAccountCredentials('_', key_file=gee_key_file),
-                opt_url='https://earthengine-highvolume.googleapis.com'
-            )
-        except ee.ee_exception.EEException:
-            logging.warning('Unable to initialize GEE using user key file')
-            return False
-    elif 'FUNCTION_REGION' in os.environ:
-        # Assume code is deployed to a cloud function
-        logging.debug(f'\nInitializing GEE using application default credentials')
-        import google.auth
-        credentials, project_id = google.auth.default(
-            default_scopes=['https://www.googleapis.com/auth/earthengine']
-        )
-        ee.Initialize(
-            credentials, project=project_id, opt_url='https://earthengine-highvolume.googleapis.com'
-        )
-    elif project_id is not None:
-        logging.info(f'\nInitializing Earth Engine using project credentials'
-                     f'\n  Project ID: {project_id}')
-        try:
-            ee.Initialize(project=project_id, opt_url='https://earthengine-highvolume.googleapis.com')
-        except Exception as e:
-            logging.warning(f'\nUnable to initialize GEE using project ID\n  {e}')
-            return False
-    else:
-        logging.info('\nInitializing Earth Engine using user credentials')
-        ee.Initialize()
-
-
     # Build output collection and folder if necessary
     logging.debug(f'\nExport Collection: {export_coll_id}')
     if not ee.data.getInfo(export_coll_id.rsplit('/', 1)[0]):
@@ -478,22 +484,8 @@ def main(
         alexi_cs = 0.04
         alexi_x, alexi_y = -125.02, 49.78
         # alexi_geo = [0.04, 0.0, -125.02, 0.0, -0.04, 49.78]
-    elif ((alexi_coll_id.upper() == 'CONUS_V007') or
-            alexi_coll_id.endswith('projects/ee-tulipyangyun-2/assets/alexi/ALEXI_V007')):
-        alexi_coll_id = 'projects/ee-tulipyangyun-2/assets/alexi/ALEXI_V007'
-        alexi_cs = 0.04
-        alexi_x, alexi_y = -125.02, 49.78
-        # alexi_geo = [0.04, 0.0, -125.02, 0.0, -0.04, 49.78]
     else:
-        raise ValueError(f'Unsupported ALEXI source: {alexi_coll_id}')
-    # # CGM - We could support reading any image collection for the source
-    # #   but this would require modifications to disalexi.py
-    # else:
-    #     alexi_info = ee.ImageCollection(alexi_coll_id).first().getInfo()['bands'][0]
-    #     alexi_crs = alexi_info['crs']
-    #     alexi_cs = alexi_info['crs_transform'][0]
-    #     alexi_x = alexi_info['crs_transform'][2]
-    #     alexi_y = alexi_info['crs_transform'][5]
+        raise ValueError(f'unsupported ALEXI source: {alexi_coll_id}')
 
     logging.debug(f'  Collection: {alexi_coll_id}')
 
@@ -703,54 +695,27 @@ def main(
                         asset_ver = utils.ver_str_2_num(asset_props[asset_id]['model_version'])
 
                         if asset_ver < model_ver:
-                            logging.info(f'  {scene_id} - Existing asset model version is old, removing')
+                            logging.info(f'  {scene_id} - Existing asset model version is old, overwriting')
                             logging.debug(f'  asset: {asset_ver}\n  model: {model_ver}')
-                            try:
-                                ee.data.deleteAsset(asset_id)
-                            except:
-                                logging.info(f'  {scene_id} - Error removing asset, skipping')
-                                continue
                         # elif (asset_props[asset_id]['alexi_source'] < model_args['alexi_source']):
                         #     logging.info('  ALEXI source is old, removing')
                         #     # input('ENTER')
-                        #     try:
-                        #         ee.data.deleteAsset(asset_id)
-                        #     except:
-                        #         logging.info('  Error removing asset, skipping')
-                        #         continue
                         # elif (asset_props[asset_id]['build_date'] <= '2020-04-27'):
                         #     logging.info('  build_date is old, removing')
                         #     # input('ENTER')
-                        #     try:
-                        #         ee.data.deleteAsset(asset_id)
-                        #     except:
-                        #         logging.info('  Error removing asset, skipping')
-                        #         continue
                         # elif (utils.ver_str_2_num(asset_props[asset_id]['tool_version']) <
                         #       utils.ver_str_2_num(TOOL_VERSION)):
                         #     logging.info('  Asset tool version is old, removing')
-                        #     try:
-                        #         ee.data.deleteAsset(asset_id)
-                        #     except:
-                        #         logging.info('  Error removing asset, skipping')
-                        #         continue
                         else:
-                            logging.info(f'  {scene_id} - Asset is up to date, skipping')
+                            logging.debug(f'  {scene_id} - Asset is up to date, skipping')
                             continue
                 elif overwrite_flag:
                     if export_id in tasks.keys():
                         logging.info(f'  {scene_id} - Task already submitted, cancelling')
                         ee.data.cancelTask(tasks[export_id]['id'])
                         # ee.data.cancelOperation(tasks[export_id]['id'])
-                    # This is intentionally not an "elif" so that a task can be
-                    # cancelled and an existing image/file/asset can be removed
                     if asset_props and (asset_id in asset_props.keys()):
-                        logging.info(f'  {scene_id} - Asset already exists, removing')
-                        try:
-                            ee.data.deleteAsset(asset_id)
-                        except:
-                            logging.info('  Error removing asset, skipping')
-                            continue
+                        logging.info(f'  {scene_id} - Asset already exists, overwriting')
                 else:
                     if export_id in tasks.keys():
                         logging.debug(f'  {scene_id} - Task already submitted, skipping')
@@ -925,6 +890,7 @@ def main(
                     crs=alexi_crs,
                     crsTransform='[' + ','.join(list(map(str, export_geo))) + ']',
                     dimensions='{0}x{1}'.format(*export_shape),
+                    overwrite=overwrite_flag or update_flag,
                 )
                 #     # except ee.ee_exception.EEException as e:
                 #     except Exception as e:
