@@ -103,7 +103,10 @@ def main(
     ee.data.setWorkloadTag('disalexi-tair-scene-export')
 
     wrs2_tile_fmt = 'p{:03d}r{:03d}'
-    wrs2_tile_re = re.compile('p?(\\d{1,3})r?(\\d{1,3})')
+    if os.name == 'nt':
+        wrs2_tile_re = re.compile('p?(\\d{1,3})r?(\\d{1,3})')
+    else:
+        wrs2_tile_re = re.compile('p?(\d{1,3})r?(\d{1,3})')
 
     # List of path/rows to skip
     wrs2_skip_list = [
@@ -406,6 +409,11 @@ def main(
     logging.info(f'  Offsets:  {tair_args["offsets"]}')
     logging.debug(f'  Retile:   {retile}')
 
+    if os.name == 'nt':
+        landsat_re_str = 'L[TEC]0[45789]_\d{3}\d{3}_\d{8}'
+    else:
+        landsat_re_str = 'L[TEC]0[45789]_\\d{3}\\d{3}_\\d{8}'
+
     # Read the scene ID skip list
     if (not scene_id_skip_path) or scene_id_skip_path.lower() in ['none', '']:
         logging.info(f'\nScene ID skip list not set')
@@ -418,7 +426,7 @@ def main(
         scene_id_skip_list = {
             scene_id.upper() for scene_id in
             pd.read_csv(scene_id_skip_path)['SCENE_ID'].values
-            if re.match('L[TEC]0[45789]_\d{3}\d{3}_\d{8}', scene_id)
+            if re.match(landsat_re_str, scene_id)
         }
         logging.info(f'  Skip list count: {len(scene_id_skip_list)}')
     else:
@@ -587,10 +595,14 @@ def main(
 
             # Filter to the wrs2_tile list
             # The WRS2 tile filtering should be done in the Collection call above,
-            #   but the DisALEXI model does not currently support this
+            #   but not all of the models support this
+            if os.name == 'nt':
+                wrs2_re_str = '_(\\d{3})(\\d{3})_'
+            else:
+                wrs2_re_str = '_(\d{3})(\d{3})_'
             year_image_id_list = [
                 x for x in year_image_id_list
-                if 'p{}r{}'.format(*re.findall('_(\d{3})(\d{3})_', x)[0]) in tile_list
+                if 'p{}r{}'.format(*re.findall(wrs2_re_str, x)[0]) in tile_list
             ]
 
             # Filter image_ids that have already been processed as part of a
@@ -1043,8 +1055,8 @@ def arg_parse():
         '--reverse', default=False, action='store_true',
         help='Process WRS2 tiles in reverse order')
     parser.add_argument(
-        '--tiles', default='', nargs='+',
-        help='Comma/space separated list of tiles to process')
+        '--tiles', default='',
+        help='Comma separated list of tiles to process')
     parser.add_argument(
         '--update', default=False, action='store_true',
         help='Update images with older model version numbers')
