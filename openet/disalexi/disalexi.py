@@ -52,7 +52,7 @@ class Image(object):
             rs_hourly_source='CFSR',
             vapor_pres_source='CFSR',
             wind_speed_source='CFSR',
-            stability_iterations=None,
+            stability_iterations=10,
             tseb_invert_stability_iterations=20,
             albedo_iterations=10,
             rs_interp_flag=True,
@@ -100,8 +100,7 @@ class Image(object):
         wind_speed_source : {'CFSR'}
             Wind speed source keyword (the default is 'CFSR').
         stability_iterations : int, optional
-            Number of stability calculation iterations.  If not set, the
-            number will be computed dynamically.
+            Number of stability calculation iterations (the default is 10).
         tseb_invert_stability_iterations : int, optional
             Number of stability calculation iterations to use in the Ta initial calculation
             (the default is 20).
@@ -505,6 +504,10 @@ class Image(object):
             # TODO: Check if collection size is 0
             alexi_img = ee.Image(alexi_coll.first()).multiply(0.408)
         elif self.alexi_source in alexi_keyword_sources.values():
+            alexi_coll = ee.ImageCollection(self.alexi_source).filterDate(self.start_date, self.end_date)
+            alexi_img = ee.Image(alexi_coll.first()).multiply(0.408)
+        elif re.match('projects/[\w-]+/(assets/)?[\w\/]*alexi[\w\/]*', self.alexi_source, re.I):
+            # Assume the source might be an ALEXI image collection in standard units
             alexi_coll = ee.ImageCollection(self.alexi_source).filterDate(self.start_date, self.end_date)
             alexi_img = ee.Image(alexi_coll.first()).multiply(0.408)
         else:
