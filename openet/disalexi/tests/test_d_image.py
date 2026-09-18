@@ -60,7 +60,7 @@ def default_image_args(
         cfmask=0,
         ndvi=0.875,
         ta_source='projects/openet/assets/disalexi/tair/conus_v006_1k',
-        alexi_source='CONUS_V006',
+        alexi_source='projects/openet/assets/alexi/conus/daily/v006',
         lai_source=4.2,
         lst_source=306.5,
         et_reference_source=10,
@@ -89,7 +89,7 @@ def default_image_obj(
         cfmask=0,
         ndvi=0.875,
         ta_source='projects/openet/assets/disalexi/tair/conus_v006_1k',
-        alexi_source='CONUS_V006',
+        alexi_source='projects/openet/assets/alexi/conus/daily/v006',
         lai_source=4.2,
         lst_source=306.5,
         et_reference_source=10,
@@ -119,7 +119,7 @@ def default_image_obj(
 def test_Image_init_default_parameters():
     m = disalexi.Image(default_image())
     assert m.ta_source == 'projects/openet/assets/disalexi/tair/conus_v006'
-    assert m.alexi_source == 'CONUS_V006'
+    assert m.alexi_source == 'projects/openet/assets/alexi/conus/daily/v006'
     assert m.lai_source == 'openet-landsat-lai'
     #assert m.lai_source == 'projects/openet/assets/lai/landsat/c02'
     assert m.lst_source == 'projects/openet/assets/lst/landsat/c02'
@@ -228,6 +228,7 @@ def test_Image_ta_properties():
         # ALEXI ET is currently in MJ m-2 d-1
         ['LC08_044033_20200708', 'CONUS_V006', TEST_POINT, 17.999324798583984 * 0.408],
         ['LC08_044033_20200724', 'CONUS_V006', TEST_POINT, 17.819684982299805 * 0.408],
+        [None, 'projects/openet/assets/alexi/conus/daily/v006', TEST_POINT, 12.765579223632812 * 0.408],
         [None, 'projects/ee-tulipyangyun-2/assets/alexi/ALEXI_V006', TEST_POINT, 12.765579223632812 * 0.408],
         [None, ee.Image('USGS/SRTMGL1_003').multiply(0).add(10), TEST_POINT, 10],
         [None, '10.382039', TEST_POINT, 10.382039],
@@ -284,7 +285,7 @@ def test_Image_elevation_band_name():
     'source, xy, expected',
     [
         [
-            'projects/sat-io/open-datasets/USGS/ANNUAL_NLCD/LANDCOVER/Annual_NLCD_LndCov_2020_CU_C1V1',
+            'projects/sat-io/open-datasets/USGS/ANNUAL_NLCD/LANDCOVER/Annual_NLCD_LndCov_2020_CU_C1V2',
             TEST_POINT, 82
         ],
         ['projects/sat-io/open-datasets/USGS/ANNUAL_NLCD/LANDCOVER', TEST_POINT, 82],

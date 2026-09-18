@@ -39,7 +39,7 @@ class Image(object):
             self,
             image,
             ta_source='projects/openet/assets/disalexi/tair/conus_v006',
-            alexi_source='CONUS_V006',
+            alexi_source='projects/openet/assets/alexi/conus/daily/v006',
             lai_source='openet-landsat-lai',
             # lai_source='projects/openet/assets/lai/landsat/c02',
             lst_source='projects/openet/assets/lst/landsat/c02',
@@ -70,8 +70,8 @@ class Image(object):
             Prepped image
         ta_source : {'projects/openet/assets/disalexi/tair/conus_v006_1k'}
             ALEXI scale air temperature image collection ID.
-        alexi_source : {'CONUS_V006'}
-            ALEXI ET image collection ID (the default is 'CONUS_V006').
+        alexi_source : {'projects/openet/assets/alexi/conus/daily/v006'}
+            ALEXI ET image collection ID.
         lai_source : {'openet-landsat-lai'}
             LAI image collection ID or set to "openet-landsat-lai" to compute LAI
             dynamically using the openet-landsat-lai module.
@@ -489,32 +489,34 @@ class Image(object):
         ALEXI ET is converted from MJ m-2 d-1 to mm d-1
 
         """
+
+        # Convert source keywords to collection IDs
         alexi_keyword_sources = {
-            'CONUS_V006': 'projects/ee-tulipyangyun-2/assets/alexi/ALEXI_V006',
+            'CONUS_V006': 'projects/openet/assets/alexi/conus/daily/v006',
+            # 'CONUS_V006': 'projects/ee-tulipyangyun-2/assets/alexi/ALEXI_V006',
         }
-        alexi_re = re.compile(
-            '(projects/earthengine-legacy/assets/)?projects/disalexi/alexi/CONUS_V\\w+'
-        )
+        try:
+            self.alexi_source = alexi_keyword_sources[self.alexi_source.upper()]
+        except Exception:
+            pass
 
         if utils.is_number(self.alexi_source):
             # Interpret numbers as constant images
             alexi_img = ee.Image.constant(float(self.alexi_source))
         elif isinstance(self.alexi_source, ee.computedobject.ComputedObject):
             alexi_img = self.alexi_source
-        elif self.alexi_source.upper() in alexi_keyword_sources.keys():
-            alexi_coll_id = alexi_keyword_sources[self.alexi_source.upper()]
-            alexi_coll = ee.ImageCollection(alexi_coll_id).filterDate(self.start_date, self.end_date)
+        elif (
+            (self.alexi_source in alexi_keyword_sources.values()) or
+            ('/ALEXI' in self.alexi_source.upper())
+        ):
+            # If the source is ALEXI, assume it needs to be scaled by 0.408
+            alexi_coll = ee.ImageCollection(self.alexi_source).filterDate(self.start_date, self.end_date)
             # TODO: Check if collection size is 0
             alexi_img = ee.Image(alexi_coll.first()).multiply(0.408)
-        elif alexi_re.match(self.alexi_source):
+        elif self.alexi_source:
+            # Otherwise read the source directly and do not scale
             alexi_coll = ee.ImageCollection(self.alexi_source).filterDate(self.start_date, self.end_date)
-            alexi_img = ee.Image(alexi_coll.first()).multiply(0.408)
-        elif self.alexi_source in alexi_keyword_sources.values():
-            # CGM - Quick fix for catching if the alexi_source was to as the
-            #   collection ID, specifically for V005 since it is currently in a
-            #   different project and won't get matched by the regex.
-            alexi_coll = ee.ImageCollection(self.alexi_source).filterDate(self.start_date, self.end_date)
-            alexi_img = ee.Image(alexi_coll.first()).multiply(0.408)
+            alexi_img = ee.Image(alexi_coll.first())
         else:
             raise ValueError(f'Unsupported alexi_source: {self.alexi_source}\n')
 
@@ -544,7 +546,7 @@ class Image(object):
             # If the source is an ee.Image assume it is an NLCD image
             lc_img = self.landcover_source.rename(['landcover'])
             self.lc_type = 'NLCD'
-        elif re.match('projects/sat-io/open-datasets/USGS/ANNUAL_NLCD/LANDCOVER/Annual_NLCD_LndCov_\\d{4}_CU_\w+',
+        elif re.match('projects/sat-io/open-datasets/USGS/ANNUAL_NLCD/LANDCOVER/Annual_NLCD_LndCov_\\d{4}_CU_\\w+',
                       self.landcover_source, re.I):
             # Assume an annual NLCD image ID was passed in and use it directly
             lc_img = ee.Image(self.landcover_source).rename(['landcover'])
