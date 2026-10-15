@@ -284,6 +284,9 @@ def test_Image_elevation_band_name():
 @pytest.mark.parametrize(
     'source, xy, expected',
     [
+        # CGM - Testing against specific annual NLCD image year versions
+        #   will likely fail in the future when a new version is released,
+        #   since the old versions are not kept in the awesome gee catalog
         [
             'projects/sat-io/open-datasets/USGS/ANNUAL_NLCD/LANDCOVER/Annual_NLCD_LndCov_2020_CU_C1V2',
             TEST_POINT, 82
