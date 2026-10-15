@@ -11,7 +11,7 @@ maintainers = [
 ]
 description = "Earth Engine based DisALEXI model"
 readme = "README.rst"
-requires-python = ">=3.9"
+requires-python = ">=3.11"
 keywords = ["DisALEXI", "OpenET", "Earth Engine", "Evapotranspiration", "Landsat"]
 license = {text = "Apache-2.0"}
 classifiers = [

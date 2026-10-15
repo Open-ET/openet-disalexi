@@ -6,4 +6,7 @@ from .landsat import Landsat_C02_L2
 
 MODEL_NAME = 'DISALEXI'
 
-# __version__ = metadata.version(__package__ or __name__)
+from importlib import metadata
+
+__version__ = metadata.version(__package__.replace('.', '-') or __name__.replace('.', '-'))
+# __version__ = metadata.version('openet-ssebop')
