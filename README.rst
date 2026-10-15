@@ -123,7 +123,7 @@ References
 
 .. [Yang2020] Yang, Y., M. Anderson, F. Gao, C. Hain, A. Noormets, G. Sun, R. Wynne and V. Thomas (2020), Investigating impacts of drought and disturbance on evapotranspiration over a forested landscape in North Carolina, USA using high spatiotemporal resolution remotely sensed data, Remote Sensing of Environment, 238, p. 111018
 
-.. |build| image:: https://github.com/Open-ET/openet-disalexi/actions/workflows/build.yml/badge.svg
+.. |build| image:: https://github.com/Open-ET/openet-disalexi/actions/workflows/tests.yml/badge.svg
    :alt: Build status
    :target: https://github.com/Open-ET/openet-disalexi
 .. |version| image:: https://badge.fury.io/py/openet-disalexi.svg
