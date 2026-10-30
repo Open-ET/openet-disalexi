@@ -81,7 +81,7 @@ class Image(object):
             Elevation source keyword or asset (the default is "USGS/SRTMGL1_003").
             Units must be in meters.
         landcover_source : {'projects/sat-io/open-datasets/USGS/ANNUAL_NLCD/LANDCOVER',
-                            'projects/sat-io/open-datasets/USGS/ANNUAL_NLCD/LANDCOVER/Annual_NLCD_LndCov_2023_CU_C1V1',
+                            'projects/sat-io/open-datasets/USGS/ANNUAL_NLCD/LANDCOVER/Annual_NLCD_LndCov_2023_CU_C1V2',
                             'USGS/NLCD_RELEASES/2021_REL/NLCD',
                             'USGS/NLCD_RELEASES/2019_REL/NLCD',
                             'USGS/NLCD_RELEASES/2021_REL/NLCD/2021'}
@@ -551,6 +551,7 @@ class Image(object):
             # Assume an annual NLCD image ID was passed in and use it directly
             lc_img = ee.Image(self.landcover_source).rename(['landcover'])
             self.lc_type = 'NLCD'
+            self.properties['landcover_source'] = self.landcover_source
         elif self.landcover_source == 'projects/sat-io/open-datasets/USGS/ANNUAL_NLCD/LANDCOVER':
             # Select the closest year in time from the Annual NLCD image collection
             # Hardcoding the year ranges for now but we might want to change this to
@@ -566,6 +567,9 @@ class Image(object):
                 .rename(['landcover'])
             )
             self.lc_type = 'NLCD'
+            self.landcover_image = lc_img.get('system:index')
+            self.properties['landcover_source'] = self.landcover_source
+            self.properties['landcover_image'] = self.landcover_image
         elif (re.match('USGS/NLCD_RELEASES/2021_REL/NLCD/\\d{4}', self.landcover_source, re.I) or
               re.match('USGS/NLCD_RELEASES/2019_REL/NLCD/\\d{4}', self.landcover_source, re.I)):
             # Assume an NLCD image ID was passed in and use it directly
@@ -658,10 +662,9 @@ class Image(object):
             #   and in the long run the LAI module should be modified to support either
             #   ee.Strings or ee.Images
             lai_img = openet.lai.Landsat(utils.getinfo(self.id)).lai(nonveg=True)
-
-            # This approach for getting the version will only work with the new LAI v0.2.0
-            #   that was built with a pyproject.toml and pins DisALEXI to Python 3.8+
-            self.landsat_lai_version = metadata.metadata('openet-landsat-lai')['Version']
+            self.lai_version = metadata.metadata('openet-landsat-lai')['Version']
+            self.properties['lai_source'] = self.lai_source
+            self.properties['lai_version'] = self.lai_version
         elif type(self.lai_source) is str:
             # Assumptions (for now)
             #   String lai_source is an image collection ID
@@ -674,7 +677,9 @@ class Image(object):
                 lai_img.multiply(ee.Number(lai_img.get('scale_factor')))
                 .set({'landsat_lai_version': lai_img.get('landsat_lai_version')})
             )
-            self.landsat_lai_version = lai_img.get('landsat_lai_version')
+            self.lai_version = lai_img.get('landsat_lai_version')
+            self.properties['lai_source'] = self.lai_source
+            self.properties['lai_version'] = self.lai_version
         else:
             raise ValueError(f'Unsupported lai_source: {self.lai_source}\n')
 
@@ -698,7 +703,9 @@ class Image(object):
                 lst_img.multiply(ee.Number(lst_img.get('scale_factor')))
                 .set({'landsat_lst_version': lst_img.get('landsat_lst_version')})
             )
-            self.landsat_lst_version = lst_img.get('landsat_lst_version')
+            self.lst_version = lst_img.get('landsat_lst_version')
+            self.properties['lst_source'] = self.lst_source
+            self.properties['lst_version'] = self.lst_version
         else:
             raise ValueError(f'Unsupported lst_source: {self.lst_source}\n')
 

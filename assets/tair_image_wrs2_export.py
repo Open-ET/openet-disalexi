@@ -21,7 +21,7 @@ import openet.core.export
 import openet.core.utils as utils
 
 TOOL_NAME = 'tair_image_wrs2_export'
-TOOL_VERSION = '0.3.0'
+TOOL_VERSION = '0.3.1'
 
 if 'FUNCTION_REGION' in os.environ:
     # Logging is not working correctly in cloud functions for Python 3.8+
@@ -766,7 +766,7 @@ def main(
                 # Eventually this should/could be done inside the model instead
                 if ('lai_source' in model_args.keys()) and (type(model_args['lai_source']) is str):
                     if model_args['lai_source'].lower() in ['openet-landsat-lai', 'openet-lai']:
-                        landsat_lai_version = metadata.metadata('openet-landsat-lai')['Version']
+                        lai_version = metadata.metadata('openet-landsat-lai')['Version']
                     else:
                         # Assumptions: string lai_source is an image collection ID
                         lai_coll = (
@@ -778,9 +778,10 @@ def main(
                             continue
                         # TODO: If not exporting to COG, LAI version value could stay server size
                         lai_info = utils.get_info(ee.Image(lai_coll.first()))
-                        landsat_lai_version = None
+                        lai_version = None
                         try:
-                            landsat_lai_version = lai_info['properties']['landsat_lai_version']
+                            lai_version = lai_info['properties']['model_version']
+                            # lai_version = lai_info['properties']['landsat_lai_version']
                         except:
                             logging.info(f'  {scene_id} - Could not get LAI properties, skipping')
                             continue
@@ -796,9 +797,10 @@ def main(
                         continue
                     # TODO: If not exporting to COG, LST version value could stay server size
                     lst_info = utils.get_info(ee.Image(lst_coll.first()))
-                    landsat_lst_version = None
+                    lst_version = None
                     try:
-                        landsat_lst_version = lst_info['properties']['landsat_lst_version']
+                        lst_version = lst_info['properties']['model_version']
+                        # lst_version = lst_info['properties']['landsat_lst_version']
                     except:
                         logging.info(f'  {scene_id} - Could not get LST properties, skipping')
                         continue
@@ -843,8 +845,11 @@ def main(
                     'coll_id': coll_id,
                     'core_version': openet.core.__version__,
                     'image_id': image_id,
-                    'landsat_lai_version': landsat_lai_version,
-                    'landsat_lst_version': landsat_lst_version,
+                    # CGM - Write both properties with both names for now
+                    'landsat_lai_version': lai_version,
+                    'landsat_lst_version': lst_version,
+                    'lai_version': lai_version,
+                    'lst_version': lst_version,
                     'model_name': model_metadata['Name'],
                     'model_version': model_metadata["Version"],
                     # 'model_name': model_name,
