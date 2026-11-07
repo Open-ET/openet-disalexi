@@ -144,10 +144,7 @@ def main(
     if gee_key_file:
         logging.info(f'\nInitializing GEE using user key file: {gee_key_file}')
         try:
-            ee.Initialize(
-                ee.ServiceAccountCredentials('_', key_file=gee_key_file),
-                # opt_url='https://earthengine-highvolume.googleapis.com'
-            )
+            ee.Initialize(ee.ServiceAccountCredentials('_', key_file=gee_key_file))
         except ee.ee_exception.EEException:
             logging.warning('Unable to initialize GEE using user key file')
             return False
@@ -158,18 +155,12 @@ def main(
         credentials, project_id = google.auth.default(
             default_scopes=['https://www.googleapis.com/auth/earthengine']
         )
-        ee.Initialize(
-            credentials, project=project_id,
-            # opt_url='https://earthengine-highvolume.googleapis.com'
-        )
+        ee.Initialize(credentials, project=project_id)
     elif project_id is not None:
         logging.info(f'\nInitializing Earth Engine using project credentials'
                      f'\n  Project ID: {project_id}')
         try:
-            ee.Initialize(
-                project=project_id,
-                # opt_url='https://earthengine-highvolume.googleapis.com'
-            )
+            ee.Initialize(project=project_id)
         except Exception as e:
             logging.warning(f'\nUnable to initialize GEE using project ID\n  {e}')
             return False
