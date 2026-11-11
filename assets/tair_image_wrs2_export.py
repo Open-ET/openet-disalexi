@@ -21,7 +21,7 @@ import openet.core.export
 import openet.core.utils as utils
 
 TOOL_NAME = 'tair_image_wrs2_export'
-TOOL_VERSION = '0.3.0'
+TOOL_VERSION = '0.3.1'
 
 if 'FUNCTION_REGION' in os.environ:
     # Logging is not working correctly in cloud functions for Python 3.8+
@@ -106,7 +106,7 @@ def main(
     if os.name == 'nt':
         wrs2_tile_re = re.compile('p?(\\d{1,3})r?(\\d{1,3})')
     else:
-        wrs2_tile_re = re.compile('p?(\d{1,3})r?(\d{1,3})')
+        wrs2_tile_re = re.compile('p?(\\d{1,3})r?(\\d{1,3})')
 
     # List of path/rows to skip
     wrs2_skip_list = [
@@ -144,10 +144,7 @@ def main(
     if gee_key_file:
         logging.info(f'\nInitializing GEE using user key file: {gee_key_file}')
         try:
-            ee.Initialize(
-                ee.ServiceAccountCredentials('_', key_file=gee_key_file),
-                # opt_url='https://earthengine-highvolume.googleapis.com'
-            )
+            ee.Initialize(ee.ServiceAccountCredentials('_', key_file=gee_key_file))
         except ee.ee_exception.EEException:
             logging.warning('Unable to initialize GEE using user key file')
             return False
@@ -158,18 +155,12 @@ def main(
         credentials, project_id = google.auth.default(
             default_scopes=['https://www.googleapis.com/auth/earthengine']
         )
-        ee.Initialize(
-            credentials, project=project_id,
-            # opt_url='https://earthengine-highvolume.googleapis.com'
-        )
+        ee.Initialize(credentials, project=project_id)
     elif project_id is not None:
         logging.info(f'\nInitializing Earth Engine using project credentials'
                      f'\n  Project ID: {project_id}')
         try:
-            ee.Initialize(
-                project=project_id,
-                # opt_url='https://earthengine-highvolume.googleapis.com'
-            )
+            ee.Initialize(project=project_id)
         except Exception as e:
             logging.warning(f'\nUnable to initialize GEE using project ID\n  {e}')
             return False
@@ -414,7 +405,7 @@ def main(
     logging.debug(f'  Retile:   {retile}')
 
     if os.name == 'nt':
-        landsat_re_str = 'L[TEC]0[45789]_\d{3}\d{3}_\d{8}'
+        landsat_re_str = 'L[TEC]0[45789]_\\d{3}\\d{3}_\\d{8}'
     else:
         landsat_re_str = 'L[TEC]0[45789]_\\d{3}\\d{3}_\\d{8}'
 
@@ -605,7 +596,7 @@ def main(
             if os.name == 'nt':
                 wrs2_re_str = '_(\\d{3})(\\d{3})_'
             else:
-                wrs2_re_str = '_(\d{3})(\d{3})_'
+                wrs2_re_str = '_(\\d{3})(\\d{3})_'
             year_image_id_list = [
                 x for x in year_image_id_list
                 if 'p{}r{}'.format(*re.findall(wrs2_re_str, x)[0]) in tile_list
@@ -766,7 +757,7 @@ def main(
                 # Eventually this should/could be done inside the model instead
                 if ('lai_source' in model_args.keys()) and (type(model_args['lai_source']) is str):
                     if model_args['lai_source'].lower() in ['openet-landsat-lai', 'openet-lai']:
-                        landsat_lai_version = metadata.metadata('openet-landsat-lai')['Version']
+                        lai_version = metadata.metadata('openet-landsat-lai')['Version']
                     else:
                         # Assumptions: string lai_source is an image collection ID
                         lai_coll = (
@@ -778,9 +769,10 @@ def main(
                             continue
                         # TODO: If not exporting to COG, LAI version value could stay server size
                         lai_info = utils.get_info(ee.Image(lai_coll.first()))
-                        landsat_lai_version = None
+                        lai_version = None
                         try:
-                            landsat_lai_version = lai_info['properties']['landsat_lai_version']
+                            lai_version = lai_info['properties']['model_version']
+                            # lai_version = lai_info['properties']['landsat_lai_version']
                         except:
                             logging.info(f'  {scene_id} - Could not get LAI properties, skipping')
                             continue
@@ -796,9 +788,10 @@ def main(
                         continue
                     # TODO: If not exporting to COG, LST version value could stay server size
                     lst_info = utils.get_info(ee.Image(lst_coll.first()))
-                    landsat_lst_version = None
+                    lst_version = None
                     try:
-                        landsat_lst_version = lst_info['properties']['landsat_lst_version']
+                        lst_version = lst_info['properties']['model_version']
+                        # lst_version = lst_info['properties']['landsat_lst_version']
                     except:
                         logging.info(f'  {scene_id} - Could not get LST properties, skipping')
                         continue
@@ -843,8 +836,11 @@ def main(
                     'coll_id': coll_id,
                     'core_version': openet.core.__version__,
                     'image_id': image_id,
-                    'landsat_lai_version': landsat_lai_version,
-                    'landsat_lst_version': landsat_lst_version,
+                    # CGM - Write both properties with both names for now
+                    'landsat_lai_version': lai_version,
+                    'landsat_lst_version': lst_version,
+                    'lai_version': lai_version,
+                    'lst_version': lst_version,
                     'model_name': model_metadata['Name'],
                     'model_version': model_metadata["Version"],
                     # 'model_name': model_name,

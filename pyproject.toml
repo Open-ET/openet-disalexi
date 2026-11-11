@@ -1,6 +1,6 @@
 [project]
 name = "openet-disalexi"
-version = "0.1.1"
+version = "0.1.2"
 authors = [
     { name = "Yun Yang", email = "yy2356@cornell.edu" },
     { name = "Martha Anderson", email = "martha.anderson@usda.gov" },
@@ -13,10 +13,10 @@ description = "Earth Engine based DisALEXI model"
 readme = "README.rst"
 requires-python = ">=3.11"
 keywords = ["DisALEXI", "OpenET", "Earth Engine", "Evapotranspiration", "Landsat"]
-license = {text = "Apache-2.0"}
+license = "Apache-2.0"
+license-files = ["LICENSE"]
 classifiers = [
     "Programming Language :: Python :: 3",
-    "License :: OSI Approved :: Apache Software License",
     "Operating System :: OS Independent",
 ]
 dependencies = [
