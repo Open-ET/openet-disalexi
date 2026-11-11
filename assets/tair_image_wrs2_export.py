@@ -106,7 +106,7 @@ def main(
     if os.name == 'nt':
         wrs2_tile_re = re.compile('p?(\\d{1,3})r?(\\d{1,3})')
     else:
-        wrs2_tile_re = re.compile('p?(\d{1,3})r?(\d{1,3})')
+        wrs2_tile_re = re.compile('p?(\\d{1,3})r?(\\d{1,3})')
 
     # List of path/rows to skip
     wrs2_skip_list = [
@@ -405,7 +405,7 @@ def main(
     logging.debug(f'  Retile:   {retile}')
 
     if os.name == 'nt':
-        landsat_re_str = 'L[TEC]0[45789]_\d{3}\d{3}_\d{8}'
+        landsat_re_str = 'L[TEC]0[45789]_\\d{3}\\d{3}_\\d{8}'
     else:
         landsat_re_str = 'L[TEC]0[45789]_\\d{3}\\d{3}_\\d{8}'
 
@@ -596,7 +596,7 @@ def main(
             if os.name == 'nt':
                 wrs2_re_str = '_(\\d{3})(\\d{3})_'
             else:
-                wrs2_re_str = '_(\d{3})(\d{3})_'
+                wrs2_re_str = '_(\\d{3})(\\d{3})_'
             year_image_id_list = [
                 x for x in year_image_id_list
                 if 'p{}r{}'.format(*re.findall(wrs2_re_str, x)[0]) in tile_list
