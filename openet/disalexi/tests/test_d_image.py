@@ -221,6 +221,11 @@ def test_Image_ta_properties():
     assert output['properties']['image_id'] == IMAGE_ID
 
 
+def test_Image_alexi_band_name():
+    output = utils.getinfo(disalexi.Image(default_image()).et_alexi)['bands'][0]['id']
+    assert output == 'et_alexi'
+
+
 # CGM - Added the scene_id for this test to make it easy to switch the datetime
 # I also modified the default_image to take the scene_id & scene_time parameters
 @pytest.mark.parametrize(
@@ -252,9 +257,9 @@ def test_Image_alexi_source_exception():
         utils.getinfo(disalexi.Image(default_image(), alexi_source='').et_alexi)
 
 
-def test_Image_alexi_band_name():
-    output = utils.getinfo(disalexi.Image(default_image()).et_alexi)['bands'][0]['id']
-    assert output == 'et_alexi'
+def test_Image_landcover_band_name():
+    output = utils.getinfo(disalexi.Image(default_image()).landcover)['bands'][0]['id']
+    assert output == 'landcover'
 
 
 @pytest.mark.parametrize(
@@ -340,9 +345,23 @@ def test_Image_landcover_source_invalid(source):
         utils.getinfo(disalexi.Image(default_image(), landcover_source=source).landcover)
 
 
-def test_Image_landcover_band_name():
-    output = utils.getinfo(disalexi.Image(default_image()).landcover)['bands'][0]['id']
-    assert output == 'landcover'
+@pytest.mark.parametrize(
+    'source',
+    [
+        'projects/sat-io/open-datasets/USGS/ANNUAL_NLCD/LANDCOVER',
+    ]
+)
+def test_Image_landcover_properties(source):
+    model_obj = disalexi.Image(default_image(), landcover_source=source)
+    # Trigger building the landcover in order to set the landcover_source property
+    landcover_img = model_obj.landcover
+    assert model_obj.landcover_source == source
+    assert model_obj.landcover_image
+
+
+def test_Image_air_pressure_band_name():
+    output = utils.getinfo(disalexi.Image(default_image()).air_pressure)['bands'][0]['id']
+    assert output == 'air_pressure'
 
 
 @pytest.mark.parametrize(
@@ -367,9 +386,9 @@ def test_Image_air_pressure_source_exception():
         utils.getinfo(disalexi.Image(default_image(), air_pres_source='').air_pressure)
 
 
-def test_Image_air_pressure_band_name():
-    output = utils.getinfo(disalexi.Image(default_image()).air_pressure)['bands'][0]['id']
-    assert output == 'air_pressure'
+def test_Image_air_temperature_band_name():
+    output = utils.getinfo(disalexi.Image(default_image()).air_temperature)['bands'][0]['id']
+    assert output == 'air_temperature'
 
 
 @pytest.mark.parametrize(
@@ -392,9 +411,9 @@ def test_Image_air_temperature_source_exception():
         utils.getinfo(disalexi.Image(default_image(), air_temp_source='').air_temperature)
 
 
-def test_Image_air_temperature_band_name():
-    output = utils.getinfo(disalexi.Image(default_image()).air_temperature)['bands'][0]['id']
-    assert output == 'air_temperature'
+def test_Image_rs_daily_band_name():
+    output = utils.getinfo(disalexi.Image(default_image()).rs24)['bands'][0]['id']
+    assert output == 'rs'
 
 
 @pytest.mark.parametrize(
@@ -419,8 +438,8 @@ def test_Image_rs_daily_source_exception():
         utils.getinfo(disalexi.Image(default_image(), rs_daily_source='').rs24)
 
 
-def test_Image_rs_daily_band_name():
-    output = utils.getinfo(disalexi.Image(default_image()).rs24)['bands'][0]['id']
+def test_Image_rs_hourly_band_name():
+    output = utils.getinfo(disalexi.Image(default_image()).rs1)['bands'][0]['id']
     assert output == 'rs'
 
 
@@ -458,9 +477,9 @@ def test_Image_rs_hourly_source_exception():
         utils.getinfo(disalexi.Image(default_image(), rs_hourly_source='').rs1)
 
 
-def test_Image_rs_hourly_band_name():
-    output = utils.getinfo(disalexi.Image(default_image()).rs1)['bands'][0]['id']
-    assert output == 'rs'
+def test_Image_vapor_pressure_band_name():
+    output = utils.getinfo(disalexi.Image(default_image()).vapor_pressure)['bands'][0]['id']
+    assert output == 'vapor_pressure'
 
 
 @pytest.mark.parametrize(
@@ -483,9 +502,9 @@ def test_Image_vapor_pressure_source_exception():
         utils.getinfo(disalexi.Image(default_image(), vapor_pres_source='').vapor_pressure)
 
 
-def test_Image_vapor_pressure_band_name():
-    output = utils.getinfo(disalexi.Image(default_image()).vapor_pressure)['bands'][0]['id']
-    assert output == 'vapor_pressure'
+def test_Image_wind_speed_band_name():
+    output = utils.getinfo(disalexi.Image(default_image()).wind_speed)['bands'][0]['id']
+    assert output == 'wind_speed'
 
 
 @pytest.mark.parametrize(
@@ -524,11 +543,6 @@ def test_Image_wind_speed_source_exception():
         utils.getinfo(disalexi.Image(default_image(), wind_speed_source='').wind_speed)
 
 
-def test_Image_wind_speed_band_name():
-    output = utils.getinfo(disalexi.Image(default_image()).wind_speed)['bands'][0]['id']
-    assert output == 'wind_speed'
-
-
 def test_Image_lai_band_name():
     output = utils.getinfo(disalexi.Image(default_image()).lai)['bands'][0]['id']
     assert output == 'lai'
@@ -556,16 +570,15 @@ def test_Image_lai_source(source, xy, expected, tol=0.0001):
     'source',
     [
         'openet-landsat-lai',
-        # # DEADBEEF
-        # 'projects/openet/assets/lai/landsat/c02',
-        # 4.123,
+        'projects/openet/assets/lai/landsat/c02',
     ]
 )
-def test_Image_lai_version_property(source):
+def test_Image_lai_properties(source):
     model_obj = disalexi.Image(default_image(), lai_source=source)
-    # Trigger building the LAI in order to set the landsat_lai_version
+    # Trigger building the LAI in order to set the lai_version property
     lai_img = model_obj.lai
-    assert model_obj.landsat_lai_version
+    assert model_obj.lai_source == source
+    assert model_obj.lai_version
 
 
 def test_Image_lst_band_name():
@@ -585,6 +598,20 @@ def test_Image_lst_band_name():
 def test_Image_lst_source(source, xy, expected, tol=0.0001):
     output = utils.point_image_value(disalexi.Image(default_image(), lst_source=source).lst, xy)
     assert abs(output['lst'] - expected) <= tol
+
+
+@pytest.mark.parametrize(
+    'source',
+    [
+        'projects/openet/assets/lst/landsat/c02',
+    ]
+)
+def test_Image_lst_properties(source):
+    model_obj = disalexi.Image(default_image(), lst_source=source)
+    # Trigger building the LST in order to set the lst_version property
+    lst_img = model_obj.lst
+    assert model_obj.lst_source == source
+    assert model_obj.lst_version
 
 
 def test_Image_et_default_values(expected=5.414691933931705, tol=0.0001):
